@@ -12,12 +12,6 @@ RUN docker-php-ext-install pdo pdo_sqlite
 # Habilitar mod_rewrite de Apache
 RUN a2enmod rewrite
 
-# Configurar Apache para Railway (puerto dinámico)
-RUN sed -i 's/80/${PORT}/g' /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf
-
-# Configurar DocumentRoot
-ENV APACHE_DOCUMENT_ROOT /var/www/html
-
 # Copiar archivos de la aplicación
 COPY . /var/www/html/
 
@@ -30,9 +24,12 @@ RUN mkdir -p /var/www/html/clients \
 # Permitir .htaccess
 RUN sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
 
-# Puerto por defecto (Railway lo sobrescribe)
-ENV PORT=8080
+# Script de inicio que configura el puerto dinámicamente
+RUN echo '#!/bin/bash\n\
+    sed -i "s/80/${PORT:-8080}/g" /etc/apache2/sites-available/000-default.conf\n\
+    sed -i "s/Listen 80/Listen ${PORT:-8080}/g" /etc/apache2/ports.conf\n\
+    apache2-foreground' > /start.sh && chmod +x /start.sh
+
 EXPOSE 8080
 
-# Comando de inicio
-CMD ["apache2-foreground"]
+CMD ["/bin/bash", "/start.sh"]
