@@ -17,7 +17,9 @@ require_once __DIR__ . '/helpers/tenant.php';
 $clientCode = 'kino';
 $clientName = 'KINO Master';
 $defaultPassword = 'kino2025';
-$sqlFile = __DIR__ . '/if0_39064130_buscador (10).sql';
+
+// Usar URL de GitHub raw en lugar de archivo local para mantener deploy ligero
+$sqlUrl = 'https://raw.githubusercontent.com/WILBIdon/MULTI-CLIEN-KINO-NEW2/main/if0_39064130_buscador%20(10).sql';
 
 echo "<h1>Importación de Datos Legados</h1>";
 echo "<pre>";
@@ -38,13 +40,19 @@ if (!$exists) {
 // 2. Abrir la base de datos del cliente
 $clientDb = open_client_db($clientCode);
 
-// 3. Leer el archivo SQL
-if (!file_exists($sqlFile)) {
-    die("❌ No se encontró el archivo SQL: $sqlFile");
+// 3. Obtener el SQL desde GitHub (o archivo local si existe)
+$localFile = __DIR__ . '/if0_39064130_buscador (10).sql';
+if (file_exists($localFile)) {
+    $sqlContent = file_get_contents($localFile);
+    echo "📂 Archivo SQL local cargado (" . round(strlen($sqlContent) / 1024) . " KB)\n";
+} else {
+    echo "🌐 Descargando SQL desde GitHub...\n";
+    $sqlContent = @file_get_contents($sqlUrl);
+    if ($sqlContent === false) {
+        die("❌ No se pudo descargar el archivo SQL desde: $sqlUrl\nIntenta subir el archivo manualmente o verificar la URL.");
+    }
+    echo "📂 SQL descargado (" . round(strlen($sqlContent) / 1024) . " KB)\n";
 }
-
-$sqlContent = file_get_contents($sqlFile);
-echo "📂 Archivo SQL cargado (" . round(strlen($sqlContent) / 1024) . " KB)\n";
 
 // 4. Extraer e insertar documents
 echo "\n--- Importando documentos ---\n";
