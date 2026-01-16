@@ -9,8 +9,8 @@ RUN apt-get update && apt-get install -y \
 # Habilitar módulos de PHP
 RUN docker-php-ext-install pdo pdo_sqlite
 
-# Habilitar mod_rewrite de Apache
-RUN a2enmod rewrite
+# Habilitar mod_rewrite de Apache y FIX para MPM conflict
+RUN a2dismod mpm_event && a2enmod mpm_prefork && a2enmod rewrite
 
 # Copiar archivos de la aplicación
 COPY . /var/www/html/
