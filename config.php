@@ -19,7 +19,8 @@ define('BASE_DIR', __DIR__);
 define('CLIENTS_DIR', BASE_DIR . DIRECTORY_SEPARATOR . 'clients');
 
 // Archivo de base de datos central para almacenar información de clientes
-define('CENTRAL_DB', BASE_DIR . DIRECTORY_SEPARATOR . 'central.db');
+// NOTA: Se coloca DENTRO de CLIENTS_DIR para que un solo volumen persista todo.
+define('CENTRAL_DB', CLIENTS_DIR . DIRECTORY_SEPARATOR . 'central.db');
 
 // Crear el directorio de clientes si no existe
 if (!file_exists(CLIENTS_DIR)) {

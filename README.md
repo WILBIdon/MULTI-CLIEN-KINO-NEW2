@@ -11,13 +11,31 @@ Sistema de Gestión Documental Multi-cliente con Trazabilidad.
 - 👥 **Multi-cliente** con bases de datos SQLite aisladas
 - 🔗 **Vinculación de documentos** con detección de discrepancias
 
-## Despliegue en Railway
+## 🚀 Despliegue en Railway
 
-1. Haz fork o clona este repositorio
-2. Ve a [railway.app](https://railway.app)
-3. Crea un nuevo proyecto desde GitHub
-4. Railway detectará el Dockerfile automáticamente
-5. (Opcional) Agrega variable `GEMINI_API_KEY` para habilitar IA
+Esta aplicación está optimizada para desplegarse en Railway.
+
+### Requisitos Previos
+1.  Tener una cuenta en [Railway.app](https://railway.app/).
+2.  Tener este proyecto en un repositorio de GitHub.
+
+### Pasos
+1.  **Nuevo Proyecto**: En Railway, crea un "New Project" -> "Deploy from GitHub repo" y selecciona este repositorio.
+2.  **Configuración de Volumen (IMPORTANTE)**:
+    *   Este paso es CRÍTICO para no perder datos, ya que Railway borra los archivos en cada despliegue.
+    *   Ve a la configuración del servicio ("Settings").
+    *   Baja a la sección de **Volumes**.
+    *   Haz clic en "New Volume".
+    *   **Mount Path**: `/var/www/html/clients`
+    *   Esto asegurará que **todos** los datos (base de datos central, bases de datos de clientes y archivos subidos) se persistan.
+3.  **Variables de Entorno**:
+    *   `GEMINI_API_KEY`: Tu clave de API de Google Gemini (opcional, para IA).
+    *   `PORT`: Opcional, por defecto es asigando automáticamante por Railway.
+
+### Notas sobre Base de Datos
+*   La aplicación usa **SQLite**.
+*   `database_structure.sql` se incluye solo como referencia de la estructura. No se usa para la conexión en vivo.
+*   Todo se guarda en `/clients/`, por eso el volumen debe montarse ahí.
 
 ## Configuración Local
 
