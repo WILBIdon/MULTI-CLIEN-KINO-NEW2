@@ -24,8 +24,9 @@ RUN mkdir -p /var/www/html/clients \
 # Permitir .htaccess
 RUN sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
 
-# Script de inicio que configura el puerto dinámicamente
+# Script de inicio que configura el puerto dinámicamente y arregla MPM
 RUN echo '#!/bin/bash\n\
+    rm -f /etc/apache2/mods-enabled/mpm_event.* 2>/dev/null\n\
     sed -i "s/80/${PORT:-8080}/g" /etc/apache2/sites-available/000-default.conf\n\
     sed -i "s/Listen 80/Listen ${PORT:-8080}/g" /etc/apache2/ports.conf\n\
     apache2-foreground' > /start.sh && chmod +x /start.sh
