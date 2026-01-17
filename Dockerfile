@@ -9,6 +9,12 @@ RUN apt-get update && apt-get install -y \
 # Habilitar módulos de PHP
 RUN docker-php-ext-install pdo pdo_sqlite
 
+# Configurar límites de PHP para subida de archivos grandes
+RUN echo "upload_max_filesize = 128M" >> /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "post_max_size = 128M" >> /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "max_execution_time = 300" >> /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/uploads.ini
+
 # Habilitar mod_rewrite de Apache y FIX para MPM conflict
 RUN a2dismod mpm_event && a2enmod mpm_prefork && a2enmod rewrite
 
