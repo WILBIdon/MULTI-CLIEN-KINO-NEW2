@@ -1,11 +1,14 @@
 <?php
 /**
- * Panel de administración para gestionar clientes.
+ * Panel de Administración - Gestor de Clientes
  *
- * Solo los usuarios autenticados como administradores pueden acceder a
- * esta página. Permite crear nuevos clientes, clonar clientes existentes,
- * habilitar/deshabilitar y eliminar clientes. La información de clientes
- * se almacena en la base central de control.
+ * Funcionalidades:
+ * - Crear nuevo cliente (con colores personalizados)
+ * - Clonar cliente existente (incluyendo datos y archivos)
+ * - Importar SQL a cliente
+ * - Cambiar contraseña de cliente
+ * - Habilitar/Deshabilitar cliente
+ * - Eliminar cliente
  */
 
 session_start();
@@ -24,50 +27,116 @@ $error = '';
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = $_POST['action'] ?? '';
+
+        // CREAR NUEVO CLIENTE
         if ($action === 'create') {
             $code = sanitize_code($_POST['code'] ?? '');
             $name = trim($_POST['name'] ?? '');
             $password = $_POST['password'] ?? '';
             $titulo = trim($_POST['titulo'] ?? '');
-            $colorP = trim($_POST['color_primario'] ?? '#2563eb');
-            $colorS = trim($_POST['color_secundario'] ?? '#F87171');
+            $colorP = trim($_POST['color_primario'] ?? '#3b82f6');
+            $colorS = trim($_POST['color_secundario'] ?? '#64748b');
+
             if ($code === '' || $name === '' || $password === '') {
-                $error = 'Debe completar todos los campos obligatorios.';
+                $error = 'Debe completar código, nombre y contraseña.';
             } else {
-                $hash = password_hash($password, PASSWORD_DEFAULT);
-                create_client_structure($code, $name, $hash, $titulo, $colorP, $colorS);
-                $message = 'Cliente creado correctamente.';
+                // Verificar que no exista
+                $stmt = $centralDb->prepare('SELECT COUNT(*) FROM control_clientes WHERE codigo = ?');
+                $stmt->execute([$code]);
+                if ((int) $stmt->fetchColumn() > 0) {
+                    $error = 'Ya existe un cliente con ese código.';
+                } else {
+                    $hash = password_hash($password, PASSWORD_DEFAULT);
+                    create_client_structure($code, $name, $hash, $titulo, $colorP, $colorS);
+                    $message = "✅ Cliente '{$name}' creado correctamente.";
+                }
             }
-        } elseif ($action === 'clone') {
+        }
+
+        // CLONAR CLIENTE
+        elseif ($action === 'clone') {
             $source = sanitize_code($_POST['source'] ?? '');
             $newCode = sanitize_code($_POST['new_code'] ?? '');
             $newName = trim($_POST['new_name'] ?? '');
             $newPassword = $_POST['new_password'] ?? '';
+
             if ($source === '' || $newCode === '' || $newName === '' || $newPassword === '') {
                 $error = 'Debe completar todos los campos de clonación.';
             } else {
                 $hash = password_hash($newPassword, PASSWORD_DEFAULT);
                 clone_client($source, $newCode, $newName, $hash);
-                $message = 'Cliente clonado correctamente.';
+                $message = "✅ Cliente clonado desde '{$source}' a '{$newCode}'.";
             }
-        } elseif ($action === 'toggle') {
+        }
+
+        // CAMBIAR CONTRASEÑA
+        elseif ($action === 'change_password') {
+            $code = sanitize_code($_POST['client_code'] ?? '');
+            $newPassword = $_POST['new_password'] ?? '';
+
+            if ($code === '' || $newPassword === '') {
+                $error = 'Debe especificar el cliente y la nueva contraseña.';
+            } else {
+                $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+                $stmt = $centralDb->prepare('UPDATE control_clientes SET password_hash = ? WHERE codigo = ?');
+                $stmt->execute([$hash, $code]);
+                $message = "✅ Contraseña actualizada para '{$code}'.";
+            }
+        }
+
+        // ACTUALIZAR COLORES
+        elseif ($action === 'update_colors') {
+            $code = sanitize_code($_POST['client_code'] ?? '');
+            $titulo = trim($_POST['titulo'] ?? '');
+            $colorP = trim($_POST['color_primario'] ?? '#3b82f6');
+            $colorS = trim($_POST['color_secundario'] ?? '#64748b');
+
+            if ($code !== '') {
+                $stmt = $centralDb->prepare('UPDATE control_clientes SET titulo = ?, color_primario = ?, color_secundario = ? WHERE codigo = ?');
+                $stmt->execute([$titulo, $colorP, $colorS, $code]);
+                $message = "✅ Colores actualizados para '{$code}'.";
+            }
+        }
+
+        // IMPORTAR SQL
+        elseif ($action === 'import_sql') {
+            $code = sanitize_code($_POST['client_code'] ?? '');
+
+            if ($code === '' || empty($_FILES['sql_file']['tmp_name'])) {
+                $error = 'Debe seleccionar un cliente y un archivo SQL.';
+            } else {
+                $sqlContent = file_get_contents($_FILES['sql_file']['tmp_name']);
+                $db = open_client_db($code);
+
+                // Ejecutar SQL
+                $db->exec($sqlContent);
+                $message = "✅ SQL importado correctamente a '{$code}'.";
+            }
+        }
+
+        // HABILITAR/DESHABILITAR
+        elseif ($action === 'toggle') {
             $toggleCode = sanitize_code($_POST['toggle_code'] ?? '');
-            if ($toggleCode !== '') {
+            if ($toggleCode !== '' && $toggleCode !== 'admin') {
                 $stmt = $centralDb->prepare('SELECT activo FROM control_clientes WHERE codigo = ?');
                 $stmt->execute([$toggleCode]);
-                $curr = (int)$stmt->fetchColumn();
+                $curr = (int) $stmt->fetchColumn();
                 $new = $curr ? 0 : 1;
                 $update = $centralDb->prepare('UPDATE control_clientes SET activo = ? WHERE codigo = ?');
                 $update->execute([$new, $toggleCode]);
-                $message = $new ? 'Cliente habilitado.' : 'Cliente deshabilitado.';
+                $message = $new ? "✅ Cliente habilitado." : "⏸️ Cliente deshabilitado.";
             }
-        } elseif ($action === 'delete') {
+        }
+
+        // ELIMINAR
+        elseif ($action === 'delete') {
             $delCode = sanitize_code($_POST['delete_code'] ?? '');
-            if ($delCode !== '') {
-                // Borrar el registro de la base de control
+            if ($delCode !== '' && $delCode !== 'admin') {
+                // Borrar registro
                 $delStmt = $centralDb->prepare('DELETE FROM control_clientes WHERE codigo = ?');
                 $delStmt->execute([$delCode]);
-                // Eliminar el directorio del cliente junto con su base de datos
+
+                // Eliminar directorio
                 $dir = CLIENTS_DIR . DIRECTORY_SEPARATOR . $delCode;
                 if (is_dir($dir)) {
                     $it = new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS);
@@ -81,146 +150,566 @@ try {
                     }
                     rmdir($dir);
                 }
-                $message = 'Cliente eliminado.';
+                $message = "🗑️ Cliente '{$delCode}' eliminado.";
             }
         }
     }
 } catch (Exception $ex) {
-    $error = 'Ocurrió un error: ' . $ex->getMessage();
+    $error = '❌ Error: ' . $ex->getMessage();
 }
 
-// Obtener la lista de clientes para mostrar y para clonar
-$clients = $centralDb->query('SELECT codigo, nombre, activo FROM control_clientes ORDER BY nombre')->fetchAll(PDO::FETCH_ASSOC);
-$clientCodes = array_map(function ($c) {
-    return $c['codigo'];
-}, $clients);
+// Obtener lista de clientes con detalles
+$clients = $centralDb->query("
+    SELECT codigo, nombre, titulo, color_primario, color_secundario, activo, fecha_creacion 
+    FROM control_clientes 
+    ORDER BY nombre
+")->fetchAll(PDO::FETCH_ASSOC);
 
+// Para clonación
+$clientCodes = array_column($clients, 'codigo');
 ?>
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
-<meta charset="UTF-8">
-<title>Panel de Administración</title>
-<link rel="stylesheet" href="../assets/css/styles.css">
-<style>
-.admin-container { max-width: 800px; margin: 2rem auto; padding: 1rem; }
-.admin-container h1 { margin-bottom: 1rem; }
-table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
-th, td { padding: 0.5rem; border: 1px solid #ddd; text-align: left; }
-.status-active { color: green; font-weight: bold; }
-.status-inactive { color: red; font-weight: bold; }
-.form-section { margin-bottom: 2rem; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
-.form-section h2 { margin-bottom: 0.5rem; }
-.form-row { margin-bottom: 0.75rem; }
-.form-row label { display: block; margin-bottom: 0.25rem; font-weight: bold; }
-.form-row input, .form-row select { width: 100%; padding: 0.5rem; }
-button { padding: 0.5rem 1rem; border: none; background: #2563eb; color: white; border-radius: 4px; cursor: pointer; }
-button:hover { background: #1d4ed8; }
-.message { background: #dcfce7; color: #065f46; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
-.error { background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Clientes - Admin</title>
+    <link rel="stylesheet" href="../assets/css/styles.css">
+    <style>
+        .admin-layout {
+            min-height: 100vh;
+            background: var(--bg-primary);
+        }
+
+        .admin-header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .admin-header h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .admin-header h1 span {
+            background: var(--accent-primary);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+        }
+
+        .admin-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            margin-bottom: 1.5rem;
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: var(--accent-success);
+        }
+
+        .alert-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: var(--accent-danger);
+        }
+
+        .clients-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .client-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .client-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--client-color, var(--accent-primary));
+        }
+
+        .client-card.inactive {
+            opacity: 0.6;
+        }
+
+        .client-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+
+        .client-name {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .client-code {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
+        .client-status {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+        }
+
+        .client-status.active {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--accent-success);
+        }
+
+        .client-status.inactive {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--accent-danger);
+        }
+
+        .client-meta {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .client-colors {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .color-swatch {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid var(--border-color);
+        }
+
+        .client-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .client-actions form {
+            display: inline;
+        }
+
+        .btn-xs {
+            padding: 0.375rem 0.625rem;
+            font-size: 0.75rem;
+        }
+
+        .btn-danger {
+            background: var(--accent-danger);
+            color: white;
+        }
+
+        .cards-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .form-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+        }
+
+        .form-card h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+
+        .form-row.full {
+            grid-template-columns: 1fr;
+        }
+
+        .color-row {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .color-row input[type="color"] {
+            width: 50px;
+            height: 36px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+        }
+
+        .color-row label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            max-width: 450px;
+            width: 90%;
+        }
+
+        .modal h3 {
+            margin-bottom: 1rem;
+        }
+    </style>
 </head>
+
 <body>
-<div class="admin-container">
-    <h1>Panel de Administración</h1>
-    <?php if ($message): ?>
-        <div class="message"><?= htmlspecialchars($message) ?></div>
-    <?php endif; ?>
-    <?php if ($error): ?>
-        <div class="error"><?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
+    <div class="admin-layout">
+        <header class="admin-header">
+            <h1>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Gestor de Clientes <span>ADMIN</span>
+            </h1>
+            <div class="flex gap-3">
+                <a href="../modules/trazabilidad/dashboard.php" class="btn btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    Dashboard
+                </a>
+                <a href="../logout.php" class="btn btn-secondary">Salir</a>
+            </div>
+        </header>
 
-    <h2>Clientes Registrados</h2>
-    <table>
-        <thead>
-            <tr><th>Código</th><th>Nombre</th><th>Estado</th><th>Acciones</th></tr>
-        </thead>
-        <tbody>
-        <?php foreach ($clients as $cli): ?>
-            <tr>
-                <td><?= htmlspecialchars($cli['codigo']) ?></td>
-                <td><?= htmlspecialchars($cli['nombre']) ?></td>
-                <td class="<?= $cli['activo'] ? 'status-active' : 'status-inactive' ?>">
-                    <?= $cli['activo'] ? 'Activo' : 'Inactivo' ?>
-                </td>
-                <td>
-                    <form method="post" style="display:inline;">
-                        <input type="hidden" name="action" value="toggle">
-                        <input type="hidden" name="toggle_code" value="<?= htmlspecialchars($cli['codigo']) ?>">
-                        <button type="submit"><?= $cli['activo'] ? 'Deshabilitar' : 'Habilitar' ?></button>
-                    </form>
-                    <form method="post" style="display:inline;" onsubmit="return confirm('¿Está seguro de eliminar este cliente?');">
-                        <input type="hidden" name="action" value="delete">
-                        <input type="hidden" name="delete_code" value="<?= htmlspecialchars($cli['codigo']) ?>">
-                        <button type="submit">Eliminar</button>
-                    </form>
-                </td>
-            </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
+        <div class="admin-container">
+            <?php if ($message): ?>
+                <div class="alert alert-success"><?= htmlspecialchars($message) ?></div>
+            <?php endif; ?>
+            <?php if ($error): ?>
+                <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
+            <?php endif; ?>
 
-    <div class="form-section">
-        <h2>Crear Nuevo Cliente</h2>
-        <form method="post">
-            <input type="hidden" name="action" value="create">
-            <div class="form-row">
-                <label for="code">Código *</label>
-                <input type="text" id="code" name="code" required>
+            <!-- Clients List -->
+            <h2 style="margin-bottom: 1rem;">Clientes Registrados (<?= count($clients) ?>)</h2>
+
+            <div class="clients-grid">
+                <?php foreach ($clients as $cli): ?>
+                    <div class="client-card <?= $cli['activo'] ? '' : 'inactive' ?>"
+                        style="--client-color: <?= htmlspecialchars($cli['color_primario'] ?: '#3b82f6') ?>">
+                        <div class="client-header">
+                            <div>
+                                <div class="client-name"><?= htmlspecialchars($cli['nombre']) ?></div>
+                                <div class="client-code"><?= htmlspecialchars($cli['codigo']) ?></div>
+                            </div>
+                            <span class="client-status <?= $cli['activo'] ? 'active' : 'inactive' ?>">
+                                <?= $cli['activo'] ? 'Activo' : 'Inactivo' ?>
+                            </span>
+                        </div>
+
+                        <?php if ($cli['titulo']): ?>
+                            <div class="client-meta">📍 <?= htmlspecialchars($cli['titulo']) ?></div>
+                        <?php endif; ?>
+
+                        <div class="client-colors">
+                            <div class="color-swatch"
+                                style="background: <?= htmlspecialchars($cli['color_primario'] ?: '#3b82f6') ?>"
+                                title="Primario"></div>
+                            <div class="color-swatch"
+                                style="background: <?= htmlspecialchars($cli['color_secundario'] ?: '#64748b') ?>"
+                                title="Secundario"></div>
+                        </div>
+
+                        <div class="client-actions">
+                            <button class="btn btn-secondary btn-xs"
+                                onclick="openEditModal('<?= htmlspecialchars($cli['codigo']) ?>', '<?= htmlspecialchars($cli['titulo']) ?>', '<?= htmlspecialchars($cli['color_primario']) ?>', '<?= htmlspecialchars($cli['color_secundario']) ?>')">
+                                Editar
+                            </button>
+                            <button class="btn btn-secondary btn-xs"
+                                onclick="openPasswordModal('<?= htmlspecialchars($cli['codigo']) ?>')">
+                                Clave
+                            </button>
+                            <?php if ($cli['codigo'] !== 'admin'): ?>
+                                <form method="post">
+                                    <input type="hidden" name="action" value="toggle">
+                                    <input type="hidden" name="toggle_code" value="<?= htmlspecialchars($cli['codigo']) ?>">
+                                    <button type="submit" class="btn btn-secondary btn-xs">
+                                        <?= $cli['activo'] ? 'Pause' : 'Activar' ?>
+                                    </button>
+                                </form>
+                                <form method="post"
+                                    onsubmit="return confirm('¿Eliminar cliente <?= htmlspecialchars($cli['codigo']) ?> y todos sus datos?');">
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="delete_code" value="<?= htmlspecialchars($cli['codigo']) ?>">
+                                    <button type="submit" class="btn btn-danger btn-xs">Eliminar</button>
+                                </form>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
             </div>
-            <div class="form-row">
-                <label for="name">Nombre *</label>
-                <input type="text" id="name" name="name" required>
+
+            <!-- Action Cards -->
+            <div class="cards-section">
+                <!-- Create Client -->
+                <div class="form-card">
+                    <h3>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                        </svg>
+                        Crear Nuevo Cliente
+                    </h3>
+                    <form method="post">
+                        <input type="hidden" name="action" value="create">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Código *</label>
+                                <input type="text" class="form-input" name="code" placeholder="ej: kino" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Nombre *</label>
+                                <input type="text" class="form-input" name="name" placeholder="KINO Company" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Contraseña *</label>
+                                <input type="password" class="form-input" name="password" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Título del Dashboard</label>
+                                <input type="text" class="form-input" name="titulo" placeholder="Mi Empresa">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Colores</label>
+                            <div class="color-row">
+                                <div>
+                                    <input type="color" name="color_primario" value="#3b82f6">
+                                    <label>Primario</label>
+                                </div>
+                                <div>
+                                    <input type="color" name="color_secundario" value="#64748b">
+                                    <label>Secundario</label>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Crear Cliente</button>
+                    </form>
+                </div>
+
+                <!-- Clone Client -->
+                <div class="form-card">
+                    <h3>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Clonar Cliente (con datos)
+                    </h3>
+                    <form method="post">
+                        <input type="hidden" name="action" value="clone">
+                        <div class="form-group">
+                            <label class="form-label">Cliente origen *</label>
+                            <select class="form-select" name="source" required>
+                                <option value="">Seleccione cliente a clonar...</option>
+                                <?php foreach ($clientCodes as $c): ?>
+                                    <option value="<?= htmlspecialchars($c) ?>"><?= htmlspecialchars($c) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Nuevo código *</label>
+                                <input type="text" class="form-input" name="new_code" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Nuevo nombre *</label>
+                                <input type="text" class="form-input" name="new_name" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Contraseña *</label>
+                            <input type="password" class="form-input" name="new_password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Clonar Cliente</button>
+                    </form>
+                </div>
+
+                <!-- Import SQL -->
+                <div class="form-card">
+                    <h3>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                        </svg>
+                        Importar SQL
+                    </h3>
+                    <form method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="action" value="import_sql">
+                        <div class="form-group">
+                            <label class="form-label">Cliente destino *</label>
+                            <select class="form-select" name="client_code" required>
+                                <option value="">Seleccione cliente...</option>
+                                <?php foreach ($clientCodes as $c): ?>
+                                    <option value="<?= htmlspecialchars($c) ?>"><?= htmlspecialchars($c) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Archivo SQL *</label>
+                            <input type="file" class="form-input" name="sql_file" accept=".sql" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Importar SQL</button>
+                    </form>
+                </div>
             </div>
-            <div class="form-row">
-                <label for="password">Contraseña *</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <div class="form-row">
-                <label for="titulo">Título</label>
-                <input type="text" id="titulo" name="titulo">
-            </div>
-            <div class="form-row">
-                <label for="color_primario">Color primario</label>
-                <input type="color" id="color_primario" name="color_primario" value="#2563eb">
-            </div>
-            <div class="form-row">
-                <label for="color_secundario">Color secundario</label>
-                <input type="color" id="color_secundario" name="color_secundario" value="#F87171">
-            </div>
-            <button type="submit">Crear cliente</button>
-        </form>
+        </div>
     </div>
 
-    <div class="form-section">
-        <h2>Clonar Cliente</h2>
-        <form method="post">
-            <input type="hidden" name="action" value="clone">
-            <div class="form-row">
-                <label for="source">Cliente origen *</label>
-                <select id="source" name="source" required>
-                    <option value="">Seleccione...</option>
-                    <?php foreach ($clientCodes as $c): ?>
-                        <option value="<?= htmlspecialchars($c) ?>"><?= htmlspecialchars($c) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="form-row">
-                <label for="new_code">Nuevo código *</label>
-                <input type="text" id="new_code" name="new_code" required>
-            </div>
-            <div class="form-row">
-                <label for="new_name">Nuevo nombre *</label>
-                <input type="text" id="new_name" name="new_name" required>
-            </div>
-            <div class="form-row">
-                <label for="new_password">Contraseña *</label>
-                <input type="password" id="new_password" name="new_password" required>
-            </div>
-            <button type="submit">Clonar cliente</button>
-        </form>
+    <!-- Edit Modal -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal">
+            <h3>Editar Cliente</h3>
+            <form method="post">
+                <input type="hidden" name="action" value="update_colors">
+                <input type="hidden" name="client_code" id="editClientCode">
+                <div class="form-group">
+                    <label class="form-label">Título del Dashboard</label>
+                    <input type="text" class="form-input" name="titulo" id="editTitulo">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Colores</label>
+                    <div class="color-row">
+                        <div>
+                            <input type="color" name="color_primario" id="editColorP">
+                            <label>Primario</label>
+                        </div>
+                        <div>
+                            <input type="color" name="color_secundario" id="editColorS">
+                            <label>Secundario</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editModal')">Cancelar</button>
+                </div>
+            </form>
+        </div>
     </div>
-    <p><a href="../modules/trazabilidad/dashboard.php">← Volver al tablero</a> | <a href="../logout.php">Cerrar sesión</a></p>
-</div>
+
+    <!-- Password Modal -->
+    <div class="modal-overlay" id="passwordModal">
+        <div class="modal">
+            <h3>Cambiar Contraseña</h3>
+            <form method="post">
+                <input type="hidden" name="action" value="change_password">
+                <input type="hidden" name="client_code" id="pwClientCode">
+                <div class="form-group">
+                    <label class="form-label">Cliente</label>
+                    <input type="text" class="form-input" id="pwClientDisplay" disabled>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nueva Contraseña *</label>
+                    <input type="password" class="form-input" name="new_password" required>
+                </div>
+                <div class="flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-primary">Cambiar Contraseña</button>
+                    <button type="button" class="btn btn-secondary"
+                        onclick="closeModal('passwordModal')">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openEditModal(code, titulo, colorP, colorS) {
+            document.getElementById('editClientCode').value = code;
+            document.getElementById('editTitulo').value = titulo || '';
+            document.getElementById('editColorP').value = colorP || '#3b82f6';
+            document.getElementById('editColorS').value = colorS || '#64748b';
+            document.getElementById('editModal').classList.add('active');
+        }
+
+        function openPasswordModal(code) {
+            document.getElementById('pwClientCode').value = code;
+            document.getElementById('pwClientDisplay').value = code;
+            document.getElementById('passwordModal').classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        // Close modal on overlay click
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.classList.remove('active');
+                }
+            });
+        });
+    </script>
 </body>
+
 </html>
