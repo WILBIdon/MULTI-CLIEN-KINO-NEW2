@@ -1,10 +1,9 @@
 <?php
 /**
- * Panel principal de trazabilidad para un cliente.
+ * Main Dashboard - KINO TRACE
  *
- * Muestra estadísticas de documentos, códigos y vínculos,
- * con accesos rápidos a todos los módulos del sistema.
- * Incluye búsqueda rápida y chat con IA.
+ * Central hub with sidebar navigation and quick access to all modules.
+ * Shows statistics and recent documents for the logged-in client.
  */
 session_start();
 require_once __DIR__ . '/../../config.php';
@@ -12,7 +11,7 @@ require_once __DIR__ . '/../../helpers/tenant.php';
 require_once __DIR__ . '/../../helpers/search_engine.php';
 require_once __DIR__ . '/../../helpers/gemini_ai.php';
 
-// Verificar autenticación
+// Verify authentication
 if (!isset($_SESSION['client_code'])) {
     header('Location: ../../login.php');
     exit;
@@ -20,17 +19,29 @@ if (!isset($_SESSION['client_code'])) {
 
 $code = $_SESSION['client_code'];
 $db = open_client_db($code);
-
-// Obtener estadísticas
 $stats = get_search_stats($db);
-$docCount = $stats['total_documents'];
-$codeCount = $stats['total_codes'];
-$uniqueCodes = $stats['unique_codes'];
-$validCount = $stats['validated_codes'];
-$recentDocs = $stats['recent_documents'];
-$docsByType = $stats['documents_by_type'];
-$vincCount = (int) $db->query('SELECT COUNT(*) FROM vinculos')->fetchColumn();
-$geminiConfigured = is_gemini_configured();
+
+// Get recent documents
+$recentDocs = $db->query("
+    SELECT d.id, d.tipo, d.numero, d.fecha, d.proveedor, 
+           (SELECT COUNT(*) FROM codigos WHERE documento_id = d.id) as code_count
+    FROM documentos d
+    ORDER BY d.fecha_creacion DESC
+    LIMIT 5
+")->fetchAll(PDO::FETCH_ASSOC);
+
+// For sidebar
+$currentModule = 'dashboard';
+$baseUrl = '../../';
+$pageTitle = 'Dashboard';
+
+// Count by type
+$docsByType = $db->query("
+    SELECT tipo, COUNT(*) as cnt
+    FROM documentos
+    GROUP BY tipo
+    ORDER BY cnt DESC
+")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -40,451 +51,207 @@ $geminiConfigured = is_gemini_configured();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - KINO TRACE</title>
     <link rel="stylesheet" href="../../assets/css/styles.css">
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
-            min-height: 100vh;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 1.5rem;
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem 0;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-
-        .header h1 {
-            color: #1f2937;
-            font-size: 1.75rem;
-        }
-
-        .header h1 span {
-            color: #2563eb;
-        }
-
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .user-badge {
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 999px;
-            font-weight: 600;
-        }
-
-        .logout-btn {
-            color: #6b7280;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-        }
-
-        .logout-btn:hover {
-            background: #f3f4f6;
-        }
-
-        /* Quick search */
-        .quick-search {
-            background: white;
-            border-radius: 12px;
-            padding: 1rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            margin-bottom: 1.5rem;
-            display: flex;
-            gap: 0.75rem;
-            flex-wrap: wrap;
-        }
-
-        .quick-search input {
-            flex: 1;
-            min-width: 200px;
-            padding: 0.75rem 1rem;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            font-size: 1rem;
-        }
-
-        .quick-search input:focus {
-            outline: none;
-            border-color: #2563eb;
-        }
-
-        .quick-search button {
-            padding: 0.75rem 1.5rem;
-            background: #2563eb;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .quick-search button:hover {
-            background: #1d4ed8;
-        }
-
-        /* Stats grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .stat-card {
-            background: white;
-            border-radius: 12px;
-            padding: 1.25rem;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-            text-align: center;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .stat-card .icon {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-card .number {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #2563eb;
-        }
-
-        .stat-card .label {
-            color: #6b7280;
-            font-size: 0.875rem;
-        }
-
-        /* Modules grid */
-        .modules-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .module-card {
-            background: white;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-            text-decoration: none;
-            transition: all 0.2s;
-            border: 2px solid transparent;
-        }
-
-        .module-card:hover {
-            border-color: #2563eb;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
-        }
-
-        .module-card .icon {
-            font-size: 2.5rem;
-            margin-bottom: 0.75rem;
-        }
-
-        .module-card h3 {
-            color: #1f2937;
-            margin-bottom: 0.5rem;
-            font-size: 1.1rem;
-        }
-
-        .module-card p {
-            color: #6b7280;
-            font-size: 0.875rem;
-            line-height: 1.4;
-        }
-
-        .module-card.highlight {
-            background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
-            border-color: #93c5fd;
-        }
-
-        .module-card.ai {
-            background: linear-gradient(135deg, #f3e8ff 0%, #faf5ff 100%);
-            border-color: #c4b5fd;
-        }
-
-        /* Recent docs */
-        .recent-section {
-            background: white;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        }
-
-        .recent-section h2 {
-            color: #1f2937;
-            margin-bottom: 1rem;
-            font-size: 1.25rem;
-        }
-
-        .recent-list {
-            list-style: none;
-        }
-
-        .recent-list li {
-            padding: 0.75rem 0;
-            border-bottom: 1px solid #f3f4f6;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .recent-list li:last-child {
-            border-bottom: none;
-        }
-
-        .doc-type-badge {
-            background: #dbeafe;
-            color: #1e40af;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        /* AI Chat mini */
-        .ai-chat-mini {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 12px;
-            padding: 1.5rem;
-            color: white;
-            margin-bottom: 1.5rem;
-        }
-
-        .ai-chat-mini h3 {
-            margin-bottom: 0.75rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .ai-chat-mini input {
-            width: 100%;
-            padding: 0.75rem;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .ai-chat-mini button {
-            padding: 0.5rem 1rem;
-            background: white;
-            color: #764ba2;
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .ai-chat-mini .response {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-top: 1rem;
-            display: none;
-        }
-
-        @media (max-width: 768px) {
-            .header {
-                flex-direction: column;
-                text-align: center;
-            }
-
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-    </style>
 </head>
 
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🚀 Dashboard <span>KINO TRACE</span></h1>
-            <div class="user-info">
-                <span class="user-badge">👤 <?= htmlspecialchars($code) ?></span>
-                <?php if (!empty($_SESSION['is_admin'])): ?>
-                    <a href="../../admin/panel.php" class="logout-btn">⚙️ Admin</a>
-                <?php endif; ?>
-                <a href="../../logout.php" class="logout-btn">Salir</a>
-            </div>
-        </div>
+    <div class="dashboard-container">
+        <?php include __DIR__ . '/../../includes/sidebar.php'; ?>
 
-        <!-- Búsqueda rápida -->
-        <div class="quick-search">
-            <input type="text" id="quickSearchInput" placeholder="🔍 Buscar código rápido...">
-            <button onclick="quickSearch()">Buscar</button>
-        </div>
+        <main class="main-content">
+            <?php include __DIR__ . '/../../includes/header.php'; ?>
 
-        <!-- Estadísticas -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="icon">📄</div>
-                <div class="number"><?= $docCount ?></div>
-                <div class="label">Documentos</div>
-            </div>
-            <div class="stat-card">
-                <div class="icon">🏷️</div>
-                <div class="number"><?= $uniqueCodes ?></div>
-                <div class="label">Códigos únicos</div>
-            </div>
-            <div class="stat-card">
-                <div class="icon">✅</div>
-                <div class="number"><?= $validCount ?>/<?= $codeCount ?></div>
-                <div class="label">Validados</div>
-            </div>
-            <div class="stat-card">
-                <div class="icon">🔗</div>
-                <div class="number"><?= $vincCount ?></div>
-                <div class="label">Vínculos</div>
-            </div>
-        </div>
+            <div class="page-content">
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value"><?= number_format($stats['total_documents']) ?></div>
+                            <div class="stat-label">Documentos</div>
+                        </div>
+                    </div>
 
-        <!-- Chat IA -->
-        <?php if ($geminiConfigured): ?>
-            <div class="ai-chat-mini">
-                <h3>🤖 Asistente IA (Gemini)</h3>
-                <input type="text" id="aiQuestion" placeholder="Pregunta sobre tus documentos...">
-                <button onclick="askAI()">Preguntar</button>
-                <div class="response" id="aiResponse"></div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                            </svg>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value"><?= number_format($stats['unique_codes']) ?></div>
+                            <div class="stat-label">Códigos Únicos</div>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value"><?= number_format($stats['validated_codes']) ?></div>
+                            <div class="stat-label">Validados</div>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            </svg>
+                        </div>
+                        <div class="stat-content">
+                            <?php
+                            $vincCount = (int) $db->query('SELECT COUNT(*) FROM vinculos')->fetchColumn();
+                            ?>
+                            <div class="stat-value"><?= number_format($vincCount) ?></div>
+                            <div class="stat-label">Vínculos</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">Acciones Rápidas</h3>
+                    </div>
+                    <div class="flex gap-3" style="flex-wrap: wrap;">
+                        <a href="../busqueda/" class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            Buscar Códigos
+                        </a>
+                        <a href="../subir/" class="btn btn-secondary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                            Subir Documento
+                        </a>
+                        <a href="../resaltar/" class="btn btn-secondary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" />
+                            </svg>
+                            Resaltar PDF
+                        </a>
+                        <a href="vincular.php" class="btn btn-secondary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            </svg>
+                            Vincular Docs
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Recent Documents & Stats by Type -->
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
+                    <!-- Recent Documents -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Documentos Recientes</h3>
+                            <a href="../recientes/" class="btn btn-secondary"
+                                style="padding: 0.5rem 1rem; font-size: 0.75rem;">Ver todos</a>
+                        </div>
+                        <?php if (empty($recentDocs)): ?>
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                            d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                                    </svg>
+                                </div>
+                                <h4 class="empty-state-title">Sin documentos</h4>
+                                <p class="empty-state-text">Comienza subiendo tu primer documento.</p>
+                            </div>
+                        <?php else: ?>
+                            <div class="table-container">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tipo</th>
+                                            <th>Número</th>
+                                            <th>Fecha</th>
+                                            <th>Códigos</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($recentDocs as $doc): ?>
+                                            <tr>
+                                                <td><span class="badge badge-primary"><?= strtoupper($doc['tipo']) ?></span>
+                                                </td>
+                                                <td><?= htmlspecialchars($doc['numero']) ?></td>
+                                                <td><?= htmlspecialchars($doc['fecha']) ?></td>
+                                                <td><span class="code-tag"><?= $doc['code_count'] ?></span></td>
+                                                <td>
+                                                    <a href="../<?= $doc['tipo'] ?>/view.php?id=<?= $doc['id'] ?>"
+                                                        class="btn btn-secondary btn-icon" title="Ver">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                                            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                                stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                                stroke-width="2"
+                                                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                        </svg>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Stats by Type -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Por Tipo</h3>
+                        </div>
+                        <?php if (empty($docsByType)): ?>
+                            <p class="text-muted text-center">Sin datos</p>
+                        <?php else: ?>
+                            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                <?php foreach ($docsByType as $type): ?>
+                                    <div
+                                        style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--radius-md);">
+                                        <span
+                                            style="font-weight: 500; text-transform: capitalize;"><?= htmlspecialchars($type['tipo']) ?></span>
+                                        <span class="badge badge-primary"><?= $type['cnt'] ?></span>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
             </div>
-        <?php endif; ?>
 
-        <!-- Módulos principales -->
-        <div class="modules-grid">
-            <a href="../busqueda/" class="module-card highlight">
-                <div class="icon">🔍</div>
-                <h3>Búsqueda Inteligente</h3>
-                <p>Búsqueda voraz de códigos en todos los documentos</p>
-            </a>
-            <a href="../subir/" class="module-card highlight">
-                <div class="icon">📤</div>
-                <h3>Subir Documento</h3>
-                <p>Sube PDFs y extrae códigos automáticamente</p>
-            </a>
-            <a href="../importar/" class="module-card">
-                <div class="icon">📥</div>
-                <h3>Importar Datos</h3>
-                <p>Importa desde CSV, SQL o Excel</p>
-            </a>
-            <a href="../manifiestos/list.php" class="module-card">
-                <div class="icon">📦</div>
-                <h3>Manifiestos</h3>
-                <p>Gestiona manifiestos de carga</p>
-            </a>
-            <a href="../declaraciones/list.php" class="module-card">
-                <div class="icon">📜</div>
-                <h3>Declaraciones</h3>
-                <p>Declaraciones aduaneras</p>
-            </a>
-            <a href="vincular.php" class="module-card">
-                <div class="icon">🔗</div>
-                <h3>Vincular</h3>
-                <p>Relaciona documentos entre sí</p>
-            </a>
-            <a href="validar.php" class="module-card">
-                <div class="icon">✅</div>
-                <h3>Validar Códigos</h3>
-                <p>Valida y marca códigos</p>
-            </a>
-        </div>
-
-        <!-- Documentos recientes -->
-        <div class="recent-section">
-            <h2>📋 Documentos Recientes</h2>
-            <?php if (empty($recentDocs)): ?>
-                <p style="color:#6b7280;">No hay documentos aún. <a href="../subir/">Sube tu primer documento</a></p>
-            <?php else: ?>
-                <ul class="recent-list">
-                    <?php foreach ($recentDocs as $doc): ?>
-                        <li>
-                            <span>
-                                <span class="doc-type-badge"><?= strtoupper($doc['tipo']) ?></span>
-                                <strong style="margin-left:0.5rem;">#<?= htmlspecialchars($doc['numero']) ?></strong>
-                            </span>
-                            <span style="color:#6b7280;"><?= htmlspecialchars($doc['fecha']) ?></span>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php endif; ?>
-        </div>
+            <?php include __DIR__ . '/../../includes/footer.php'; ?>
+        </main>
     </div>
-
-    <script>
-        function quickSearch() {
-            const term = document.getElementById('quickSearchInput').value.trim();
-            if (term) {
-                window.location.href = '../busqueda/?q=' + encodeURIComponent(term);
-            }
-        }
-
-        document.getElementById('quickSearchInput').addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') quickSearch();
-        });
-
-        <?php if ($geminiConfigured): ?>
-            async function askAI() {
-                const question = document.getElementById('aiQuestion').value.trim();
-                if (!question) return;
-
-                const responseDiv = document.getElementById('aiResponse');
-                responseDiv.style.display = 'block';
-                responseDiv.textContent = 'Pensando...';
-
-                try {
-                    const formData = new FormData();
-                    formData.append('action', 'ai_chat');
-                    formData.append('question', question);
-
-                    const response = await fetch('../../api.php', { method: 'POST', body: formData });
-                    const result = await response.json();
-
-                    if (result.error) {
-                        responseDiv.textContent = '❌ ' + result.error;
-                    } else {
-                        responseDiv.textContent = result.answer || 'Sin respuesta';
-                    }
-                } catch (e) {
-                    responseDiv.textContent = '❌ Error: ' + e.message;
-                }
-            }
-
-            document.getElementById('aiQuestion').addEventListener('keydown', function (e) {
-                if (e.key === 'Enter') askAI();
-            });
-        <?php endif; ?>
-    </script>
 </body>
 
 </html>

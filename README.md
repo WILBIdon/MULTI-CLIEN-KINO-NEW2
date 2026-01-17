@@ -1,11 +1,13 @@
 # KINO-TRACE 🚀
 
-Sistema de Gestión Documental Multi-cliente con Trazabilidad.
+Sistema de Gestión Documental Multi-cliente con Dashboard Moderno.
 
 ## Características
 
-- 📤 **Subida de documentos PDF** con extracción automática de códigos
-- 🔍 **Búsqueda inteligente voraz** de códigos en documentos
+- 🎨 **Dashboard moderno** con sidebar colapsable e iconos minimalistas
+- 📤 **Gestor de Documentos** con búsqueda inteligente, subida y consulta
+- 🖍️ **Resaltador de PDF** - marca texto con patrones de inicio/fin
+- 🔍 **Búsqueda voraz** de códigos en documentos
 - 📥 **Importación de datos** desde CSV/SQL
 - 🤖 **Integración con IA** (Google Gemini) para extracción inteligente
 - 👥 **Multi-cliente** con bases de datos SQLite aisladas
@@ -13,67 +15,121 @@ Sistema de Gestión Documental Multi-cliente con Trazabilidad.
 
 ## 🚀 Despliegue en Railway
 
-Esta aplicación está optimizada para desplegarse en Railway.
-
 ### Requisitos Previos
-1.  Tener una cuenta en [Railway.app](https://railway.app/).
-2.  Tener este proyecto en un repositorio de GitHub.
+1. Cuenta en [Railway.app](https://railway.app/)
+2. Este proyecto en un repositorio de GitHub
 
-### Pasos
-1.  **Nuevo Proyecto**: En Railway, crea un "New Project" -> "Deploy from GitHub repo" y selecciona este repositorio.
-2.  **Configuración de Volumen (IMPORTANTE)**:
-    *   Este paso es CRÍTICO para no perder datos, ya que Railway borra los archivos en cada despliegue.
-    *   Ve a la configuración del servicio ("Settings").
-    *   Baja a la sección de **Volumes**.
-    *   Haz clic en "New Volume".
-    *   **Mount Path**: `/var/www/html/clients`
-    *   Esto asegurará que **todos** los datos (base de datos central, bases de datos de clientes y archivos subidos) se persistan.
-3.  **Variables de Entorno**:
-    *   `GEMINI_API_KEY`: Tu clave de API de Google Gemini (opcional, para IA).
-    *   `PORT`: Opcional, por defecto es asigando automáticamante por Railway.
+### Pasos de Despliegue
 
-### Notas sobre Base de Datos
-*   La aplicación usa **SQLite**.
-*   `database_structure.sql` se incluye solo como referencia de la estructura. No se usa para la conexión en vivo.
-*   Todo se guarda en `/clients/`, por eso el volumen debe montarse ahí.
+#### 1. Crear Proyecto
+- En Railway: "New Project" → "Deploy from GitHub repo"
+- Seleccionar este repositorio
+
+#### 2. Configurar Volumen (CRÍTICO)
+
+> ⚠️ **SIN VOLUMEN SE PERDERÁN LOS DATOS EN CADA DESPLIEGUE**
+
+1. Ve a la configuración del servicio → "Settings"
+2. Sección **Volumes** → "New Volume"
+3. **Mount Path**: `/var/www/html/clients`
+
+Esto persiste:
+- ✅ Base de datos central (`central.db`)
+- ✅ Bases de datos de cada cliente (`{codigo}.db`)
+- ✅ Archivos PDF subidos
+
+#### 3. Variables de Entorno (Opcionales)
+| Variable | Descripción |
+|----------|-------------|
+| `GEMINI_API_KEY` | Clave API de Google Gemini (para IA) |
+
+#### 4. Crear Usuario Admin
+Después del primer despliegue, visita:
+```
+https://tu-app.railway.app/migrate.php
+```
+
+Esto crea:
+- **Código**: `admin`
+- **Contraseña**: `admin123`
+
+> 🔐 Cambia la contraseña después del primer login.
+
+---
 
 ## Configuración Local
 
 ```bash
 # Clonar
-git clone https://github.com/tu-usuario/kino-trace.git
-cd kino-trace
+git clone https://github.com/kino14n/MULTI-CLIEN-KINO-NEW.git
+cd MULTI-CLIEN-KINO-NEW
 
-# Iniciar servidor PHP
-php -S localhost:8000
+# Crear usuario admin
+php migrate.php
 
-# Visitar http://localhost:8000
+# Iniciar servidor
+php -S localhost:8080
+
+# Visitar http://localhost:8080
 ```
 
-## Usuario Admin por Defecto
+---
 
-Ejecuta `migrate.php` para crear el usuario administrador:
-- **Código**: admin
-- **Contraseña**: admin123
-
-## Estructura
+## Estructura del Proyecto
 
 ```
 kino-trace/
-├── api.php              # API unificada
+├── api.php                    # API unificada
+├── config.php                 # Configuración SQLite
+├── login.php                  # Login moderno
+├── migrate.php                # Crear admin
+├── includes/
+│   ├── sidebar.php            # Navegación lateral
+│   ├── header.php             # Header de página
+│   └── footer.php             # Footer
 ├── helpers/
-│   ├── pdf_extractor.php   # Extracción de códigos
-│   ├── search_engine.php   # Búsqueda voraz
-│   ├── gemini_ai.php       # Integración IA
-│   └── import_engine.php   # Importación CSV/SQL
+│   ├── pdf_extractor.php      # Extracción de códigos
+│   ├── search_engine.php      # Búsqueda voraz
+│   ├── gemini_ai.php          # Integración IA
+│   ├── import_engine.php      # Importación CSV/SQL
+│   └── tenant.php             # Multi-tenancy
 ├── modules/
-│   ├── busqueda/        # Búsqueda inteligente
-│   ├── subir/           # Subida de documentos
-│   ├── importar/        # Importación de datos
-│   └── trazabilidad/    # Dashboard y validación
-└── clients/             # Datos por cliente (SQLite)
+│   ├── busqueda/              # Gestor de Documentos (4 tabs)
+│   ├── resaltar/              # Resaltador de PDF
+│   ├── recientes/             # Documentos recientes
+│   ├── manifiestos/           # Gestión manifiestos
+│   ├── declaraciones/         # Gestión declaraciones
+│   ├── subir/                 # Subida con extracción
+│   ├── importar/              # Importación datos
+│   └── trazabilidad/          # Dashboard y validación
+├── assets/css/styles.css      # Sistema de diseño
+└── clients/                   # Datos (VOLUMEN EN RAILWAY)
 ```
+
+---
+
+## Arquitectura de Base de Datos
+
+```
+clients/
+├── central.db                 # Control de clientes
+├── admin/
+│   ├── admin.db               # BD del admin
+│   └── uploads/               # Archivos
+├── kino/
+│   ├── kino.db                # BD de KINO
+│   └── uploads/
+└── [otros clientes]/
+```
+
+### ¿Por qué SQLite?
+- ✅ Sin servidor MySQL externo
+- ✅ Portabilidad total (backup = copiar carpeta)
+- ✅ Un solo volumen persiste todo
+- ✅ Aislamiento completo por cliente
+
+---
 
 ## Licencia
 
-MIT License - Elaborado por KINO GENIUS
+MIT License - Elaborado por **KINO GENIUS**
