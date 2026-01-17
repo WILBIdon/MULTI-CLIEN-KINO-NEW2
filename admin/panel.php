@@ -36,6 +36,7 @@ try {
             $titulo = trim($_POST['titulo'] ?? '');
             $colorP = trim($_POST['color_primario'] ?? '#3b82f6');
             $colorS = trim($_POST['color_secundario'] ?? '#64748b');
+            $copyKinoData = isset($_POST['copy_kino_data']);
 
             if ($code === '' || $name === '' || $password === '') {
                 $error = 'Debe completar código, nombre y contraseña.';
@@ -48,7 +49,69 @@ try {
                 } else {
                     $hash = password_hash($password, PASSWORD_DEFAULT);
                     create_client_structure($code, $name, $hash, $titulo, $colorP, $colorS);
-                    $message = "✅ Cliente '{$name}' creado correctamente.";
+
+                    $extraMsg = '';
+
+                    // Copy KINO reference data if requested
+                    if ($copyKinoData) {
+                        $kinoDb = open_client_db('kino');
+                        $newDb = open_client_db($code);
+
+                        // Copy documentos
+                        $docs = $kinoDb->query('SELECT tipo, numero, fecha, ruta_archivo FROM documentos')->fetchAll(PDO::FETCH_ASSOC);
+                        $docMapping = [];
+                        $stmtDoc = $newDb->prepare('INSERT INTO documentos (tipo, numero, fecha, ruta_archivo) VALUES (?, ?, ?, ?)');
+                        foreach ($docs as $doc) {
+                            $stmtDoc->execute([$doc['tipo'], $doc['numero'], $doc['fecha'], $doc['ruta_archivo']]);
+                            $docMapping[$doc['numero']] = $newDb->lastInsertId();
+                        }
+
+                        // Copy codigos
+                        $codes = $kinoDb->query('SELECT c.codigo, d.numero FROM codigos c JOIN documentos d ON c.documento_id = d.id')->fetchAll(PDO::FETCH_ASSOC);
+                        $stmtCode = $newDb->prepare('INSERT INTO codigos (documento_id, codigo) VALUES (?, ?)');
+                        foreach ($codes as $codeRow) {
+                            if (isset($docMapping[$codeRow['numero']])) {
+                                $stmtCode->execute([$docMapping[$codeRow['numero']], $codeRow['codigo']]);
+                            }
+                        }
+
+                        $extraMsg = " + Datos de KINO copiados (" . count($docs) . " docs, " . count($codes) . " códigos).";
+                    }
+
+                    // Process ZIP file if uploaded
+                    if (!empty($_FILES['zip_file']['tmp_name']) && $_FILES['zip_file']['error'] === UPLOAD_ERR_OK) {
+                        $zip = new ZipArchive();
+                        if ($zip->open($_FILES['zip_file']['tmp_name']) === TRUE) {
+                            $uploadDir = CLIENTS_DIR . "/{$code}/uploads/documento/";
+                            if (!file_exists($uploadDir)) {
+                                mkdir($uploadDir, 0777, true);
+                            }
+
+                            $newDb = open_client_db($code);
+                            $pdfCount = 0;
+
+                            for ($i = 0; $i < $zip->numFiles; $i++) {
+                                $filename = $zip->getNameIndex($i);
+                                if (strtolower(pathinfo($filename, PATHINFO_EXTENSION)) !== 'pdf')
+                                    continue;
+
+                                $basename = basename($filename);
+                                $newFilename = time() . '_' . $pdfCount . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $basename);
+                                $content = $zip->getFromIndex($i);
+
+                                if ($content !== false && file_put_contents($uploadDir . $newFilename, $content)) {
+                                    $docName = pathinfo($basename, PATHINFO_FILENAME);
+                                    $stmt = $newDb->prepare("INSERT INTO documentos (tipo, numero, fecha, ruta_archivo) VALUES (?, ?, ?, ?)");
+                                    $stmt->execute(['documento', $docName, date('Y-m-d'), $newFilename]);
+                                    $pdfCount++;
+                                }
+                            }
+                            $zip->close();
+                            $extraMsg .= " + {$pdfCount} PDFs del ZIP importados.";
+                        }
+                    }
+
+                    $message = "✅ Cliente '{$name}' creado correctamente." . $extraMsg;
                 }
             }
         }
@@ -552,7 +615,7 @@ $clientCodes = array_column($clients, 'codigo');
                         </svg>
                         Crear Nuevo Cliente
                     </h3>
-                    <form method="post">
+                    <form method="post" enctype="multipart/form-data">
                         <input type="hidden" name="action" value="create">
                         <div class="form-row">
                             <div class="form-group">
@@ -587,6 +650,26 @@ $clientCodes = array_column($clients, 'codigo');
                                 </div>
                             </div>
                         </div>
+                        
+                        <div class="form-group" style="padding: 0.75rem; background: rgba(59,130,246,0.05); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">
+                            <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" name="copy_kino_data">
+                                <span>📦 Copiar datos de referencia de KINO</span>
+                            </label>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0.5rem 0 0 1.5rem;">
+                                Incluye 119 documentos y 18,400 códigos de inventario
+                            </p>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">📁 Subir PDFs (ZIP opcional)</label>
+                            <input type="file" class="form-input" name="zip_file" accept=".zip"
+                                style="padding: 0.5rem;">
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
+                                Sube un archivo ZIP con PDFs para importar automáticamente
+                            </p>
+                        </div>
+                        
                         <button type="submit" class="btn btn-primary" style="width: 100%;">Crear Cliente</button>
                     </form>
                 </div>
