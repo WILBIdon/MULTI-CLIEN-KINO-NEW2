@@ -108,11 +108,47 @@ try {
                 $sqlContent = file_get_contents($_FILES['sql_file']['tmp_name']);
                 $db = open_client_db($code);
 
-                // Ejecutar SQL
-                $db->exec($sqlContent);
-                $message = "✅ SQL importado correctamente a '{$code}'.";
+                // Clean MySQL-specific syntax for SQLite compatibility
+                $sqlContent = preg_replace('/\/\*!.*?\*\/;?/s', '', $sqlContent); // Remove MySQL comments /*!...*/
+                $sqlContent = preg_replace('/SET\s+[^;]+;/i', '', $sqlContent); // Remove SET statements
+                $sqlContent = preg_replace('/LOCK\s+TABLES[^;]+;/i', '', $sqlContent); // Remove LOCK TABLES
+                $sqlContent = preg_replace('/UNLOCK\s+TABLES;?/i', '', $sqlContent); // Remove UNLOCK TABLES
+                $sqlContent = preg_replace('/ENGINE\s*=\s*\w+/i', '', $sqlContent); // Remove ENGINE=
+                $sqlContent = preg_replace('/DEFAULT\s+CHARSET\s*=\s*\w+/i', '', $sqlContent); // Remove CHARSET
+                $sqlContent = preg_replace('/COLLATE\s*=?\s*\w+/i', '', $sqlContent); // Remove COLLATE
+                $sqlContent = preg_replace('/AUTO_INCREMENT\s*=\s*\d+/i', '', $sqlContent); // Remove AUTO_INCREMENT=N
+                $sqlContent = preg_replace('/ON\s+UPDATE\s+CURRENT_TIMESTAMP/i', '', $sqlContent); // Remove ON UPDATE
+                $sqlContent = preg_replace('/`/s', '"', $sqlContent); // Convert backticks to double quotes
+                $sqlContent = preg_replace('/int\s*\(\d+\)/i', 'INTEGER', $sqlContent); // int(11) -> INTEGER
+                $sqlContent = preg_replace('/varchar\s*\(\d+\)/i', 'TEXT', $sqlContent); // varchar -> TEXT
+                $sqlContent = preg_replace('/datetime/i', 'TEXT', $sqlContent); // datetime -> TEXT
+                $sqlContent = preg_replace('/--.*$/m', '', $sqlContent); // Remove -- comments
+
+                // Split into statements and execute
+                $statements = array_filter(array_map('trim', explode(';', $sqlContent)));
+                $executed = 0;
+                $errors = 0;
+
+                foreach ($statements as $stmt) {
+                    if (empty($stmt) || strlen($stmt) < 5)
+                        continue;
+                    try {
+                        $db->exec($stmt);
+                        $executed++;
+                    } catch (PDOException $e) {
+                        $errors++;
+                        // Continue with other statements
+                    }
+                }
+
+                if ($errors > 0) {
+                    $message = "⚠️ SQL importado con {$executed} sentencias OK, {$errors} errores ignorados.";
+                } else {
+                    $message = "✅ SQL importado correctamente: {$executed} sentencias ejecutadas.";
+                }
             }
         }
+
 
         // HABILITAR/DESHABILITAR
         elseif ($action === 'toggle') {
