@@ -4,10 +4,11 @@ FROM php:8.2-apache
 RUN apt-get update && apt-get install -y \
     poppler-utils \
     libsqlite3-dev \
+    libzip-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Habilitar módulos de PHP
-RUN docker-php-ext-install pdo pdo_sqlite
+# Habilitar módulos de PHP (incluido zip para ZipArchive)
+RUN docker-php-ext-install pdo pdo_sqlite zip
 
 # Configurar límites de PHP para subida de archivos grandes
 RUN echo "upload_max_filesize = 128M" >> /usr/local/etc/php/conf.d/uploads.ini \
