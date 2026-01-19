@@ -359,6 +359,22 @@ try {
             json_exit($result);
 
         // ====================
+        // SMART CHAT - Asistente que conoce la app
+        // ====================
+        case 'smart_chat':
+            if (!is_gemini_configured()) {
+                json_exit(['error' => 'Gemini AI no configurado. Configure GEMINI_API_KEY.']);
+            }
+
+            $question = trim($_POST['question'] ?? '');
+            if (empty($question)) {
+                json_exit(['error' => 'Pregunta vacía']);
+            }
+
+            $result = ai_smart_chat($db, $question, $clientCode);
+            json_exit($result);
+
+        // ====================
         // VERIFICAR ESTADO DE IA
         // ====================
         case 'ai_status':

@@ -302,3 +302,186 @@ PROMPT;
         'suggestion' => $data
     ];
 }
+
+/**
+ * Chat inteligente que conoce toda la app KINO TRACE.
+ * Puede buscar códigos, documentos y explicar funcionalidades.
+ *
+ * @param PDO $db Conexión a la base de datos del cliente.
+ * @param string $question Pregunta del usuario.
+ * @param string $clientCode Código del cliente.
+ * @return array Respuesta del chat con enlaces a documentos si aplica.
+ */
+function ai_smart_chat(PDO $db, string $question, string $clientCode): array
+{
+    // Obtener estadísticas del sistema
+    $stats = [
+        'total_documentos' => $db->query("SELECT COUNT(*) FROM documentos")->fetchColumn(),
+        'total_codigos' => $db->query("SELECT COUNT(*) FROM codigos")->fetchColumn(),
+        'tipos_documentos' => $db->query("SELECT tipo, COUNT(*) as cnt FROM documentos GROUP BY tipo")->fetchAll(PDO::FETCH_ASSOC)
+    ];
+
+    // Buscar si la pregunta menciona un código específico
+    $codigosEncontrados = [];
+    $documentosRelacionados = [];
+
+    // Extraer posibles códigos de la pregunta (patrones alfanuméricos)
+    preg_match_all('/[A-Z]{2,4}[-\s]?\d{3,}[-\/]?\d*[-\/]?\d*/i', $question, $matches);
+    $posiblesCodigos = array_unique($matches[0]);
+
+    if (!empty($posiblesCodigos)) {
+        foreach ($posiblesCodigos as $codigo) {
+            $codigoLimpio = preg_replace('/[\s-]/', '', $codigo);
+            $stmt = $db->prepare("
+                SELECT c.codigo, d.id, d.numero, d.tipo, d.fecha, d.ruta_archivo
+                FROM codigos c
+                JOIN documentos d ON c.documento_id = d.id
+                WHERE UPPER(REPLACE(c.codigo, '-', '')) LIKE UPPER(?)
+                LIMIT 5
+            ");
+            $stmt->execute(['%' . $codigoLimpio . '%']);
+            $resultados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($resultados as $r) {
+                $codigosEncontrados[$r['codigo']] = $r;
+                $documentosRelacionados[$r['id']] = $r;
+            }
+        }
+    }
+
+    // Buscar documentos recientes si no hay códigos específicos
+    $docsRecientes = $db->query("
+        SELECT d.id, d.numero, d.tipo, d.fecha, d.ruta_archivo,
+               (SELECT COUNT(*) FROM codigos WHERE documento_id = d.id) as total_codigos
+        FROM documentos d
+        ORDER BY d.fecha DESC
+        LIMIT 5
+    ")->fetchAll(PDO::FETCH_ASSOC);
+
+    // Preparar tipos de documentos
+    $tiposTexto = formatTiposDocumentos($stats['tipos_documentos']);
+
+    // Construir contexto para Gemini
+    $appContext = "ERES EL ASISTENTE VIRTUAL DE KINO TRACE - Sistema de Trazabilidad de Documentos
+
+=== SOBRE LA APLICACIÓN ===
+KINO TRACE es un sistema web para:
+- Gestionar documentos de importación (manifiestos, declaraciones, facturas)
+- Buscar códigos de productos en documentos PDF
+- Relacionar códigos entre diferentes documentos
+- Sincronizar con base de datos KINO original
+
+=== MÓDULOS DISPONIBLES ===
+1. **Dashboard** (/modules/trazabilidad/dashboard.php): Vista general con estadísticas
+2. **Gestor Doc** (/modules/busqueda/): Buscar documentos, subir nuevos, buscar por código
+3. **Subida Lote** (/modules/lote/): Subir múltiples PDFs en ZIP
+4. **Sincronizar BD** (/modules/sincronizar/): Enlazar códigos con documentos
+5. **Documentos Recientes** (/modules/recientes/): Ver últimos documentos
+
+=== ESTADÍSTICAS ACTUALES ===
+- Total de documentos: {$stats['total_documentos']}
+- Total de códigos enlazados: {$stats['total_codigos']}
+- Tipos de documentos: {$tiposTexto}
+";
+
+    // Agregar información de códigos encontrados
+    if (!empty($codigosEncontrados)) {
+        $appContext .= "\n=== CÓDIGOS ENCONTRADOS EN LA PREGUNTA ===\n";
+        foreach ($codigosEncontrados as $codigo => $info) {
+            $appContext .= "Código: {$codigo}\n";
+            $appContext .= "  - Documento: {$info['tipo']} #{$info['numero']}\n";
+            $appContext .= "  - Fecha: {$info['fecha']}\n";
+            $appContext .= "  - ID Documento: {$info['id']}\n";
+            if ($info['ruta_archivo']) {
+                $appContext .= "  - PDF disponible: Sí\n";
+            }
+            $appContext .= "\n";
+        }
+    }
+
+    // Agregar documentos recientes
+    $appContext .= "\n=== DOCUMENTOS RECIENTES ===\n";
+    foreach ($docsRecientes as $doc) {
+        $appContext .= "- {$doc['tipo']} #{$doc['numero']} (ID: {$doc['id']}, {$doc['total_codigos']} códigos, Fecha: {$doc['fecha']})\n";
+    }
+
+    $prompt = <<<PROMPT
+{$appContext}
+
+=== INSTRUCCIONES ===
+1. Responde preguntas sobre la aplicación de forma clara y concisa
+2. Si mencionan un código, busca si está en los datos y da información
+3. Cuando menciones documentos, incluye el formato: [DOC:ID:NUMERO] para crear enlaces
+4. Cuando menciones códigos, incluye el formato: [CODE:CODIGO] para resaltarlos
+5. NO generes imágenes ni dibujes
+6. Responde en español
+7. Sé amable y profesional
+
+=== PREGUNTA DEL USUARIO ===
+{$question}
+
+Responde de forma útil y estructurada:
+PROMPT;
+
+    $result = call_gemini($prompt);
+
+    if (!$result['success']) {
+        return [
+            'success' => false,
+            'error' => $result['error'],
+            'response' => null
+        ];
+    }
+
+    $response = $result['response'];
+
+    // Procesar la respuesta para crear enlaces reales
+    // Reemplazar [DOC:ID:NUMERO] con enlaces HTML
+    $response = preg_replace_callback(
+        '/\[DOC:(\d+):([^\]]+)\]/',
+        function ($matches) {
+            return '<a href="../documento/view.php?id=' . $matches[1] . '" class="chat-link">' . htmlspecialchars($matches[2]) . '</a>';
+        },
+        $response
+    );
+
+    // Reemplazar [CODE:CODIGO] con badges
+    $response = preg_replace_callback(
+        '/\[CODE:([^\]]+)\]/',
+        function ($matches) {
+            return '<span class="chat-code">' . htmlspecialchars($matches[1]) . '</span>';
+        },
+        $response
+    );
+
+    // Agregar documentos relacionados para mostrar como tarjetas
+    $docCards = [];
+    foreach ($documentosRelacionados as $doc) {
+        $docCards[] = [
+            'id' => $doc['id'],
+            'numero' => $doc['numero'],
+            'tipo' => $doc['tipo'],
+            'fecha' => $doc['fecha'],
+            'ruta_archivo' => $doc['ruta_archivo']
+        ];
+    }
+
+    return [
+        'success' => true,
+        'response' => $response,
+        'documents' => $docCards,
+        'codes_found' => array_keys($codigosEncontrados)
+    ];
+}
+
+/**
+ * Formatea los tipos de documentos para el contexto.
+ */
+function formatTiposDocumentos(array $tipos): string
+{
+    $result = [];
+    foreach ($tipos as $t) {
+        $result[] = "{$t['tipo']}: {$t['cnt']}";
+    }
+    return implode(', ', $result);
+}
