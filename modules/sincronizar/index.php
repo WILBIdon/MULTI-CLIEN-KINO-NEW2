@@ -329,6 +329,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
         }
     }
+
+    // Acción para limpiar códigos duplicados
+    if ($_POST['action'] === 'clean_duplicates') {
+        try {
+            // Contar duplicados antes de limpiar
+            $countBefore = $db->query("SELECT COUNT(*) FROM codigos")->fetchColumn();
+
+            // Eliminar duplicados manteniendo solo el primero (ID más bajo)
+            $db->exec("
+                DELETE FROM codigos 
+                WHERE rowid NOT IN (
+                    SELECT MIN(rowid) 
+                    FROM codigos 
+                    GROUP BY documento_id, codigo
+                )
+            ");
+
+            $countAfter = $db->query("SELECT COUNT(*) FROM codigos")->fetchColumn();
+            $deleted = $countBefore - $countAfter;
+
+            if ($deleted > 0) {
+                $success = "🧹 ¡Limpieza completada! Se eliminaron $deleted códigos duplicados. (De $countBefore a $countAfter)";
+            } else {
+                $success = "✅ No se encontraron códigos duplicados. La base de datos está limpia.";
+            }
+        } catch (Exception $e) {
+            $error = 'Error al limpiar duplicados: ' . $e->getMessage();
+        }
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -524,10 +553,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             Analizaremos los documentos actuales y buscaremos coincidencias con la BD de KINO.
                         </p>
 
-                        <form method="POST">
+                        <form method="POST" style="display: inline-block;">
                             <input type="hidden" name="action" value="preview">
                             <button type="submit" class="btn btn-primary">
                                 🔍 Analizar Coincidencias
+                            </button>
+                        </form>
+
+                        <form method="POST" style="display: inline-block; margin-left: 1rem;">
+                            <input type="hidden" name="action" value="clean_duplicates">
+                            <button type="submit" class="btn btn-secondary"
+                                onclick="return confirm('¿Limpiar códigos duplicados?')">
+                                🧹 Limpiar Duplicados
                             </button>
                         </form>
                     </div>
