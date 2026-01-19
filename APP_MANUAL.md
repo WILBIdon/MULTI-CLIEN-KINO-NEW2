@@ -14,6 +14,24 @@ KINO TRACE es un sistema de trazabilidad documental diseñado para gestionar imp
   - **Gráficos:** Visualización de documentos por mes y tipos.
   - **Actividad Reciente:** Lista de las últimas acciones realizadas.
 
+### 🖍️ RESALTAR DOC (Visor Inteligente)
+**Ruta:** `/modules/resaltar/`
+- **Propósito:** Herramienta visual para "pintar" o resaltar textos específicos dentro de un PDF. Útil para auditoría visual.
+- **Funcionalidad:**
+  - Seleccionas un PDF existente o subes uno nuevo.
+  - Defines texto inicial y final.
+  - El sistema marca en colores todas las apariciones.
+
+### ✅ VALIDAR CÓDIGOS (Control de Calidad)
+**Ruta:** `/modules/trazabilidad/validar.php`
+- **Propósito:** Revisar y aprobar códigos extraídos.
+- **Funciones Nuevas:**
+  - **Validar Seleccionados:** Marca múltiples códigos con casillas y un solo clic.
+  - **🚀 Validar TODO:** Aprueba todos los códigos pendientes de golpe (Acción Masiva).
+- **Botones en resultados:**
+  - `📄 Ver PDF`: Abre el documento PDF en una nueva pestaña (Ruta inteligente corregida).
+  - `👁️ Ver Detalle`: Lleva a la vista detallada del documento.
+
 ### 🔍 GESTOR DOC (Búsqueda Avanzada)
 **Ruta:** `/modules/busqueda/`
 - **Propósito:** El buscador principal del sistema. Funciona como un "Google" para tus documentos.
