@@ -44,17 +44,35 @@ $codigos = $stmtCodigos->fetchAll(PDO::FETCH_ASSOC);
 
 // Determinar la ruta del PDF
 $pdfPath = null;
+$pdfUrl = null;
+
 if (!empty($doc['ruta_archivo'])) {
-    // Intentar múltiples rutas posibles
-    $possiblePaths = [
-        CLIENTS_DIR . "/{$clientCode}/uploads/{$doc['tipo']}/{$doc['ruta_archivo']}",
-        CLIENTS_DIR . "/{$clientCode}/uploads/{$doc['ruta_archivo']}",
-        CLIENTS_DIR . "/{$clientCode}/uploads/documento/{$doc['ruta_archivo']}",
-    ];
+    $ruta = $doc['ruta_archivo'];
+    $tipo = $doc['tipo'] ?? 'documento';
+
+    // Construir rutas posibles
+    $possiblePaths = [];
+
+    // Si la ruta ya incluye directorio (tipo/archivo.pdf)
+    if (strpos($ruta, '/') !== false) {
+        $possiblePaths[] = CLIENTS_DIR . "/{$clientCode}/uploads/{$ruta}";
+    }
+
+    // Rutas estándar
+    $possiblePaths[] = CLIENTS_DIR . "/{$clientCode}/uploads/{$tipo}/{$ruta}";
+    $possiblePaths[] = CLIENTS_DIR . "/{$clientCode}/uploads/{$ruta}";
+    $possiblePaths[] = CLIENTS_DIR . "/{$clientCode}/uploads/documento/{$ruta}";
+
+    // Si la ruta no tiene extensión, agregar .pdf
+    if (pathinfo($ruta, PATHINFO_EXTENSION) !== 'pdf') {
+        $possiblePaths[] = CLIENTS_DIR . "/{$clientCode}/uploads/{$tipo}/{$ruta}.pdf";
+    }
 
     foreach ($possiblePaths as $path) {
-        if (file_exists($path)) {
-            $pdfPath = str_replace(BASE_DIR, '../..', $path);
+        if (file_exists($path) && is_file($path)) {
+            $pdfPath = $path;
+            // Construir URL relativa para el navegador
+            $pdfUrl = "../../clients/{$clientCode}/uploads/" . str_replace(CLIENTS_DIR . "/{$clientCode}/uploads/", '', $path);
             break;
         }
     }
@@ -222,8 +240,8 @@ if (!empty($doc['ruta_archivo'])) {
                     </div>
                     <div class="actions-bar">
                         <a href="../recientes/" class="btn btn-secondary">← Volver</a>
-                        <?php if ($pdfPath): ?>
-                            <a href="<?= htmlspecialchars($pdfPath) ?>" target="_blank" class="btn btn-primary">
+                        <?php if ($pdfUrl): ?>
+                            <a href="<?= htmlspecialchars($pdfUrl) ?>" target="_blank" class="btn btn-primary">
                                 📥 Descargar PDF
                             </a>
                         <?php endif; ?>
@@ -290,12 +308,12 @@ if (!empty($doc['ruta_archivo'])) {
                     </div>
                 <?php endif; ?>
 
-                <?php if ($pdfPath): ?>
+                <?php if ($pdfUrl): ?>
                     <div class="card" style="margin-top: 1.5rem;">
                         <div class="card-header">
                             <h3 class="card-title">📄 Vista Previa del PDF</h3>
                         </div>
-                        <iframe src="<?= htmlspecialchars($pdfPath) ?>" class="pdf-viewer"></iframe>
+                        <iframe src="<?= htmlspecialchars($pdfUrl) ?>" class="pdf-viewer"></iframe>
                     </div>
                 <?php endif; ?>
             </div>

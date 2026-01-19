@@ -223,11 +223,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 // Preparar statement para insertar códigos
                 $stmtCode = $db->prepare("INSERT OR IGNORE INTO codigos (documento_id, codigo) VALUES (?, ?)");
 
-                // También actualizar ruta_archivo si tenemos el path de KINO
+                // También actualizar ruta_archivo
                 $stmtUpdatePath = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE id = ?");
+
+                // Obtener info del documento local para buscar el PDF real
+                $stmtGetDoc = $db->prepare("SELECT tipo, numero, ruta_archivo FROM documentos WHERE id = ?");
 
                 $syncedCodes = 0;
                 $syncedDocs = 0;
+                $pdfFixed = 0;
+
+                // Directorio base de uploads
+                $uploadsDir = CLIENTS_DIR . "/{$clientCode}/uploads/";
 
                 foreach ($results as $result) {
                     if ($result['status'] === 'matched' && $result['kino_id']) {
@@ -242,12 +249,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             $syncedCodes++;
                         }
 
-                        // Actualizar path si existe
-                        if (!empty($kinoData['documents'][$kinoDocId]['path'])) {
-                            $stmtUpdatePath->execute([
-                                $kinoData['documents'][$kinoDocId]['path'],
-                                $localDocId
-                            ]);
+                        // Buscar y corregir la ruta del PDF
+                        $stmtGetDoc->execute([$localDocId]);
+                        $localDoc = $stmtGetDoc->fetch(PDO::FETCH_ASSOC);
+
+                        if ($localDoc) {
+                            $currentPath = $localDoc['ruta_archivo'] ?? '';
+                            $tipo = $localDoc['tipo'] ?? 'documento';
+                            $numero = $localDoc['numero'] ?? '';
+
+                            // Si la ruta actual no incluye el tipo, buscar el archivo
+                            $pdfPath = null;
+
+                            // Buscar el PDF en varias ubicaciones posibles
+                            $searchPaths = [
+                                // Ruta actual si ya existe
+                                $uploadsDir . $currentPath,
+                                $uploadsDir . $tipo . '/' . $currentPath,
+                                $uploadsDir . $tipo . '/' . basename($currentPath),
+                            ];
+
+                            // Buscar por nombre del documento
+                            if (!empty($numero)) {
+                                // Buscar archivos que contengan el nombre
+                                $typeDir = $uploadsDir . $tipo . '/';
+                                if (is_dir($typeDir)) {
+                                    $files = scandir($typeDir);
+                                    foreach ($files as $file) {
+                                        if ($file === '.' || $file === '..')
+                                            continue;
+                                        // Verificar si el nombre del archivo contiene el número del documento
+                                        $fileBasename = pathinfo($file, PATHINFO_FILENAME);
+                                        if (
+                                            stripos($fileBasename, preg_replace('/[^a-zA-Z0-9]/', '', $numero)) !== false ||
+                                            stripos($numero, preg_replace('/[^a-zA-Z0-9]/', '', $fileBasename)) !== false
+                                        ) {
+                                            $searchPaths[] = $typeDir . $file;
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Encontrar el primer archivo que exista
+                            foreach ($searchPaths as $path) {
+                                if (file_exists($path) && is_file($path)) {
+                                    // Construir ruta relativa correcta: tipo/archivo.pdf
+                                    $pdfPath = $tipo . '/' . basename($path);
+                                    break;
+                                }
+                            }
+
+                            // Si encontramos el PDF, actualizar la ruta
+                            if ($pdfPath && $pdfPath !== $currentPath) {
+                                $stmtUpdatePath->execute([$pdfPath, $localDocId]);
+                                $pdfFixed++;
+                            } elseif (empty($currentPath) && !empty($kinoData['documents'][$kinoDocId]['path'])) {
+                                // Si no hay ruta y tenemos el path de KINO, usar ese
+                                $kinoPath = $tipo . '/' . $kinoData['documents'][$kinoDocId]['path'];
+                                $stmtUpdatePath->execute([$kinoPath, $localDocId]);
+                            }
                         }
 
                         $syncedDocs++;
@@ -256,6 +316,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 $db->commit();
                 $success = "✅ Sincronización completada: $syncedDocs documentos procesados, $syncedCodes códigos enlazados";
+                if ($pdfFixed > 0) {
+                    $success .= ", $pdfFixed rutas de PDF corregidas";
+                }
 
                 // Limpiar sesión
                 unset($_SESSION['sync_results'], $_SESSION['sync_kino_data']);
