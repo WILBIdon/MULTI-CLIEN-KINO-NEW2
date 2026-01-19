@@ -32,14 +32,14 @@
         <div id="aiChatMessages" class="ai-chat-messages">
             <div class="ai-message ai-message-bot">
                 <div class="ai-message-content">
-                    ¡Hola! 👋 Soy el asistente de KINO TRACE. Puedo ayudarte a:
+                    ¡Bienvenido a su mejor gestor de documentos! 🤖✨<br><br>
+                    Soy su Asistente Inteligente KINO. Puedo ayudarle a:
                     <ul>
-                        <li>Buscar códigos de productos</li>
-                        <li>Encontrar documentos relacionados</li>
-                        <li>Explicar cómo usar la aplicación</li>
-                        <li>Resolver dudas sobre trazabilidad</li>
+                        <li>🔍 <b>Rastrear códigos</b> en segundos.</li>
+                        <li>📊 <b>Analizar documentos</b> (Manifiestos, Facturas).</li>
+                        <li>🚀 <b>Explicar el uso</b> de la plataforma.</li>
                     </ul>
-                    ¿En qué puedo ayudarte?
+                    ¡Pregúnteme lo que necesite!
                 </div>
             </div>
         </div>

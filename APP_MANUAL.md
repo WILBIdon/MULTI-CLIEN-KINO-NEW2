@@ -30,51 +30,27 @@ KINO TRACE es un sistema de trazabilidad documental diseñado para gestionar imp
 - **Flujo de uso:**
   1. Preparas un ZIP con tus PDFs.
   2. Lo arrastras al área de carga.
-  3. Clic en `Procesar Lote`.
-- **Botones:**
-  - `🗑️ Limpiar`: Borra la selección actual.
-  - `▶️ Procesar`: Descomprime y registra los archivos en el sistema.
-
-### ⬆️ SUBIR DOCUMENTO (Individual)
-**Ruta:** `/modules/subir/`
-- **Propósito:** Subir un solo documento y extraer sus códigos automáticamente.
-- **Funciones Especiales:**
-  - **Extracción por Patrón:** Puedes definir con qué empieza (Prefijo) y termina (Terminador) un código para buscarlos en el PDF.
-  - **Extracción IA:** Usa Gemini para leer el PDF y encontrar datos automáticamente.
-- **Botones:**
-  - `🔍 Extraer Códigos`: Busca códigos según los patrones definidos.
-  - `🤖 Extracción con IA`: Usa inteligencia artificial para llenar el formulario.
-  - `💾 Guardar`: Registra el documento y los códigos encontrados en la BD.
-
-### 🔗 SINCRONIZAR BD (Enlazador)
-**Ruta:** `/modules/sincronizar/`
-- **Propósito:** Conectar los documentos subidos con la base de datos histórica (SQL) y limpiar errores.
-- **Botones Clave:**
-  - `🔍 Analizar Coincidencias`: Busca qué archivos subidos coinciden con registros existentes.
-  - `🔄 Sincronizar Ahora`: Realiza el enlace efectivo en la base de datos (INSERT OR UPDATE).
-  - `🧹 Limpiar Duplicados`: Herramienta de mantenimiento que elimina códigos repetidos en la base de datos, dejando solo una copia única.
-
-### 🖍️ RESALTAR DOC (Visor Inteligente)
-**Ruta:** `/modules/resaltar/`
-- **Propósito:** Herramienta visual para "pintar" o resaltar textos específicos dentro de un PDF. Útil para auditoría visual.
-- **Funcionalidad:**
-  - Seleccionas un PDF existente o subes uno nuevo.
-  - Defines texto inicial y final.
-  - El sistema marca en colores todas las apariciones.
+  3. Clic en `Procesar ZIP`.
+  4. El sistema muestra un **Resumen Compacto** de éxitos y errores (sin alertas molestas).
 
 ### 🕒 DOCUMENTOS RECIENTES
 **Ruta:** `/modules/recientes/`
 - **Propósito:** Lista cronológica de lo último que entró al sistema.
+- **Funcionalidad:**
+  - Carga los últimos 50 documentos.
+  - Botón `⏬ Ver 50 más` para cargar historial ilimitado sin recargar.
 - **Botones:**
-  - `📄 Ver PDF`: Acceso directo al archivo (con ruta corregida automática).
+  - `📄 Ver PDF`: Acceso directo al archivo.
 
 ### 🤖 CHAT INTELIGENTE (Asistente KINO)
 - **Ubicación:** Botón flotante morado en la esquina inferior derecha.
+- **Seguridad (IMPORTANTE):**
+  - El asistente está diseñado para proteger la información del sistema.
+  - **Nunca** revelará claves, contraseñas ni estructura interna del servidor.
 - **Capacidades:**
-  - Conoce toda la estructura descrita en este manual.
-  - Puede buscar códigos en tiempo real (Ej: "¿Dónde está el código XYZ?").
-  - Puede generar enlaces a documentos.
-  - Responde dudas sobre cómo usar la app.
+  - Saludo oficial: "Bienvenido a su mejor gestor de documentos".
+  - Búsqueda y análisis de códigos.
+  - Explicación de funciones del manual.
 
 ## 3. FLUJOS DE TRABAJO COMUNES
 
