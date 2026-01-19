@@ -87,16 +87,39 @@ function normalizeName($name)
     $name = preg_replace('/\.pdf$/i', '', $name);
     // Convertir a minúsculas y remover espacios extra
     $name = strtolower(trim($name));
-    // Remover caracteres especiales
+    // Remover caracteres especiales excepto letras, números, espacios y guiones
     $name = preg_replace('/[^a-z0-9\s-]/', '', $name);
     // Normalizar espacios
     $name = preg_replace('/\s+/', ' ', $name);
     return $name;
 }
 
-// Función para buscar coincidencia
+// Función para buscar coincidencia - MEJORADA
 function findMatch($docName, $docPath, $kinoDocuments)
 {
+    // Primero intentar coincidencia exacta por path (con o sin .pdf)
+    $docNameClean = preg_replace('/\.pdf$/i', '', trim($docName));
+
+    foreach ($kinoDocuments as $kinoDoc) {
+        $kinoPathClean = preg_replace('/\.pdf$/i', '', trim($kinoDoc['path']));
+
+        // Coincidencia exacta por path completo
+        if (strcasecmp($docNameClean, $kinoPathClean) === 0) {
+            return $kinoDoc;
+        }
+
+        // Coincidencia exacta por path (local como numero)
+        if (strcasecmp($docName, $kinoDoc['path']) === 0) {
+            return $kinoDoc;
+        }
+
+        // Coincidencia sin extensión
+        if (strcasecmp($docNameClean . '.pdf', $kinoDoc['path']) === 0) {
+            return $kinoDoc;
+        }
+    }
+
+    // Si no hay coincidencia exacta, buscar por nombre normalizado
     $normalizedName = normalizeName($docName);
     $normalizedPath = normalizeName($docPath);
 
@@ -104,32 +127,33 @@ function findMatch($docName, $docPath, $kinoDocuments)
         $kinoName = normalizeName($kinoDoc['name']);
         $kinoPath = normalizeName($kinoDoc['path']);
 
-        // Coincidencia exacta por nombre
+        // Coincidencia exacta por nombre normalizado
         if ($normalizedName === $kinoName) {
             return $kinoDoc;
         }
 
         // Coincidencia por path normalizado
-        if ($normalizedPath === $kinoPath) {
+        if (!empty($normalizedPath) && $normalizedPath === $kinoPath) {
             return $kinoDoc;
         }
 
-        // Coincidencia parcial (contiene)
+        // Coincidencia: el nombre local contiene el path de KINO normalizado
+        if (!empty($kinoPath) && strpos($normalizedName, $kinoPath) !== false) {
+            return $kinoDoc;
+        }
+
+        // Coincidencia: el path de KINO contiene el nombre local normalizado
+        if (!empty($normalizedName) && strlen($normalizedName) > 5 && strpos($kinoPath, $normalizedName) !== false) {
+            return $kinoDoc;
+        }
+
+        // Coincidencia parcial por nombre KINO
         if (
-            strpos($normalizedName, $kinoName) !== false ||
-            strpos($kinoName, $normalizedName) !== false
+            strlen($kinoName) > 5 &&
+            (strpos($normalizedName, $kinoName) !== false ||
+                strpos($kinoName, $normalizedName) !== false)
         ) {
             return $kinoDoc;
-        }
-
-        // Coincidencia por path
-        if (!empty($docPath) && !empty($kinoDoc['path'])) {
-            if (
-                strpos($normalizedPath, $kinoPath) !== false ||
-                strpos($kinoPath, $normalizedPath) !== false
-            ) {
-                return $kinoDoc;
-            }
         }
     }
 
