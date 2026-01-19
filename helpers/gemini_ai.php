@@ -361,22 +361,18 @@ function ai_smart_chat(PDO $db, string $question, string $clientCode): array
     // Preparar tipos de documentos
     $tiposTexto = formatTiposDocumentos($stats['tipos_documentos']);
 
+    // Obtener contenido del manual
+    $manualPath = __DIR__ . '/../APP_MANUAL.md';
+    $manualContent = '';
+    if (file_exists($manualPath)) {
+        $manualContent = file_get_contents($manualPath);
+    }
+
     // Construir contexto para Gemini
     $appContext = "ERES EL ASISTENTE VIRTUAL DE KINO TRACE - Sistema de Trazabilidad de Documentos
 
-=== SOBRE LA APLICACIÓN ===
-KINO TRACE es un sistema web para:
-- Gestionar documentos de importación (manifiestos, declaraciones, facturas)
-- Buscar códigos de productos en documentos PDF
-- Relacionar códigos entre diferentes documentos
-- Sincronizar con base de datos KINO original
-
-=== MÓDULOS DISPONIBLES ===
-1. **Dashboard** (/modules/trazabilidad/dashboard.php): Vista general con estadísticas
-2. **Gestor Doc** (/modules/busqueda/): Buscar documentos, subir nuevos, buscar por código
-3. **Subida Lote** (/modules/lote/): Subir múltiples PDFs en ZIP
-4. **Sincronizar BD** (/modules/sincronizar/): Enlazar códigos con documentos
-5. **Documentos Recientes** (/modules/recientes/): Ver últimos documentos
+=== MANUAL DE LA APLICACIÓN ===
+{$manualContent}
 
 === ESTADÍSTICAS ACTUALES ===
 - Total de documentos: {$stats['total_documentos']}
