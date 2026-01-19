@@ -214,8 +214,8 @@ $docsByType = $db->query("
                                                 <td><?= htmlspecialchars($doc['fecha']) ?></td>
                                                 <td><span class="code-tag"><?= $doc['code_count'] ?></span></td>
                                                 <td>
-                                                    <a href="../<?= $doc['tipo'] ?>/view.php?id=<?= $doc['id'] ?>"
-                                                        class="btn btn-secondary btn-icon" title="Ver">
+                                                    <a href="../documento/view.php?id=<?= $doc['id'] ?>"
+                                                                class=" btn btn-secondary btn-icon" title="Ver documento">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
                                                             fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path stroke-linecap="round" stroke-linejoin="round"

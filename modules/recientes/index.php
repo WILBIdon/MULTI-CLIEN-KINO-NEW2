@@ -106,8 +106,8 @@ $pageTitle = 'Documentos Recientes';
                                             </td>
                                             <td>
                                                 <div class="flex gap-2">
-                                                    <a href="../<?= $doc['tipo'] ?>/view.php?id=<?= $doc['id'] ?>"
-                                                        class="btn btn-secondary btn-icon" title="Ver">
+                                                    <a href="../documento/view.php?id=<?= $doc['id'] ?>"
+                                                                class=" btn btn-secondary btn-icon" title="Ver documento">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
                                                             fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path stroke-linecap="round" stroke-linejoin="round"
