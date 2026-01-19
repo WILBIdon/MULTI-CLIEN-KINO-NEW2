@@ -384,6 +384,7 @@ COD001
 
     <script>
         const apiUrl = '../../api.php';
+        const clientCode = '<?= $code ?>';
         let currentPage = 1;
 
         // ============ Tabs ============
@@ -458,6 +459,17 @@ COD001
 
             let html = '';
             for (const doc of result.documents) {
+                // Construir ruta del PDF correctamente
+                let pdfUrl = '';
+                if (doc.ruta_archivo) {
+                    // Si la ruta ya incluye el tipo (ej: documento/archivo.pdf)
+                    if (doc.ruta_archivo.includes('/')) {
+                        pdfUrl = `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`;
+                    } else {
+                        pdfUrl = `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
+                    }
+                }
+
                 html += `
                     <div class="result-card">
                         <div class="result-header">
@@ -471,7 +483,7 @@ COD001
                         </div>
                         <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                             <a href="../documento/view.php?id=${doc.id}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Códigos</a>
-                            ${doc.ruta_archivo ? `<a href="../../clients/<?= $code ?>/uploads/${doc.tipo}/${doc.ruta_archivo}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
+                            ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
                         </div>
                     </div>
                 `;
@@ -709,19 +721,31 @@ COD001
                     return;
                 }
 
-                document.getElementById('singleCodeList').innerHTML = result.documents.map(doc => `
-                    <div class="result-card">
-                        <div class="result-header">
-                            <span class="badge badge-primary">${doc.tipo.toUpperCase()}</span>
-                            <span class="result-meta">${doc.fecha}</span>
+                document.getElementById('singleCodeList').innerHTML = result.documents.map(doc => {
+                    // Construir ruta del PDF correctamente
+                    let pdfUrl = '';
+                    if (doc.ruta_archivo) {
+                        if (doc.ruta_archivo.includes('/')) {
+                            pdfUrl = `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`;
+                        } else {
+                            pdfUrl = `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
+                        }
+                    }
+                    
+                    return `
+                        <div class="result-card">
+                            <div class="result-header">
+                                <span class="badge badge-primary">${doc.tipo.toUpperCase()}</span>
+                                <span class="result-meta">${doc.fecha}</span>
+                            </div>
+                            <div class="result-title">${doc.numero}</div>
+                            <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                <a href="../documento/view.php?id=${doc.id}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Códigos</a>
+                                ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
+                            </div>
                         </div>
-                        <div class="result-title">${doc.numero}</div>
-                        <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            <a href="../documento/view.php?id=${doc.id}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Códigos</a>
-                            ${doc.ruta_archivo ? `<a href="../../clients/<?= $code ?>/uploads/${doc.tipo}/${doc.ruta_archivo}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
-                        </div>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
             } catch (error) {
                 alert('Error: ' + error.message);
             }
