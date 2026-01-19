@@ -346,41 +346,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['zip_file'])) {
                     </form>
                 </div>
 
-                <?php if (!empty($results)): ?>
+                <?php if (!empty($results)):
+                    $successCount = 0;
+                    $errorCount = 0;
+                    foreach ($results as $r) {
+                        if ($r['status'] === 'success')
+                            $successCount++;
+                        else
+                            $errorCount++;
+                    }
+                    ?>
                     <div class="card" style="margin-top: 1.5rem;">
                         <div class="card-header">
-                            <h3 class="card-title">📋 Resultados del Procesamiento</h3>
+                            <h3 class="card-title">📊 Resumen de Procesamiento</h3>
+                            <div class="flex gap-2">
+                                <span class="badge badge-success"><?= $successCount ?> Exitosos</span>
+                                <?php if ($errorCount > 0): ?>
+                                    <span class="badge badge-danger"><?= $errorCount ?> Errores</span>
+                                <?php endif; ?>
+                            </div>
                         </div>
+
                         <div class="results-list">
-                            <?php foreach ($results as $result): ?>
-                                <div class="result-item">
-                                    <div class="result-icon <?= $result['status'] ?>">
-                                        <?php if ($result['status'] === 'success'): ?>
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none"
-                                                viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M5 13l4 4L19 7" />
-                                            </svg>
-                                        <?php else: ?>
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none"
-                                                viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                        <?php endif; ?>
-                                    </div>
-                                    <span class="result-name">
-                                        <?= htmlspecialchars($result['file']) ?>
-                                    </span>
-                                    <?php if ($result['status'] === 'success'): ?>
-                                        <span class="badge badge-success">ID:
-                                            <?= $result['id'] ?>
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="badge badge-danger">Error</span>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endforeach; ?>
+                            <table class="table" style="margin:0">
+                                <thead>
+                                    <tr>
+                                        <th>Estado</th>
+                                        <th>Archivo</th>
+                                        <th>Detalle</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($results as $result): ?>
+                                        <tr>
+                                            <td width="50">
+                                                <?php if ($result['status'] === 'success'): ?>
+                                                    <span class="badge badge-success">OK</span>
+                                                <?php else: ?>
+                                                    <span class="badge badge-danger">Error</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?= htmlspecialchars($result['file']) ?></td>
+                                            <td>
+                                                <?php if ($result['status'] === 'success'): ?>
+                                                    <span style="color:var(--accent-success)">Guardado (ID:
+                                                        <?= $result['id'] ?>)</span>
+                                                <?php else: ?>
+                                                    <span
+                                                        style="color:var(--accent-danger)"><?= htmlspecialchars($result['message']) ?></span>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 <?php endif; ?>
