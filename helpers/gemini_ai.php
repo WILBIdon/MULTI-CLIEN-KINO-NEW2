@@ -408,19 +408,29 @@ KINO TRACE es un sistema web para:
     $prompt = <<<PROMPT
 {$appContext}
 
-=== INSTRUCCIONES ===
-1. Responde preguntas sobre la aplicación de forma clara y concisa
-2. Si mencionan un código, busca si está en los datos y da información
-3. Cuando menciones documentos, incluye el formato: [DOC:ID:NUMERO] para crear enlaces
-4. Cuando menciones códigos, incluye el formato: [CODE:CODIGO] para resaltarlos
-5. NO generes imágenes ni dibujes
-6. Responde en español
-7. Sé amable y profesional
+=== INSTRUCCIONES ESTRICTAS ===
+1. SOLO responde preguntas relacionadas con KINO TRACE y sus funcionalidades
+2. Si alguien pregunta sobre temas NO relacionados con la app (chistes, deportes, recetas, etc.), responde amablemente: "Solo puedo ayudarte con temas de KINO TRACE. ¿Tienes alguna duda sobre documentos, códigos o trazabilidad?"
+3. Si mencionan un código, busca si está en los datos proporcionados y da información detallada incluyendo:
+   - En qué documento está
+   - Fecha del documento
+   - Si hay PDF disponible
+   - Usa el formato [DOC:ID:NUMERO] para crear enlaces
+4. Cuando menciones códigos, usa el formato: [CODE:CODIGO]
+5. NO generes imágenes, dibujos ni código de programación
+6. Responde SIEMPRE en español
+7. Sé conciso pero informativo
+8. Si no encuentras un código en los datos, indica que no está registrado pero sugiere usar el módulo de búsqueda
+
+=== EJEMPLOS DE RESPUESTAS ===
+- "El código [CODE:AK-1815] está en el documento [DOC:123:MANIFIESTO SEPT 2021]"
+- "Tienes 150 documentos y 12,340 códigos enlazados en total"
+- "Para subir documentos en lote, ve a Subida Lote y sube un archivo ZIP con los PDFs"
 
 === PREGUNTA DEL USUARIO ===
 {$question}
 
-Responde de forma útil y estructurada:
+Responde de forma útil, estructurada y SOLO sobre KINO TRACE:
 PROMPT;
 
     $result = call_gemini($prompt);
