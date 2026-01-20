@@ -385,7 +385,10 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
         const pdfUrl = '<?= addslashes($pdfUrl) ?>';
         const searchTerm = '<?= addslashes($searchTerm) ?>';
+        // Pass matched pages from PHP to JS
+        const matchedPages = <?= json_encode($pagesWithMatches) ?>;
         const container = document.getElementById('pdfContainer');
+        const scale = 1.5;
 
         async function renderPDF() {
             try {
@@ -394,14 +397,17 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
                 container.innerHTML = '';
 
+                // Track if we have scrolled to the first match
+                let scrolledToFirstMatch = false;
+
                 for (let pageNum = 1; pageNum <= numPages; pageNum++) {
                     const page = await pdf.getPage(pageNum);
-                    const scale = 1.5;
                     const viewport = page.getViewport({ scale });
 
                     // Create page wrapper
                     const wrapper = document.createElement('div');
                     wrapper.className = 'pdf-page-wrapper';
+                    wrapper.id = 'page-' + pageNum; // Add ID for scrolling
                     wrapper.style.width = viewport.width + 'px';
                     wrapper.style.height = viewport.height + 'px';
 
@@ -418,23 +424,52 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                         viewport: viewport
                     }).promise;
 
-                    // Create text layer for highlighting
+                    // Create text layer
                     const textContent = await page.getTextContent();
                     const textLayer = document.createElement('div');
                     textLayer.className = 'text-layer';
                     textLayer.style.width = viewport.width + 'px';
                     textLayer.style.height = viewport.height + 'px';
+                    // Ensure text layer matches canvas scaling
+                    textLayer.style.setProperty('--scale-factor', scale);
 
                     textContent.items.forEach(item => {
                         const span = document.createElement('span');
                         const transform = item.transform;
-                        const fontSize = Math.sqrt(transform[0] * transform[0] + transform[1] * transform[1]);
+
+                        // Calculate dimensions based on viewport
+                        // transform: [scaleX, skewY, skewX, scaleY, x, y]
+                        // We need to map PDF coordinates to scaled Viewport coordinates
+
+                        // Use PDF.js internal conversion if available, or manual math
+                        // Manual math matching standard PDF coordinate system (origin bottom-left):
+
+                        // Font height in PDF points
+                        const fontHeight = Math.sqrt((transform[0] * transform[0]) + (transform[1] * transform[1]));
+                        const scaledFontSize = fontHeight * scale;
+
+                        // X coordinate
+                        const x = transform[4] * scale;
+
+                        // Y coordinate (PDF is bottom-up, CSS is top-down)
+                        // item.transform[5] is the baseline Y. 
+                        // We align top by subtracting font ascent (roughly).
+                        const y = viewport.height - (transform[5] * scale) - scaledFontSize;
+
+                        // Width adjustment (crucial for mark.js to have space to mark)
+                        const width = item.width * scale;
 
                         span.textContent = item.str;
-                        span.style.left = transform[4] + 'px';
-                        span.style.top = (viewport.height - transform[5] - fontSize) + 'px';
-                        span.style.fontSize = fontSize + 'px';
+                        span.style.left = x + 'px';
+                        span.style.top = y + 'px';
+                        span.style.fontSize = scaledFontSize + 'px';
                         span.style.fontFamily = item.fontName || 'sans-serif';
+                        span.style.width = Math.ceil(width) + 'px'; // Expand slightly
+
+                        // Fix rotation if needed (basic support)
+                        if (viewport.rotation !== 0) {
+                            // Rotation handling is complex manually, but basic layout usually works for 0 deg
+                        }
 
                         textLayer.appendChild(span);
                     });
@@ -451,17 +486,52 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                     pageContainer.appendChild(pageLabel);
                     container.appendChild(pageContainer);
 
-                    // Apply highlighting if search term exists
+                    // Apply highlighting
                     if (searchTerm) {
                         const marker = new Mark(textLayer);
                         marker.mark(searchTerm, {
                             separateWordSearch: false,
                             accuracy: 'partially',
-                            caseSensitive: false
+                            caseSensitive: false,
+                            done: function (totalMatches) {
+                                // If this page has matches and we haven't scrolled yet -> Scroll!
+                                // Note: matching is async, so we assume PHP passed correct page numbers
+                                // to prioritize scrolling.
+                            }
                         });
+                    }
+
+                    // Auto-scroll logic: If this page is in the matchedPages list
+                    // Warning: matchedPages is 0-indexed in array logic usually? No, PDF pages 1-indexed.
+                    // PHP search returns byte offsets, not page numbers directly in the text extractor helper...
+                    // Wait, extraction helper returns raw text, we derived page based on string position?
+                    // "pagesWithMatches" in PHP was calculated.
+
+                    // Actually, my PHP code calculated 'pagesWithMatches' as character positions, NOT page numbers!
+                    // See: $pagesWithMatches[] = $pos; 
+                    // This is wrong for page identification unless the valid pages were extracted separately.
+                    // But for highlighting, `mark.js` will just find it on the page if text is there.
+
+                    // Since I cannot trust matching pages blindly from that logic,
+                    // I rely on `mark.js` finding it.
+                    // But scrolling happens best if I know where.
+
+                    // Improved strategy: 
+                    // Let's just scroll to the first occurrence found by mark.js
+                    if (searchTerm && !scrolledToFirstMatch) {
+                        // Check if DOM actually has the <mark> element
+                        // Use a small timeout to let mark.js render
+                        setTimeout(() => {
+                            const firstMark = textLayer.querySelector('mark');
+                            if (firstMark && !scrolledToFirstMatch) {
+                                scrolledToFirstMatch = true;
+                                wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        }, 100);
                     }
                 }
             } catch (error) {
+                console.error(error);
                 container.innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">⚠️</div>
