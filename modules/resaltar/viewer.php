@@ -42,10 +42,25 @@ if (!$document) {
 }
 
 $uploadsDir = CLIENTS_DIR . "/{$clientCode}/uploads/";
-$pdfPath = $uploadsDir . $document['ruta_archivo'];
+$rutaArchivo = $document['ruta_archivo'];
 
-if (!file_exists($pdfPath)) {
-    die('Archivo PDF no encontrado: ' . $document['ruta_archivo']);
+// Build the PDF path - try multiple possible locations
+$pdfPath = null;
+$possiblePaths = [
+    $uploadsDir . $rutaArchivo,
+    $uploadsDir . $document['tipo'] . '/' . $rutaArchivo,
+    $uploadsDir . $document['tipo'] . '/' . basename($rutaArchivo),
+];
+
+foreach ($possiblePaths as $path) {
+    if (file_exists($path)) {
+        $pdfPath = $path;
+        break;
+    }
+}
+
+if (!$pdfPath) {
+    die('Archivo PDF no encontrado. Rutas probadas: ' . implode(', ', array_map('basename', $possiblePaths)));
 }
 
 // For sidebar
@@ -70,7 +85,10 @@ if (!empty($searchTerm)) {
 }
 
 $matchCount = count($pagesWithMatches);
-$pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $document['ruta_archivo'];
+
+// Build the PDF URL - extract the relative path from the found pdfPath
+$relativePath = str_replace($uploadsDir, '', $pdfPath);
+$pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 ?>
 <!DOCTYPE html>
 <html lang="es">
