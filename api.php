@@ -516,7 +516,13 @@ try {
                 }
 
                 if (!file_exists($pdfPath)) {
-                    $errors[] = "#{$doc['id']}: Archivo no encontrado";
+                    // Debug info
+                    $triedPaths = [
+                        $uploadsDir . $doc['ruta_archivo'],
+                        $uploadsDir . $doc['tipo'] . '/' . basename($doc['ruta_archivo']),
+                        $uploadsDir . $doc['tipo'] . '/' . $doc['ruta_archivo']
+                    ];
+                    $errors[] = "#{$doc['id']}: Archivo no encontrado. Intentado: " . implode(', ', $triedPaths);
                     continue;
                 }
 
