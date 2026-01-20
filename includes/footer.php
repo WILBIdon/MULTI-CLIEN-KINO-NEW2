@@ -446,3 +446,116 @@
         });
     })();
 </script>
+
+<!-- SweetAlert2 for confirmation modals -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    // Global confirmation handler for forms with data-confirm attribute
+    document.addEventListener('DOMContentLoaded', function () {
+        // Handle forms with data-confirm
+        document.querySelectorAll('form[data-confirm]').forEach(form => {
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+
+                const message = this.dataset.confirm || '¿Estás seguro de realizar esta acción?';
+                const title = this.dataset.confirmTitle || '¿Confirmar acción?';
+                const confirmText = this.dataset.confirmButton || 'Sí, continuar';
+                const cancelText = this.dataset.cancelButton || 'Cancelar';
+                const icon = this.dataset.confirmIcon || 'warning';
+
+                const result = await Swal.fire({
+                    title: title,
+                    text: message,
+                    icon: icon,
+                    showCancelButton: true,
+                    confirmButtonColor: '#3b82f6',
+                    cancelButtonColor: '#64748b',
+                    confirmButtonText: confirmText,
+                    cancelButtonText: cancelText,
+                    reverseButtons: true
+                });
+
+                if (result.isConfirmed) {
+                    // Create hidden input to indicate confirmation was done
+                    const confirmInput = document.createElement('input');
+                    confirmInput.type = 'hidden';
+                    confirmInput.name = '_confirmed';
+                    confirmInput.value = '1';
+                    this.appendChild(confirmInput);
+                    this.submit();
+                }
+            });
+        });
+
+        // Handle buttons with data-confirm that trigger form submission
+        document.querySelectorAll('button[data-confirm]').forEach(button => {
+            button.addEventListener('click', async function (e) {
+                if (this.form && !this.form.dataset.confirm) {
+                    e.preventDefault();
+
+                    const message = this.dataset.confirm || '¿Estás seguro?';
+                    const title = this.dataset.confirmTitle || '¿Confirmar acción?';
+
+                    const result = await Swal.fire({
+                        title: title,
+                        text: message,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#3b82f6',
+                        cancelButtonColor: '#64748b',
+                        confirmButtonText: 'Sí, continuar',
+                        cancelButtonText: 'Cancelar',
+                        reverseButtons: true
+                    });
+
+                    if (result.isConfirmed) {
+                        this.form.submit();
+                    }
+                }
+            });
+        });
+
+        // Utility function for programmatic confirmations
+        window.kinoConfirm = async function (options) {
+            const defaults = {
+                title: '¿Confirmar acción?',
+                text: '¿Estás seguro de realizar esta acción?',
+                icon: 'warning',
+                confirmButtonText: 'Sí, continuar',
+                cancelButtonText: 'Cancelar'
+            };
+
+            const config = { ...defaults, ...options };
+
+            const result = await Swal.fire({
+                title: config.title,
+                text: config.text,
+                icon: config.icon,
+                showCancelButton: true,
+                confirmButtonColor: config.dangerMode ? '#ef4444' : '#3b82f6',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: config.confirmButtonText,
+                cancelButtonText: config.cancelButtonText,
+                reverseButtons: true
+            });
+
+            return result.isConfirmed;
+        };
+
+        // Success toast utility
+        window.kinoToast = function (message, type = 'success') {
+            const Toast = Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
+                timerProgressBar: true
+            });
+
+            Toast.fire({
+                icon: type,
+                title: message
+            });
+        };
+    });
+</script>

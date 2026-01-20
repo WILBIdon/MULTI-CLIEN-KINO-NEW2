@@ -560,10 +560,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             </button>
                         </form>
 
-                        <form method="POST" style="display: inline-block; margin-left: 1rem;">
+                        <form method="POST" style="display: inline-block; margin-left: 1rem;"
+                            data-confirm="Esta acción eliminará todos los códigos duplicados de la base de datos."
+                            data-confirm-title="🧹 Limpiar Duplicados" data-confirm-button="Sí, limpiar"
+                            data-confirm-icon="warning">
                             <input type="hidden" name="action" value="clean_duplicates">
-                            <button type="submit" class="btn btn-secondary"
-                                onclick="return confirm('¿Limpiar códigos duplicados?')">
+                            <button type="submit" class="btn btn-secondary">
                                 🧹 Limpiar Duplicados
                             </button>
                         </form>
@@ -657,10 +659,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                         <?php if ($stats['matched'] > 0): ?>
                             <div class="btn-group">
-                                <form method="POST" style="display: inline;">
+                                <form method="POST" style="display: inline;"
+                                    data-confirm="Se sincronizarán <?= $stats['matched'] ?> documentos con <?= $stats['codes_linked'] ?> códigos."
+                                    data-confirm-title="✅ Sincronizar Base de Datos" data-confirm-button="Sincronizar Ahora"
+                                    data-confirm-icon="question">
                                     <input type="hidden" name="action" value="sync">
-                                    <button type="submit" class="btn btn-primary"
-                                        onclick="return confirm('¿Sincronizar <?= $stats['matched'] ?> documentos con <?= $stats['codes_linked'] ?> códigos?')">
+                                    <button type="submit" class="btn btn-primary">
                                         ✅ Sincronizar Ahora
                                     </button>
                                 </form>

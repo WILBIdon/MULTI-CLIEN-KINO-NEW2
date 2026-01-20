@@ -117,6 +117,17 @@ $currentModule = $currentModule ?? '';
                 <span class="nav-label">Importar Data</span>
             </a>
 
+            <a href="<?= $baseUrl ?? '' ?>modules/excel_import/"
+                class="nav-item <?= $currentModule === 'excel_import' ? 'active' : '' ?>" data-tooltip="Excel Import">
+                <span class="nav-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125" />
+                    </svg>
+                </span>
+                <span class="nav-label">Excel Import</span>
+            </a>
+
             <a href="<?= $baseUrl ?? '' ?>modules/lote/"
                 class="nav-item <?= $currentModule === 'lote' ? 'active' : '' ?>" data-tooltip="Subida Lote">
                 <span class="nav-icon">
@@ -175,6 +186,17 @@ $currentModule = $currentModule ?? '';
                     </svg>
                 </span>
                 <span class="nav-label">Doc Recientes</span>
+            </a>
+
+            <a href="<?= $baseUrl ?? '' ?>admin/backup.php"
+                class="nav-item <?= $currentModule === 'backup' ? 'active' : '' ?>" data-tooltip="Backup">
+                <span class="nav-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
+                    </svg>
+                </span>
+                <span class="nav-label">Backup</span>
             </a>
         </div>
     </nav>

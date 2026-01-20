@@ -172,6 +172,101 @@ function fulltext_search(PDO $db, string $query): array
 }
 
 /**
+ * Búsqueda avanzada dentro del contenido de PDFs.
+ * Extrae texto de los PDFs en tiempo real y busca coincidencias.
+ *
+ * @param PDO $db Conexión a la base de datos.
+ * @param string $searchTerm Término a buscar dentro de los PDFs.
+ * @param string $clientCode Código del cliente para ubicar los archivos.
+ * @return array Documentos con coincidencias y snippets del texto.
+ */
+function search_in_pdf_content(PDO $db, string $searchTerm, string $clientCode): array
+{
+    require_once __DIR__ . '/pdf_extractor.php';
+
+    $searchTerm = trim($searchTerm);
+    if ($searchTerm === '' || strlen($searchTerm) < 3) {
+        return [];
+    }
+
+    $results = [];
+    $uploadsDir = CLIENTS_DIR . "/{$clientCode}/uploads/";
+
+    // Get all documents with PDF files
+    $stmt = $db->query("
+        SELECT id, tipo, numero, fecha, proveedor, ruta_archivo
+        FROM documentos
+        WHERE ruta_archivo LIKE '%.pdf'
+        ORDER BY fecha DESC
+        LIMIT 100
+    ");
+
+    $documents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($documents as $doc) {
+        $pdfPath = $uploadsDir . $doc['ruta_archivo'];
+
+        if (!file_exists($pdfPath)) {
+            continue;
+        }
+
+        try {
+            $text = extract_text_from_pdf($pdfPath);
+
+            if (empty($text)) {
+                continue;
+            }
+
+            // Case-insensitive search
+            $pos = stripos($text, $searchTerm);
+
+            if ($pos !== false) {
+                // Extract snippet around the match
+                $snippetStart = max(0, $pos - 80);
+                $snippetEnd = min(strlen($text), $pos + strlen($searchTerm) + 80);
+                $snippet = substr($text, $snippetStart, $snippetEnd - $snippetStart);
+
+                // Clean up snippet
+                $snippet = preg_replace('/\s+/', ' ', $snippet);
+                $snippet = trim($snippet);
+
+                if ($snippetStart > 0) {
+                    $snippet = '...' . $snippet;
+                }
+                if ($snippetEnd < strlen($text)) {
+                    $snippet .= '...';
+                }
+
+                // Count total occurrences
+                $occurrences = substr_count(strtolower($text), strtolower($searchTerm));
+
+                $results[] = [
+                    'id' => $doc['id'],
+                    'tipo' => $doc['tipo'],
+                    'numero' => $doc['numero'],
+                    'fecha' => $doc['fecha'],
+                    'proveedor' => $doc['proveedor'],
+                    'ruta_archivo' => $doc['ruta_archivo'],
+                    'snippet' => $snippet,
+                    'occurrences' => $occurrences,
+                    'search_term' => $searchTerm
+                ];
+            }
+        } catch (Exception $e) {
+            // Skip files that can't be processed
+            continue;
+        }
+    }
+
+    // Sort by number of occurrences (most relevant first)
+    usort($results, function ($a, $b) {
+        return $b['occurrences'] - $a['occurrences'];
+    });
+
+    return $results;
+}
+
+/**
  * Obtiene sugerencias de códigos mientras el usuario escribe.
  *
  * @param PDO $db Conexión a la base de datos.
