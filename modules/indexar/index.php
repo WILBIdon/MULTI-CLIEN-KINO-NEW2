@@ -13,8 +13,8 @@ if (!isset($_SESSION['client_code'])) {
     exit;
 }
 
-$db = getDB();
 $clientCode = $_SESSION['client_code'];
+$db = open_client_db($clientCode);
 $baseUrl = '../../';
 $pageTitle = 'Indexar Documentos';
 
