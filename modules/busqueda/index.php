@@ -322,6 +322,7 @@ COD001
                                     <option value="manifiesto">Manifiestos</option>
                                     <option value="declaracion">Declaraciones</option>
                                     <option value="factura">Facturas</option>
+                                    <option value="documento">Documentos</option>
                                 </select>
                                 <button class="btn btn-secondary" onclick="downloadCSV()">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none"
@@ -332,6 +333,36 @@ COD001
                                     CSV
                                 </button>
                             </div>
+                        </div>
+
+                        <!-- Búsqueda Full-Text en PDFs -->
+                        <div class="summary-box"
+                            style="margin-bottom: 1rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(59, 130, 246, 0.1));">
+                            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 200px;">
+                                    <input type="text" class="form-input" id="fulltextSearch"
+                                        placeholder="🔍 Buscar texto dentro de los PDFs..." style="width: 100%;">
+                                </div>
+                                <button class="btn btn-primary" onclick="searchFulltext()" id="fulltextBtn">
+                                    Buscar en Contenido
+                                </button>
+                                <button class="btn btn-secondary" onclick="reindexDocuments()" id="reindexBtn"
+                                    title="Indexar PDFs sin texto extraído">
+                                    🔄 Indexar Pendientes
+                                </button>
+                            </div>
+                            <div id="indexStatus"
+                                style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-muted);"></div>
+                        </div>
+
+                        <!-- Resultados de búsqueda full-text -->
+                        <div id="fulltextResults" class="hidden">
+                            <div class="summary-box" style="margin-bottom: 1rem;">
+                                <span id="fulltextSummary"></span>
+                                <button class="btn btn-secondary" style="float: right; padding: 0.25rem 0.5rem;"
+                                    onclick="clearFulltext()">✕ Limpiar</button>
+                            </div>
+                            <div id="fulltextList" class="results-list"></div>
                         </div>
 
                         <div id="documentsLoading" class="loading">
@@ -663,6 +694,124 @@ COD001
             // Simple CSV export
             const tipo = document.getElementById('filterTipo').value;
             window.open(apiUrl + '?action=export_csv&tipo=' + tipo, '_blank');
+        }
+
+        // ============ Full-Text Search in PDFs ============
+        const fulltextInput = document.getElementById('fulltextSearch');
+        
+        fulltextInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchFulltext();
+        });
+
+        async function searchFulltext() {
+            const query = fulltextInput.value.trim();
+            if (query.length < 3) {
+                alert('Ingresa al menos 3 caracteres');
+                return;
+            }
+
+            const btn = document.getElementById('fulltextBtn');
+            btn.disabled = true;
+            btn.textContent = 'Buscando...';
+
+            try {
+                const response = await fetch(`${apiUrl}?action=fulltext_search&query=${encodeURIComponent(query)}`);
+                const result = await response.json();
+
+                btn.disabled = false;
+                btn.textContent = 'Buscar en Contenido';
+
+                if (result.error) {
+                    alert(result.error);
+                    return;
+                }
+
+                showFulltextResults(result);
+            } catch (error) {
+                btn.disabled = false;
+                btn.textContent = 'Buscar en Contenido';
+                alert('Error: ' + error.message);
+            }
+        }
+
+        function showFulltextResults(result) {
+            document.getElementById('fulltextResults').classList.remove('hidden');
+            document.getElementById('documentsTable').classList.add('hidden');
+            document.getElementById('documentsLoading').classList.add('hidden');
+
+            document.getElementById('fulltextSummary').innerHTML = 
+                `<strong>${result.count}</strong> documento(s) contienen "<strong>${result.query}</strong>"`;
+
+            if (result.results.length === 0) {
+                document.getElementById('fulltextList').innerHTML = 
+                    '<p class="text-muted">No se encontraron coincidencias. Prueba indexar los documentos primero.</p>';
+                return;
+            }
+
+            let html = '';
+            for (const doc of result.results) {
+                let pdfUrl = '';
+                if (doc.ruta_archivo) {
+                    pdfUrl = doc.ruta_archivo.includes('/') 
+                        ? `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`
+                        : `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
+                }
+
+                html += `
+                    <div class="result-card">
+                        <div class="result-header">
+                            <span class="badge badge-primary">${doc.tipo.toUpperCase()}</span>
+                            <span class="result-meta">${doc.fecha} · ${doc.occurrences} coincidencia(s)</span>
+                        </div>
+                        <div class="result-title">${doc.numero}</div>
+                        ${doc.snippet ? `<div class="result-meta" style="margin-top: 0.5rem; font-style: italic; background: rgba(255,235,59,0.1); padding: 0.5rem; border-radius: 4px;">"${doc.snippet}"</div>` : ''}
+                        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <a href="../documento/view.php?id=${doc.id}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver</a>
+                            ${pdfUrl ? `<a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(result.query)}" class="btn btn-secondary" style="padding: 0.5rem 1rem; background: #fbbf24; color: #000;">🖍️ Resaltar</a>` : ''}
+                            ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 PDF</a>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            document.getElementById('fulltextList').innerHTML = html;
+        }
+
+        function clearFulltext() {
+            document.getElementById('fulltextResults').classList.add('hidden');
+            document.getElementById('documentsTable').classList.remove('hidden');
+            fulltextInput.value = '';
+            loadDocuments();
+        }
+
+        async function reindexDocuments() {
+            const btn = document.getElementById('reindexBtn');
+            const status = document.getElementById('indexStatus');
+            
+            btn.disabled = true;
+            btn.textContent = '⏳ Indexando...';
+            status.textContent = 'Extrayendo texto de PDFs...';
+
+            try {
+                const response = await fetch(`${apiUrl}?action=reindex_documents&batch=10`);
+                const result = await response.json();
+
+                status.innerHTML = `✅ ${result.message}`;
+                
+                if (result.pending > 0) {
+                    status.innerHTML += ` <a href="#" onclick="reindexDocuments(); return false;" style="color: var(--accent-primary);">Continuar indexando</a>`;
+                }
+
+                btn.disabled = false;
+                btn.textContent = '🔄 Indexar Pendientes';
+
+                if (result.errors.length > 0) {
+                    console.log('Errores de indexación:', result.errors);
+                }
+            } catch (error) {
+                btn.disabled = false;
+                btn.textContent = '🔄 Indexar Pendientes';
+                status.textContent = '❌ Error: ' + error.message;
+            }
         }
 
         // ============ Single Code Search Tab ============

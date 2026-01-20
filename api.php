@@ -383,6 +383,155 @@ try {
                 'model' => GEMINI_MODEL
             ]);
 
+        // ====================
+        // BÚSQUEDA FULL-TEXT EN CONTENIDO DE PDFs
+        // ====================
+        case 'fulltext_search':
+            $query = trim($_REQUEST['query'] ?? '');
+            $limit = min(100, max(1, (int) ($_REQUEST['limit'] ?? 50)));
+
+            if (strlen($query) < 3) {
+                json_exit(['error' => 'El término debe tener al menos 3 caracteres']);
+            }
+
+            // Buscar en datos_extraidos (texto pre-indexado)
+            $stmt = $db->prepare("
+                SELECT 
+                    d.id, d.tipo, d.numero, d.fecha, d.proveedor, d.ruta_archivo,
+                    d.datos_extraidos
+                FROM documentos d
+                WHERE d.datos_extraidos LIKE ?
+                ORDER BY d.fecha DESC
+                LIMIT ?
+            ");
+            $stmt->execute(['%' . $query . '%', $limit]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $results = [];
+            foreach ($rows as $r) {
+                // Extraer snippet con contexto
+                $data = json_decode($r['datos_extraidos'], true);
+                $text = $data['text'] ?? '';
+                $snippet = '';
+
+                if (!empty($text)) {
+                    $pos = stripos($text, $query);
+                    if ($pos !== false) {
+                        $start = max(0, $pos - 60);
+                        $end = min(strlen($text), $pos + strlen($query) + 60);
+                        $snippet = ($start > 0 ? '...' : '') .
+                            substr($text, $start, $end - $start) .
+                            ($end < strlen($text) ? '...' : '');
+                        $snippet = preg_replace('/\s+/', ' ', trim($snippet));
+                    }
+                }
+
+                // Contar ocurrencias
+                $occurrences = substr_count(strtolower($text), strtolower($query));
+
+                $results[] = [
+                    'id' => (int) $r['id'],
+                    'tipo' => $r['tipo'],
+                    'numero' => $r['numero'],
+                    'fecha' => $r['fecha'],
+                    'proveedor' => $r['proveedor'],
+                    'ruta_archivo' => $r['ruta_archivo'],
+                    'snippet' => $snippet,
+                    'occurrences' => $occurrences
+                ];
+            }
+
+            // Ordenar por relevancia (más ocurrencias primero)
+            usort($results, fn($a, $b) => $b['occurrences'] - $a['occurrences']);
+
+            json_exit([
+                'query' => $query,
+                'count' => count($results),
+                'results' => $results
+            ]);
+
+        // ====================
+        // RE-INDEXAR DOCUMENTOS (extraer texto de PDFs)
+        // ====================
+        case 'reindex_documents':
+            set_time_limit(300); // 5 minutos máximo
+
+            $forceAll = isset($_REQUEST['force']);
+            $batchSize = min(20, max(1, (int) ($_REQUEST['batch'] ?? 10)));
+
+            // Obtener documentos sin texto indexado
+            if ($forceAll) {
+                $stmt = $db->prepare("
+                    SELECT id, ruta_archivo, tipo 
+                    FROM documentos 
+                    WHERE ruta_archivo LIKE '%.pdf'
+                    LIMIT ?
+                ");
+                $stmt->execute([$batchSize]);
+            } else {
+                $stmt = $db->prepare("
+                    SELECT id, ruta_archivo, tipo 
+                    FROM documentos 
+                    WHERE ruta_archivo LIKE '%.pdf'
+                      AND (datos_extraidos IS NULL OR datos_extraidos = '' OR datos_extraidos = '[]')
+                    LIMIT ?
+                ");
+                $stmt->execute([$batchSize]);
+            }
+
+            $docs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $indexed = 0;
+            $errors = [];
+
+            $updateStmt = $db->prepare("UPDATE documentos SET datos_extraidos = ? WHERE id = ?");
+            $uploadsDir = CLIENTS_DIR . "/{$clientCode}/uploads/";
+
+            foreach ($docs as $doc) {
+                $pdfPath = $uploadsDir . $doc['ruta_archivo'];
+
+                // Intentar múltiples rutas
+                if (!file_exists($pdfPath)) {
+                    $pdfPath = $uploadsDir . $doc['tipo'] . '/' . basename($doc['ruta_archivo']);
+                }
+
+                if (!file_exists($pdfPath)) {
+                    $errors[] = "#{$doc['id']}: Archivo no encontrado";
+                    continue;
+                }
+
+                try {
+                    $extractResult = extract_codes_from_pdf($pdfPath);
+                    if ($extractResult['success']) {
+                        $datosExtraidos = [
+                            'text' => substr($extractResult['text'], 0, 50000), // Máximo 50KB de texto
+                            'auto_codes' => $extractResult['codes'],
+                            'indexed_at' => date('Y-m-d H:i:s')
+                        ];
+                        $updateStmt->execute([json_encode($datosExtraidos), $doc['id']]);
+                        $indexed++;
+                    } else {
+                        $errors[] = "#{$doc['id']}: " . ($extractResult['error'] ?? 'Error de extracción');
+                    }
+                } catch (Exception $e) {
+                    $errors[] = "#{$doc['id']}: " . $e->getMessage();
+                }
+            }
+
+            // Contar pendientes
+            $pending = (int) $db->query("
+                SELECT COUNT(*) FROM documentos 
+                WHERE ruta_archivo LIKE '%.pdf'
+                  AND (datos_extraidos IS NULL OR datos_extraidos = '' OR datos_extraidos = '[]')
+            ")->fetchColumn();
+
+            json_exit([
+                'success' => true,
+                'indexed' => $indexed,
+                'errors' => $errors,
+                'pending' => $pending,
+                'message' => "Indexados: $indexed, Pendientes: $pending"
+            ]);
+
         default:
             json_exit(['error' => 'Acción inválida: ' . $action, 'code' => 400]);
     }
