@@ -469,17 +469,34 @@ try {
                 ");
                 $stmt->execute([$batchSize]);
             } else {
+                // Buscar docs - seleccionar todos y filtrar en PHP por contenido real
                 $stmt = $db->prepare("
-                    SELECT id, ruta_archivo, tipo 
+                    SELECT id, ruta_archivo, tipo, datos_extraidos
                     FROM documentos 
                     WHERE ruta_archivo LIKE '%.pdf'
-                      AND (datos_extraidos IS NULL OR datos_extraidos = '' OR datos_extraidos = '[]')
-                    LIMIT ?
+                    ORDER BY id DESC
                 ");
-                $stmt->execute([$batchSize]);
+                $stmt->execute();
+
+                // Filtrar en PHP: solo docs sin texto real
+                $allDocs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $docs = [];
+                foreach ($allDocs as $d) {
+                    $data = json_decode($d['datos_extraidos'] ?? '', true);
+                    $text = $data['text'] ?? '';
+                    if (empty($text) || strlen($text) < 100) {
+                        unset($d['datos_extraidos']);
+                        $docs[] = $d;
+                        if (count($docs) >= $batchSize)
+                            break;
+                    }
+                }
             }
 
-            $docs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            if ($forceAll) {
+                $docs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+
             $indexed = 0;
             $errors = [];
 
@@ -495,34 +512,41 @@ try {
                 }
 
                 if (!file_exists($pdfPath)) {
+                    $pdfPath = $uploadsDir . $doc['tipo'] . '/' . $doc['ruta_archivo'];
+                }
+
+                if (!file_exists($pdfPath)) {
                     $errors[] = "#{$doc['id']}: Archivo no encontrado";
                     continue;
                 }
 
                 try {
                     $extractResult = extract_codes_from_pdf($pdfPath);
-                    if ($extractResult['success']) {
+                    if ($extractResult['success'] && !empty($extractResult['text'])) {
                         $datosExtraidos = [
-                            'text' => substr($extractResult['text'], 0, 50000), // Máximo 50KB de texto
+                            'text' => substr($extractResult['text'], 0, 50000),
                             'auto_codes' => $extractResult['codes'],
                             'indexed_at' => date('Y-m-d H:i:s')
                         ];
-                        $updateStmt->execute([json_encode($datosExtraidos), $doc['id']]);
+                        $updateStmt->execute([json_encode($datosExtraidos, JSON_UNESCAPED_UNICODE), $doc['id']]);
                         $indexed++;
                     } else {
-                        $errors[] = "#{$doc['id']}: " . ($extractResult['error'] ?? 'Error de extracción');
+                        $errors[] = "#{$doc['id']}: " . ($extractResult['error'] ?? 'Sin texto');
                     }
                 } catch (Exception $e) {
                     $errors[] = "#{$doc['id']}: " . $e->getMessage();
                 }
             }
 
-            // Contar pendientes
-            $pending = (int) $db->query("
-                SELECT COUNT(*) FROM documentos 
-                WHERE ruta_archivo LIKE '%.pdf'
-                  AND (datos_extraidos IS NULL OR datos_extraidos = '' OR datos_extraidos = '[]')
-            ")->fetchColumn();
+            // Contar pendientes con lógica PHP
+            $allStmt = $db->query("SELECT datos_extraidos FROM documentos WHERE ruta_archivo LIKE '%.pdf'");
+            $pending = 0;
+            while ($row = $allStmt->fetch(PDO::FETCH_ASSOC)) {
+                $data = json_decode($row['datos_extraidos'] ?? '', true);
+                if (empty($data['text']) || strlen($data['text'] ?? '') < 100) {
+                    $pending++;
+                }
+            }
 
             json_exit([
                 'success' => true,
