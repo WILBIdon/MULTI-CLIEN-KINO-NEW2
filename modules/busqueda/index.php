@@ -470,6 +470,9 @@ COD001
                     }
                 }
 
+                // Get the first matched code for highlighting
+                const firstCode = (doc.matched_codes && doc.matched_codes[0]) || (doc.codes && doc.codes[0]) || '';
+
                 html += `
                     <div class="result-card">
                         <div class="result-header">
@@ -483,6 +486,7 @@ COD001
                         </div>
                         <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                             <a href="../documento/view.php?id=${doc.id}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Códigos</a>
+                            ${pdfUrl ? `<a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(firstCode)}" class="btn btn-secondary" style="padding: 0.5rem 1rem; background: #fbbf24; color: #000;">🖍️ Resaltar</a>` : ''}
                             ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
                         </div>
                     </div>
@@ -731,7 +735,7 @@ COD001
                             pdfUrl = `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
                         }
                     }
-                    
+
                     return `
                         <div class="result-card">
                             <div class="result-header">
@@ -741,6 +745,7 @@ COD001
                             <div class="result-title">${doc.numero}</div>
                             <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                                 <a href="../documento/view.php?id=${doc.id}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Códigos</a>
+                                ${pdfUrl ? `<a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(code)}" class="btn btn-secondary" style="padding: 0.5rem 1rem; background: #fbbf24; color: #000;">🖍️ Resaltar</a>` : ''}
                                 ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
                             </div>
                         </div>
