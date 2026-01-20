@@ -516,11 +516,23 @@ try {
                 }
 
                 if (!file_exists($pdfPath)) {
+                    // Estrategia 3: Búsqueda borrosa (fuzzy) - el archivo físico puede tener prefijos extra
+                    // Ejemplo DB: archivo.pdf -> Real: 123456_archivo.pdf
+                    // Buscamos en la carpeta del tipo del documento
+                    $searchPattern = $uploadsDir . $doc['tipo'] . '/*' . basename($doc['ruta_archivo']);
+                    $matches = glob($searchPattern);
+                    if (!empty($matches)) {
+                        $pdfPath = $matches[0];
+                    }
+                }
+
+                if (!file_exists($pdfPath)) {
                     // Debug info
                     $triedPaths = [
                         $uploadsDir . $doc['ruta_archivo'],
                         $uploadsDir . $doc['tipo'] . '/' . basename($doc['ruta_archivo']),
-                        $uploadsDir . $doc['tipo'] . '/' . $doc['ruta_archivo']
+                        $uploadsDir . $doc['tipo'] . '/' . $doc['ruta_archivo'],
+                        "GLOB: " . ($searchPattern ?? 'N/A')
                     ];
                     $errors[] = "#{$doc['id']}: Archivo no encontrado. Intentado: " . implode(', ', $triedPaths);
                     continue;
