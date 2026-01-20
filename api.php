@@ -484,6 +484,13 @@ try {
                 foreach ($allDocs as $d) {
                     $data = json_decode($d['datos_extraidos'] ?? '', true);
                     $text = $data['text'] ?? '';
+                    $hasError = isset($data['error']);
+
+                    // Skip if explicitly marked as error (unless forced)
+                    if (!$forceAll && $hasError) {
+                        continue;
+                    }
+
                     if (empty($text) || strlen($text) < 100) {
                         unset($d['datos_extraidos']);
                         $docs[] = $d;
@@ -535,6 +542,15 @@ try {
                         "GLOB: " . ($searchPattern ?? 'N/A')
                     ];
                     $errors[] = "#{$doc['id']}: Archivo no encontrado. Intentado: " . implode(', ', $triedPaths);
+
+                    // Marcar como error en DB para no reintentar infinitamente
+                    $errorData = json_encode([
+                        'error' => 'Archivo no encontrado',
+                        'paths_tried' => $triedPaths,
+                        'timestamp' => time()
+                    ]);
+                    $updateStmt->execute([$errorData, $doc['id']]);
+
                     continue;
                 }
 
