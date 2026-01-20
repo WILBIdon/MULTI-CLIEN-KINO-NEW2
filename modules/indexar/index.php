@@ -3,13 +3,18 @@
  * Módulo de Indexación de PDFs
  * Permite indexar todos los documentos PDF pendientes para búsqueda full-text
  */
-require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../helpers/auth.php';
+session_start();
+require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../helpers/tenant.php';
 
-requireAuth();
+// Verify authentication
+if (!isset($_SESSION['client_code'])) {
+    header('Location: ../../login.php');
+    exit;
+}
 
 $db = getDB();
-$clientCode = $_SESSION['client_code'] ?? 'demo';
+$clientCode = $_SESSION['client_code'];
 $baseUrl = '../../';
 $pageTitle = 'Indexar Documentos';
 
