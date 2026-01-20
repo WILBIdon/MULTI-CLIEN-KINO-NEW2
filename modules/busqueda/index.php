@@ -764,10 +764,12 @@ COD001
                             <span class="result-meta">${doc.fecha} · ${doc.occurrences} coincidencia(s)</span>
                         </div>
                         <div class="result-title">${doc.numero}</div>
+                        <!-- Snippet oculto para usuario final 
                         ${doc.snippet ? `<div class="result-meta" style="margin-top: 0.5rem; font-style: italic; background: rgba(255,235,59,0.1); padding: 0.5rem; border-radius: 4px;">"${doc.snippet}"</div>` : ''}
+                        -->
                         <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            <a href="../documento/view.php?id=${doc.id}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver</a>
-                            ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 PDF</a>` : ''}
+                            <a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(result.query)}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Documento</a>
+                            ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Original</a>` : ''}
                         </div>
                     </div>
                 `;
