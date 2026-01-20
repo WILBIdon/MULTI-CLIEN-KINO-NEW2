@@ -698,7 +698,7 @@ COD001
 
         // ============ Full-Text Search in PDFs ============
         const fulltextInput = document.getElementById('fulltextSearch');
-        
+
         fulltextInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') searchFulltext();
         });
@@ -739,11 +739,11 @@ COD001
             document.getElementById('documentsTable').classList.add('hidden');
             document.getElementById('documentsLoading').classList.add('hidden');
 
-            document.getElementById('fulltextSummary').innerHTML = 
+            document.getElementById('fulltextSummary').innerHTML =
                 `<strong>${result.count}</strong> documento(s) contienen "<strong>${result.query}</strong>"`;
 
             if (result.results.length === 0) {
-                document.getElementById('fulltextList').innerHTML = 
+                document.getElementById('fulltextList').innerHTML =
                     '<p class="text-muted">No se encontraron coincidencias. Prueba indexar los documentos primero.</p>';
                 return;
             }
@@ -752,7 +752,7 @@ COD001
             for (const doc of result.results) {
                 let pdfUrl = '';
                 if (doc.ruta_archivo) {
-                    pdfUrl = doc.ruta_archivo.includes('/') 
+                    pdfUrl = doc.ruta_archivo.includes('/')
                         ? `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`
                         : `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
                 }
@@ -783,35 +783,64 @@ COD001
             loadDocuments();
         }
 
+        let isIndexing = false;
+        let totalIndexedSession = 0;
+
         async function reindexDocuments() {
+            if (isIndexing) return;
+            isIndexing = true;
+
             const btn = document.getElementById('reindexBtn');
             const status = document.getElementById('indexStatus');
-            
+
             btn.disabled = true;
-            btn.textContent = '⏳ Indexando...';
-            status.textContent = 'Extrayendo texto de PDFs...';
+            btn.innerHTML = '⏳ Indexando...';
+            totalIndexedSession = 0;
 
-            try {
-                const response = await fetch(`${apiUrl}?action=reindex_documents&batch=10`);
-                const result = await response.json();
+            // First call to get initial pending count
+            let pending = 999;
+            let batchNum = 0;
 
-                status.innerHTML = `✅ ${result.message}`;
-                
-                if (result.pending > 0) {
-                    status.innerHTML += ` <a href="#" onclick="reindexDocuments(); return false;" style="color: var(--accent-primary);">Continuar indexando</a>`;
+            while (pending > 0) {
+                batchNum++;
+                status.innerHTML = `🔄 Procesando lote #${batchNum}... (Indexados: ${totalIndexedSession})`;
+
+                try {
+                    const response = await fetch(`${apiUrl}?action=reindex_documents&batch=10`);
+                    const result = await response.json();
+
+                    if (!result.success) {
+                        status.innerHTML = `❌ Error: ${result.error || 'Error desconocido'}`;
+                        break;
+                    }
+
+                    totalIndexedSession += result.indexed;
+                    pending = result.pending;
+
+                    status.innerHTML = `✅ Indexados: ${totalIndexedSession}, Pendientes: ${pending}`;
+
+                    if (result.errors && result.errors.length > 0) {
+                        console.log('Errores de indexación:', result.errors);
+                    }
+
+                    // If nothing was indexed but still pending, files are missing
+                    if (result.indexed === 0 && pending > 0) {
+                        status.innerHTML += ` <span style="color: var(--warning);">(${pending} archivos no encontrados)</span>`;
+                        break;
+                    }
+                } catch (error) {
+                    status.innerHTML = `❌ Error de red: ${error.message}`;
+                    break;
                 }
-
-                btn.disabled = false;
-                btn.textContent = '🔄 Indexar Pendientes';
-
-                if (result.errors.length > 0) {
-                    console.log('Errores de indexación:', result.errors);
-                }
-            } catch (error) {
-                btn.disabled = false;
-                btn.textContent = '🔄 Indexar Pendientes';
-                status.textContent = '❌ Error: ' + error.message;
             }
+
+            if (pending === 0) {
+                status.innerHTML = `✅ ¡Completado! ${totalIndexedSession} documentos indexados`;
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '🔄 Indexar Pendientes';
+            isIndexing = false;
         }
 
         // ============ Single Code Search Tab ============
