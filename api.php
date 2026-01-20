@@ -532,6 +532,84 @@ try {
                 'message' => "Indexados: $indexed, Pendientes: $pending"
             ]);
 
+        // ====================
+        // DIAGNÓSTICO DE EXTRACCIÓN PDF
+        // ====================
+        case 'pdf_diagnostic':
+            $diagnostics = [
+                'pdftotext_available' => false,
+                'pdftotext_path' => null,
+                'smalot_available' => false,
+                'native_php' => true,
+                'test_result' => null,
+                'sample_doc' => null
+            ];
+
+            // Verificar pdftotext
+            $pdftotextPath = find_pdftotext();
+            if ($pdftotextPath) {
+                $diagnostics['pdftotext_available'] = true;
+                $diagnostics['pdftotext_path'] = $pdftotextPath;
+
+                // Probar versión
+                $version = shell_exec("$pdftotextPath -v 2>&1");
+                $diagnostics['pdftotext_version'] = trim(substr($version, 0, 100));
+            }
+
+            // Verificar Smalot
+            $parserPath = __DIR__ . '/vendor/autoload.php';
+            if (file_exists($parserPath)) {
+                require_once $parserPath;
+                $diagnostics['smalot_available'] = class_exists('Smalot\PdfParser\Parser');
+            }
+
+            // Probar con un documento real
+            $testId = (int) ($_REQUEST['doc_id'] ?? 0);
+            if ($testId) {
+                $stmt = $db->prepare("SELECT id, ruta_archivo, tipo FROM documentos WHERE id = ?");
+                $stmt->execute([$testId]);
+                $doc = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($doc) {
+                    $diagnostics['sample_doc'] = $doc['ruta_archivo'];
+                    $uploadsDir = CLIENTS_DIR . "/{$clientCode}/uploads/";
+
+                    // Intentar encontrar el archivo
+                    $possiblePaths = [
+                        $uploadsDir . $doc['ruta_archivo'],
+                        $uploadsDir . $doc['tipo'] . '/' . $doc['ruta_archivo'],
+                        $uploadsDir . $doc['tipo'] . '/' . basename($doc['ruta_archivo']),
+                    ];
+
+                    foreach ($possiblePaths as $path) {
+                        if (file_exists($path)) {
+                            $diagnostics['pdf_found'] = true;
+                            $diagnostics['pdf_path'] = $path;
+                            $diagnostics['pdf_size'] = filesize($path);
+
+                            // Probar extracción
+                            try {
+                                $result = extract_codes_from_pdf($path);
+                                $diagnostics['extraction_success'] = $result['success'];
+                                $diagnostics['text_length'] = strlen($result['text'] ?? '');
+                                $diagnostics['text_sample'] = substr($result['text'] ?? '', 0, 500);
+                                $diagnostics['codes_found'] = count($result['codes'] ?? []);
+                            } catch (Exception $e) {
+                                $diagnostics['extraction_error'] = $e->getMessage();
+                            }
+                            break;
+                        }
+                    }
+
+                    if (!isset($diagnostics['pdf_found'])) {
+                        $diagnostics['pdf_found'] = false;
+                        $diagnostics['paths_tried'] = $possiblePaths;
+                    }
+                }
+            }
+
+            json_exit($diagnostics);
+
         default:
             json_exit(['error' => 'Acción inválida: ' . $action, 'code' => 400]);
     }

@@ -11,7 +11,7 @@
  */
 
 /**
- * Extrae texto de un archivo PDF usando pdftotext (poppler) o pdfparser.
+ * Extrae texto de un archivo PDF usando múltiples métodos.
  *
  * @param string $pdfPath Ruta al archivo PDF.
  * @return string Texto extraído del PDF.
@@ -19,33 +19,138 @@
 function extract_text_from_pdf(string $pdfPath): string
 {
     if (!file_exists($pdfPath)) {
+        error_log("PDF Extractor: Archivo no encontrado - $pdfPath");
         throw new Exception("Archivo PDF no encontrado: $pdfPath");
     }
 
-    // Intentar con pdftotext (más rápido y preciso si está instalado)
+    $text = '';
+
+    // Método 1: pdftotext (más preciso)
+    $text = extract_with_pdftotext($pdfPath);
+    if (!empty(trim($text))) {
+        return $text;
+    }
+
+    // Método 2: Smalot\PdfParser (si está disponible)
+    $text = extract_with_smalot($pdfPath);
+    if (!empty(trim($text))) {
+        return $text;
+    }
+
+    // Método 3: Extracción nativa PHP (básica, para PDFs simples)
+    $text = extract_with_native_php($pdfPath);
+    if (!empty(trim($text))) {
+        return $text;
+    }
+
+    error_log("PDF Extractor: No se pudo extraer texto de $pdfPath");
+    return '';
+}
+
+/**
+ * Extrae texto usando pdftotext (poppler-utils)
+ */
+function extract_with_pdftotext(string $pdfPath): string
+{
     $pdftotextPath = find_pdftotext();
-    if ($pdftotextPath) {
-        $escaped = escapeshellarg($pdfPath);
-        $cmd = "$pdftotextPath -layout $escaped -";
-        $output = shell_exec($cmd);
-        if ($output !== null && trim($output) !== '') {
+    if (!$pdftotextPath) {
+        return '';
+    }
+
+    $escaped = escapeshellarg($pdfPath);
+    $cmd = "$pdftotextPath -layout -enc UTF-8 $escaped -";
+
+    // Usar proc_open para capturar errores
+    $descriptors = [
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w']
+    ];
+
+    $process = proc_open($cmd, $descriptors, $pipes);
+
+    if (is_resource($process)) {
+        fclose($pipes[0]);
+        $output = stream_get_contents($pipes[1]);
+        $errors = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $returnCode = proc_close($process);
+
+        if ($returnCode === 0 && !empty(trim($output))) {
             return $output;
         }
-    }
 
-    // Fallback: usar Smalot\PdfParser si está disponible
-    $parserPath = __DIR__ . '/../vendor/autoload.php';
-    if (file_exists($parserPath)) {
-        require_once $parserPath;
-        if (class_exists('Smalot\PdfParser\Parser')) {
-            $parser = new \Smalot\PdfParser\Parser();
-            $pdf = $parser->parseFile($pdfPath);
-            return $pdf->getText();
+        if (!empty($errors)) {
+            error_log("pdftotext error: $errors");
         }
     }
 
-    // Si no hay ninguna opción, retornar vacío
     return '';
+}
+
+/**
+ * Extrae texto usando Smalot\PdfParser
+ */
+function extract_with_smalot(string $pdfPath): string
+{
+    $parserPath = __DIR__ . '/../vendor/autoload.php';
+    if (!file_exists($parserPath)) {
+        return '';
+    }
+
+    require_once $parserPath;
+    if (!class_exists('Smalot\PdfParser\Parser')) {
+        return '';
+    }
+
+    try {
+        $parser = new \Smalot\PdfParser\Parser();
+        $pdf = $parser->parseFile($pdfPath);
+        return $pdf->getText();
+    } catch (Exception $e) {
+        error_log("Smalot Parser error: " . $e->getMessage());
+        return '';
+    }
+}
+
+/**
+ * Extracción nativa PHP - para PDFs con texto embebido simple
+ * Lee el contenido binario y busca streams de texto
+ */
+function extract_with_native_php(string $pdfPath): string
+{
+    $content = file_get_contents($pdfPath);
+    if ($content === false) {
+        return '';
+    }
+
+    $text = '';
+
+    // Buscar contenido entre BT y ET (Begin Text / End Text)
+    if (preg_match_all('/BT\s*(.+?)\s*ET/s', $content, $matches)) {
+        foreach ($matches[1] as $textBlock) {
+            // Extraer texto entre paréntesis (Tj y TJ operadores)
+            if (preg_match_all('/\(([^)]*)\)/', $textBlock, $textMatches)) {
+                $text .= implode(' ', $textMatches[1]) . "\n";
+            }
+            // Extraer texto hexadecimal
+            if (preg_match_all('/<([^>]+)>/', $textBlock, $hexMatches)) {
+                foreach ($hexMatches[1] as $hex) {
+                    $decoded = @hex2bin($hex);
+                    if ($decoded) {
+                        $text .= $decoded . ' ';
+                    }
+                }
+            }
+        }
+    }
+
+    // Limpiar caracteres no imprimibles
+    $text = preg_replace('/[^\x20-\x7E\xA0-\xFF\n\r\t]/', '', $text);
+    $text = preg_replace('/\s+/', ' ', $text);
+
+    return trim($text);
 }
 
 /**
@@ -172,7 +277,8 @@ function search_codes_in_pdf(string $pdfPath, array $searchCodes): array
 
     foreach ($searchCodes as $code) {
         $code = trim($code);
-        if ($code === '') continue;
+        if ($code === '')
+            continue;
 
         if (stripos($textUpper, strtoupper($code)) !== false) {
             $found[] = $code;
