@@ -42,6 +42,16 @@ $docsByType = $db->query("
     GROUP BY tipo
     ORDER BY cnt DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
+
+// Count documents needing indexing (for notification)
+$pendingIndex = 0;
+$allDocsStmt = $db->query("SELECT datos_extraidos FROM documentos WHERE ruta_archivo LIKE '%.pdf'");
+while ($row = $allDocsStmt->fetch(PDO::FETCH_ASSOC)) {
+    $data = json_decode($row['datos_extraidos'] ?? '', true);
+    if (empty($data['text']) || strlen($data['text'] ?? '') < 100) {
+        $pendingIndex++;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -61,6 +71,31 @@ $docsByType = $db->query("
             <?php include __DIR__ . '/../../includes/header.php'; ?>
 
             <div class="page-content">
+                <?php if ($pendingIndex > 0): ?>
+                <!-- Indexing Notification Banner -->
+                <div id="indexBanner" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 1rem 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span style="font-size: 1.5rem;">📄</span>
+                        <div>
+                            <strong><?= $pendingIndex ?> documento(s)</strong> necesitan indexarse para búsqueda full-text
+                            <div style="font-size: 0.8rem; opacity: 0.9;">Los documentos indexados permiten buscar texto dentro de los PDFs</div>
+                        </div>
+                    </div>
+                    <button onclick="autoIndex()" id="autoIndexBtn" style="background: white; color: #d97706; border: none; padding: 0.75rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                        🚀 Indexar Ahora
+                    </button>
+                </div>
+                <div id="indexProgress" style="display: none; background: var(--bg-secondary); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <div class="spinner" style="width: 20px; height: 20px; border-width: 2px;"></div>
+                        <span id="indexProgressText">Indexando documentos...</span>
+                    </div>
+                    <div style="margin-top: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; height: 6px; overflow: hidden;">
+                        <div id="indexProgressBar" style="width: 0%; height: 100%; background: var(--accent-primary); transition: width 0.3s;"></div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
                 <!-- Stats Grid -->
                 <div class="stats-grid">
                     <div class="stat-card">
@@ -215,7 +250,7 @@ $docsByType = $db->query("
                                                 <td><span class="code-tag"><?= $doc['code_count'] ?></span></td>
                                                 <td>
                                                     <a href="../documento/view.php?id=<?= $doc['id'] ?>"
-                                                                class=" btn btn-secondary btn-icon" title="Ver documento">
+                                                        class=" btn btn-secondary btn-icon" title="Ver documento">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
                                                             fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path stroke-linecap="round" stroke-linejoin="round"
@@ -260,6 +295,67 @@ $docsByType = $db->query("
             <?php include __DIR__ . '/../../includes/footer.php'; ?>
         </main>
     </div>
+
+    <?php if ($pendingIndex > 0): ?>
+    <script>
+        const apiUrl = '../../api.php';
+        let totalPending = <?= $pendingIndex ?>;
+        let totalIndexed = 0;
+        
+        async function autoIndex() {
+            const btn = document.getElementById('autoIndexBtn');
+            const banner = document.getElementById('indexBanner');
+            const progress = document.getElementById('indexProgress');
+            const progressText = document.getElementById('indexProgressText');
+            const progressBar = document.getElementById('indexProgressBar');
+            
+            btn.style.display = 'none';
+            progress.style.display = 'block';
+            
+            // Index in batches
+            let pending = totalPending;
+            while (pending > 0) {
+                try {
+                    const response = await fetch(`${apiUrl}?action=reindex_documents&batch=10`);
+                    const result = await response.json();
+                    
+                    if (!result.success) {
+                        progressText.textContent = 'Error: ' + (result.error || 'Error desconocido');
+                        break;
+                    }
+                    
+                    totalIndexed += result.indexed;
+                    pending = result.pending;
+                    
+                    const percent = Math.round(((totalPending - pending) / totalPending) * 100);
+                    progressBar.style.width = percent + '%';
+                    progressText.textContent = `Indexados: ${totalIndexed}, Pendientes: ${pending}`;
+                    
+                    // Si no se indexó nada, detener para evitar loop infinito
+                    if (result.indexed === 0 && pending > 0) {
+                        progressText.textContent = `Completado. ${pending} docs no pudieron indexarse (archivos faltantes)`;
+                        break;
+                    }
+                } catch (error) {
+                    progressText.textContent = 'Error: ' + error.message;
+                    break;
+                }
+            }
+            
+            if (pending === 0) {
+                progressText.textContent = '✅ ¡Todos los documentos indexados!';
+                progressBar.style.width = '100%';
+                progressBar.style.background = '#10b981';
+                
+                // Ocultar banner después de 3 segundos
+                setTimeout(() => {
+                    banner.style.display = 'none';
+                    progress.style.display = 'none';
+                }, 3000);
+            }
+        }
+    </script>
+    <?php endif; ?>
 </body>
 
 </html>
