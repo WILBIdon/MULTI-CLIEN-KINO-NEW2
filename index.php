@@ -259,9 +259,9 @@ COD001
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label class="form-label">Número</label>
+                                    <label class="form-label">Nombre de documento</label>
                                     <input type="text" class="form-input" name="numero" id="docNumero"
-                                        placeholder="Ej: MAN-2024-001" required>
+                                        placeholder="Ej: Manifiesto Enero 2024" required>
                                 </div>
                             </div>
 
