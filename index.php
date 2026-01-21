@@ -183,60 +183,120 @@ $pageTitle = 'Dashboard';
                     </div>
                 </div>
 
-                <!-- Search Interface -->
-                <div class="card">
-                    <h3 style="margin-bottom: 1rem;">🔍 Búsqueda Inteligente de Códigos</h3>
-                    <p class="text-muted mb-4">Pega aquí tus códigos o bloque de texto. El sistema encontrará los
-                        documentos que los contienen.</p>
 
-                    <form id="searchForm">
-                        <div class="form-group">
-                            <textarea class="form-textarea" id="codesInput" rows="6" placeholder="ABC123
-XYZ789
-COD001
-..."></textarea>
+                <!-- Dashboard con Tarjetas de Acceso -->
+                <div class="dashboard-grid">
+                    <!-- Tarjeta: Gestor de Documentos -->
+                    <a href="modules/busqueda/" class="dashboard-card primary-card">
+                        <div class="card-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                            </svg>
                         </div>
-                        <div class="flex gap-3">
-                            <button type="submit" class="btn btn-primary">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none"
-                                    viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                                Buscar
-                            </button>
-                            <button type="button" class="btn btn-secondary" onclick="clearSearch()">Limpiar</button>
+                        <h3>Gestor de Documentos</h3>
+                        <p>Buscar, subir, consultar y gestionar todos tus documentos</p>
+                        <span class="card-action">Abrir Gestor →</span>
+                    </a>
+
+                    <!-- Tarjeta: Resaltador PDF -->
+                    <a href="modules/resaltar/" class="dashboard-card">
+                        <div class="card-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" />
+                            </svg>
                         </div>
-                    </form>
+                        <h3>Resaltador PDF</h3>
+                        <p>Visualiza PDFs con términos resaltados automáticamente</p>
+                        <span class="card-action">Abrir Visor →</span>
+                    </a>
 
-                    <div id="searchLoading" class="loading hidden">
-                        <div class="spinner"></div>
-                        <p>Buscando documentos...</p>
-                    </div>
+                    <!-- Tarjeta: Manifiestos -->
+                    <a href="modules/manifiestos/" class="dashboard-card">
+                        <div class="card-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                            </svg>
+                        </div>
+                        <h3>Manifiestos</h3>
+                        <p>Gestión de manifiestos de carga</p>
+                        <span class="card-action">Ver Manifiestos →</span>
+                    </a>
 
-                    <div id="searchResults" class="hidden mt-4">
-                        <div id="searchSummary"></div>
-                        <div id="documentList" class="results-list"></div>
-                    </div>
-                </div>
+                    <!-- Tarjeta: Declaraciones -->
+                    <a href="modules/declaraciones/" class="dashboard-card">
+                        <div class="card-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                            </svg>
+                        </div>
+                        <h3>Declaraciones</h3>
+                        <p>Gestión de declaraciones aduaneras</p>
+                        <span class="card-action">Ver Declaraciones →</span>
+                    </a>
 
-                <!-- Quick Access Links -->
-                <div class="card" style="margin-top: 1.5rem;">
-                    <h4 style="margin-bottom: 1rem;">⚡ Accesos Rápidos</h4>
-                    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                        <a href="modules/subir/" class="btn btn-secondary" style="justify-content: center;">
-                            📤 Subir Documento
-                        </a>
-                        <a href="modules/excel_import/" class="btn btn-secondary" style="justify-content: center;">
-                            📊 Importar Excel
-                        </a>
-                        <a href="modules/lote/" class="btn btn-secondary" style="justify-content: center;">
-                            📦 Subida por Lote
-                        </a>
-                        <a href="modules/indexar/" class="btn btn-secondary" style="justify-content: center;">
-                            🔄 Indexar PDFs
-                        </a>
-                    </div>
+                    <!-- Tarjeta: Subir Documento -->
+                    <a href="modules/subir/" class="dashboard-card">
+                        <div class="card-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                            </svg>
+                        </div>
+                        <h3>Subir Documento</h3>
+                        <p>Subir nuevo documento PDF con códigos</p>
+                        <span class="card-action">Subir →</span>
+                    </a>
+
+                    <!-- Tarjeta: Importar Excel -->
+                    <a href="modules/excel_import/" class="dashboard-card">
+                        <div class="card-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125" />
+                            </svg>
+                        </div>
+                        <h3>Importar Excel</h3>
+                        <p>Importar datos desde Excel o CSV</p>
+                        <span class="card-action">Importar →</span>
+                    </a>
+
+                    <!-- Tarjeta: Indexar PDFs -->
+                    <a href="modules/indexar/" class="dashboard-card">
+                        <div class="card-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                            </svg>
+                        </div>
+                        <h3>Indexar PDFs</h3>
+                        <p>Indexar documentos para búsqueda full-text</p>
+                        <span class="card-action">Indexar →</span>
+                    </a>
+
+                    <!-- Tarjeta: Backup -->
+                    <a href="admin/backup.php" class="dashboard-card">
+                        <div class="card-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                        </div>
+                        <h3>Backup</h3>
+                        <p>Descargar respaldo completo de datos</p>
+                        <span class="card-action">Crear Backup →</span>
+                    </a>
                 </div>
             </div>
 
@@ -244,109 +304,73 @@ COD001
         </main>
     </div>
 
-    <script>
-        const apiUrl = 'api.php';
-        const clientCode = '<?= $clientCode ?>';
-
-        // ============ Search Form ============
-        document.getElementById('searchForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const codes = document.getElementById('codesInput').value.trim();
-            if (!codes) {
-                alert('Ingresa al menos un código');
-                return;
-            }
-
-            document.getElementById('searchLoading').classList.remove('hidden');
-            document.getElementById('searchResults').classList.add('hidden');
-
-            try {
-                const formData = new FormData();
-                formData.append('action', 'search');
-                formData.append('codes', codes);
-
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    body: formData
-                });
-                const result = await response.json();
-
-                document.getElementById('searchLoading').classList.add('hidden');
-                showSearchResults(result);
-            } catch (error) {
-                document.getElementById('searchLoading').classList.add('hidden');
-                alert('Error en la búsqueda: ' + error.message);
-            }
-        });
-
-        function showSearchResults(result) {
-            document.getElementById('searchResults').classList.remove('hidden');
-
-            const coveredCount = result.total_covered || 0;
-            const totalSearched = result.total_searched || 0;
-            const notFound = result.not_found || [];
-
-            let summaryHtml = `
-                <div class="summary-box${notFound.length > 0 ? ' warning' : ''}">
-                    <strong>${coveredCount}/${totalSearched}</strong> códigos encontrados en 
-                    <strong>${result.documents?.length || 0}</strong> documento(s)
-                    ${notFound.length > 0 ? `
-                        <div style="margin-top: 0.5rem;">
-                            <span style="color: var(--accent-danger);">No encontrados:</span>
-                            <div class="codes-list">
-                                ${notFound.map(c => `<span class="code-tag" style="background: rgba(239,68,68,0.1); color: var(--accent-danger);">${c}</span>`).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-            document.getElementById('searchSummary').innerHTML = summaryHtml;
-
-            if (!result.documents || result.documents.length === 0) {
-                document.getElementById('documentList').innerHTML = '<p class="text-muted">No se encontraron documentos.</p>';
-                return;
-            }
-
-            let html = '';
-            for (const doc of result.documents) {
-                // Construir ruta del PDF
-                let pdfUrl = '';
-                if (doc.ruta_archivo) {
-                    pdfUrl = doc.ruta_archivo.includes('/')
-                        ? `clients/${clientCode}/uploads/${doc.ruta_archivo}`
-                        : `clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
-                }
-
-                // Primer código para resaltar
-                const firstCode = (doc.matched_codes && doc.matched_codes[0]) || (doc.codes && doc.codes[0]) || '';
-
-                html += `
-                    <div class="result-card">
-                        <div class="result-header">
-                            <span class="badge badge-primary">${doc.tipo.toUpperCase()}</span>
-                            <span class="result-meta">${doc.fecha}</span>
-                        </div>
-                        <div class="result-title">${doc.numero}</div>
-                        <div class="result-meta">${doc.proveedor || ''}</div>
-                        <div class="codes-list">
-                            ${(doc.matched_codes || doc.codes || []).map(c => `<span class="code-tag">${c}</span>`).join('')}
-                        </div>
-                        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            ${pdfUrl ? `<a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(firstCode)}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver con Resaltado</a>` : ''}
-                            <a href="modules/documento/view.php?id=${doc.id}" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📋 Ver Códigos</a>
-                            ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 PDF Original</a>` : ''}
-                        </div>
-                    </div>
-                `;
-            }
-            document.getElementById('documentList').innerHTML = html;
+    <style>
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
         }
 
-        function clearSearch() {
-            document.getElementById('codesInput').value = '';
-            document.getElementById('searchResults').classList.add('hidden');
+        .dashboard-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
         }
-    </script>
+
+        .dashboard-card:hover {
+            border-color: var(--accent-primary);
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-4px);
+        }
+
+        .dashboard-card.primary-card {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
+            border-color: var(--accent-primary);
+        }
+
+        .card-icon {
+            width: 56px;
+            height: 56px;
+            background: var(--accent-primary);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            color: white;
+        }
+
+        .dashboard-card h3 {
+            font-size: 1.125rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .dashboard-card p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            flex-grow: 1;
+        }
+
+        .card-action {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--accent-primary);
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </body>
 
 </html>
