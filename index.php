@@ -341,7 +341,8 @@ COD001
                             <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
                                 <div style="flex: 1; min-width: 200px;">
                                     <input type="text" class="form-input" id="fulltextSearch"
-                                        placeholder="🔍 Buscar texto dentro de los PDFs..." style="width: 100%;">
+                                        placeholder="🔍 Buscar palabras en PDFs y nombres de documentos..."
+                                        style="width: 100%;">
                                 </div>
                                 <button class="btn btn-primary" onclick="searchFulltext()" id="fulltextBtn">
                                     Buscar en Contenido
@@ -838,6 +839,17 @@ COD001
             const query = fulltextInput.value.trim();
             if (query.length < 3) {
                 alert('Ingresa al menos 3 caracteres');
+                return;
+            }
+
+            // Validar si parece un código o número
+            // Si tiene números y no tiene espacios, es probable que sea un código
+            if (/^\d+$/.test(query) || (/^[\w-]+$/.test(query) && /\d/.test(query))) {
+                alert('⚠️ Este buscador es solo para PALABRAS y NOMBRES de documentos.\n\nPara buscar por CÓDIGOS (ej: ' + query + '), por favor usa la pestaña "Buscar" (Búsqueda Inteligente).');
+
+                // Opcional: Cambiar a la pestaña de búsqueda automáticamente
+                // switchTab('buscar');
+                // document.getElementById('searchScores').value = query;
                 return;
             }
 

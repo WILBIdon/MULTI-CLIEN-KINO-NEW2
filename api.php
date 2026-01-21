@@ -506,17 +506,18 @@ try {
                 json_exit(['error' => 'El término debe tener al menos 3 caracteres']);
             }
 
-            // Buscar en datos_extraidos (texto pre-indexado)
+            // Buscar en datos_extraidos (texto) Y en numero (nombre del documento)
             $stmt = $db->prepare("
                 SELECT 
                     d.id, d.tipo, d.numero, d.fecha, d.proveedor, d.ruta_archivo,
                     d.datos_extraidos
                 FROM documentos d
-                WHERE d.datos_extraidos LIKE ?
+                WHERE d.datos_extraidos LIKE ? OR d.numero LIKE ?
                 ORDER BY d.fecha DESC
                 LIMIT ?
             ");
-            $stmt->execute(['%' . $query . '%', $limit]);
+            $likeQuery = '%' . $query . '%';
+            $stmt->execute([$likeQuery, $likeQuery, $limit]);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             $results = [];
