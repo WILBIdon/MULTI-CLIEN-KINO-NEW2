@@ -415,7 +415,7 @@ COD001
     </div>
 
     <script>
-        const apiUrl = '../../api.php';
+        const apiUrl = 'api.php';
         const clientCode = '<?= $code ?>';
         let currentPage = 1;
 
@@ -517,9 +517,9 @@ COD001
                 if (doc.ruta_archivo) {
                     // Si la ruta ya incluye el tipo (ej: documento/archivo.pdf)
                     if (doc.ruta_archivo.includes('/')) {
-                        pdfUrl = `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`;
+                        pdfUrl = `clients/${clientCode}/uploads/${doc.ruta_archivo}`;
                     } else {
-                        pdfUrl = `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
+                        pdfUrl = `clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
                     }
                 }
 
@@ -538,8 +538,8 @@ COD001
                             ${(doc.matched_codes || doc.codes || []).map(c => `<span class="code-tag">${c}</span>`).join('')}
                         </div>
                         <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            <a href="../documento/view.php?id=${doc.id}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Códigos</a>
-                            ${pdfUrl ? `<a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(firstCode)}" class="btn btn-secondary" style="padding: 0.5rem 1rem; background: #fbbf24; color: #000;">🖍️ Resaltar</a>` : ''}
+                            <a href="modules/documento/view.php?id=${doc.id}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Códigos</a>
+                            ${pdfUrl ? `<a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(firstCode)}" class="btn btn-secondary" style="padding: 0.5rem 1rem; background: #fbbf24; color: #000;">🖍️ Resaltar</a>` : ''}
                             ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
                         </div>
                     </div>
@@ -712,7 +712,7 @@ COD001
                     <td><span class="code-tag">${doc.codes.length}</span></td>
                     <td>
                         <div class="flex gap-2">
-                            <a href="../documento/view.php?id=${doc.id}" class="btn btn-secondary btn-icon" title="Ver documento">
+                            <a href="modules/documento/view.php?id=${doc.id}" class="btn btn-secondary btn-icon" title="Ver documento">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
