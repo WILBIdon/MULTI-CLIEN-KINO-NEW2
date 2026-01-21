@@ -148,10 +148,10 @@ $pageTitle = 'Gestor de Documentos';
 
 <body>
     <div class="dashboard-container">
-        <?php include __DIR__ . '/../../includes/sidebar.php'; ?>
+        <?php include __DIR__ . '/includes/sidebar.php'; ?>
 
         <main class="main-content">
-            <?php include __DIR__ . '/../../includes/header.php'; ?>
+            <?php include __DIR__ . '/includes/header.php'; ?>
 
             <div class="page-content">
                 <!-- Stats Bar -->
@@ -409,7 +409,7 @@ COD001
                 </div>
             </div>
 
-            <?php include __DIR__ . '/../../includes/footer.php'; ?>
+            <?php include __DIR__ . '/includes/footer.php'; ?>
         </main>
     </div>
 
