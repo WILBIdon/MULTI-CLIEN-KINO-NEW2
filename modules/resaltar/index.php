@@ -23,8 +23,8 @@ $documents = $db->query("
     SELECT id, tipo, numero, fecha, ruta_archivo
     FROM documentos
     WHERE ruta_archivo LIKE '%.pdf'
-    ORDER BY fecha_creacion DESC
-    LIMIT 50
+    ORDER BY id DESC
+    LIMIT 100
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 // For sidebar
@@ -259,8 +259,9 @@ $pageTitle = 'Resaltar Documento';
                                 <select class="form-select" id="docSelect">
                                     <option value="">Seleccionar documento...</option>
                                     <?php foreach ($documents as $doc): ?>
-                                        <option value="<?= htmlspecialchars($doc['ruta_archivo']) ?>">
-                                            <?= htmlspecialchars($doc['tipo'] . ' #' . $doc['numero'] . ' (' . $doc['fecha'] . ')') ?>
+                                        <option value="<?= htmlspecialchars($doc['ruta_archivo']) ?>"
+                                            data-tipo="<?= htmlspecialchars($doc['tipo']) ?>">
+                                            <?= htmlspecialchars('[' . strtoupper($doc['tipo']) . '] ' . $doc['numero'] . ' (' . $doc['fecha'] . ')') ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -412,10 +413,20 @@ $pageTitle = 'Resaltar Documento';
 
         // Load PDF from existing document
         document.getElementById('docSelect').addEventListener('change', async (e) => {
-            const path = e.target.value;
+            const option = e.target.selectedOptions[0];
+            const path = option.value;
             if (!path) return;
 
-            const fullPath = `../../clients/${clientCode}/uploads/${path}`;
+            const type = option.dataset.tipo || 'documento';
+            
+            // Logic to determine full path similar to index.php
+            let fullPath;
+            if (path.includes('/')) {
+                fullPath = `../../clients/${clientCode}/uploads/${path}`;
+            } else {
+                fullPath = `../../clients/${clientCode}/uploads/${type}/${path}`;
+            }
+            
             loadPdfFromUrl(fullPath);
         });
 
