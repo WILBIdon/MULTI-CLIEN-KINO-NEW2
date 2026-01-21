@@ -912,17 +912,17 @@ COD001
                         -->
                         <div class="result-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                             <a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(result.query)}" 
-                               class="btn btn-primary btn-sm" target="_blank" style="flex: 1; justify-content: center;">
+                               class="btn btn-primary btn-sm" target="_blank">
                                 👁️ Ver Documento
                             </a>
                             
-                            ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary btn-sm" style="flex: 0; white-space: nowrap;">📄 Original</a>` : ''}
+                            ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary btn-sm" style="white-space: nowrap;">📄 Original</a>` : ''}
 
-                            <button onclick="editDoc(${doc.id})" class="btn btn-sm" style="flex: 0; background: #f59e0b; color: white;" title="Editar">
+                            <button onclick="editDoc(${doc.id})" class="btn btn-sm" style="background: #f59e0b; color: white;" title="Editar">
                                 ✏️
                             </button>
 
-                            <button onclick="deleteDoc(${doc.id})" class="btn btn-sm" style="flex: 0; background: #ef4444; color: white;" title="Eliminar">
+                            <button onclick="deleteDoc(${doc.id})" class="btn btn-sm" style="background: #ef4444; color: white;" title="Eliminar">
                                 🗑️
                             </button>
                         </div>
