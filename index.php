@@ -680,8 +680,8 @@ COD001
 
         async function editDoc(id) {
             try {
-                // Get document details
-                const response = await fetch(apiUrl + '?action=get_document&id=' + id);
+                // Get document details using correct API action
+                const response = await fetch(apiUrl + '?action=get&id=' + id);
                 const doc = await response.json();
 
                 if (!doc || doc.error) {
@@ -697,7 +697,8 @@ COD001
                 document.getElementById('docNumero').value = doc.numero;
                 document.getElementById('docFecha').value = doc.fecha;
                 document.getElementById('docProveedor').value = doc.proveedor || '';
-                document.getElementById('docCodes').value = doc.codes_text || '';
+                // Convert codes array to newline-separated text
+                document.getElementById('docCodes').value = (doc.codes || []).join('\n');
 
                 // Update form title and button
                 document.querySelector('#tab-subir h3').textContent = 'Editar Documento';
@@ -953,7 +954,7 @@ COD001
                     if (doc.ruta_archivo) {
                         if (doc.ruta_archivo.includes('/')) {
                             pdfUrl = `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`;
-                        } else {
+             } else {
                             pdfUrl = `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
                         }
                     }
