@@ -376,7 +376,7 @@ COD001
                                     <thead>
                                         <tr>
                                             <th>Tipo</th>
-                                            <th>Número</th>
+                                            <th>Nombre</th>
                                             <th>Fecha</th>
                                             <th>Proveedor</th>
                                             <th>Códigos</th>
