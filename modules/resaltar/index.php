@@ -456,30 +456,67 @@ $pageTitle = 'Resaltar Documento';
         async function extractTextFromPdf(data) {
             document.getElementById('loadingPdf').classList.remove('hidden');
             document.getElementById('pdfPlaceholder').classList.add('hidden');
-            document.getElementById('pdfTextContainer').classList.add('hidden');
+            const container = document.getElementById('pdfTextContainer'); // Reutilizamos contenedor
+            container.classList.remove('hidden');
+            
+            // Limpiar contenedor y usar id correcto para el contenido
+            const contentDiv = document.getElementById('pdfTextContent');
+            contentDiv.innerHTML = '';
+            contentDiv.classList.remove('pdf-text-content'); // Quitar estilo monoespaciado para modo visual
+            contentDiv.style.whiteSpace = 'normal'; // Resetear estilos de texto
 
             try {
                 const pdf = await pdfjsLib.getDocument({ data }).promise;
-                let fullText = '';
+                pdfText = ''; // Resetear texto global
 
                 for (let i = 1; i <= pdf.numPages; i++) {
                     const page = await pdf.getPage(i);
+                    
+                    // Crear wrapper para la página
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'pdf-page-wrapper';
+                    wrapper.style.position = 'relative';
+                    wrapper.style.marginBottom = '20px';
+                    wrapper.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+                    wrapper.style.border = '1px solid #e5e7eb';
+                    
+                    // Crear Canvas
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    
+                    // Ajustar escala para que se vea bien
+                    const viewport = page.getViewport({ scale: 1.5 });
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    canvas.style.width = '100%';
+                    canvas.style.height = 'auto';
+                    canvas.style.display = 'block';
+                    
+                    wrapper.appendChild(canvas);
+                    contentDiv.appendChild(wrapper);
+
+                    // Renderizar página
+                    await page.render({
+                        canvasContext: context,
+                        viewport: viewport
+                    }).promise;
+
+                    // Extraer texto en background para la variable global (por si se necesita búsqueda futura)
                     const textContent = await page.getTextContent();
                     const pageText = textContent.items.map(item => item.str).join(' ');
-                    fullText += pageText + '\n\n';
+                    pdfText += pageText + '\n\n';
                 }
 
-                pdfText = fullText;
-
                 document.getElementById('loadingPdf').classList.add('hidden');
-                document.getElementById('pdfTextContainer').classList.remove('hidden');
-                document.getElementById('pdfTextContent').textContent = pdfText;
                 document.getElementById('applyHighlightsBtn').disabled = false;
+                // Nota: El botón de aplicar resaltados necesitaría lógica visual avanzada para funcionar sobre Canvas
+                // Por ahora mostramos el visual que es lo prioritario.
 
             } catch (error) {
-                alert('Error al extraer texto: ' + error.message);
+                alert('Error al procesar PDF: ' + error.message);
                 document.getElementById('loadingPdf').classList.add('hidden');
                 document.getElementById('pdfPlaceholder').classList.remove('hidden');
+                container.classList.add('hidden');
             }
         }
 
