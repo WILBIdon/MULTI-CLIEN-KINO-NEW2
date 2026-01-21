@@ -648,6 +648,11 @@ COD001
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                 </svg>
                             </a>
+                            <button class="btn btn-secondary btn-icon" title="Editar" onclick="editDoc(${doc.id})">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                            </button>
                             <button class="btn btn-secondary btn-icon" title="Eliminar" onclick="deleteDoc(${doc.id})">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -672,6 +677,44 @@ COD001
         document.getElementById('filterTipo').addEventListener('change', (e) => {
             loadDocuments(1, e.target.value);
         });
+
+        async function editDoc(id) {
+            try {
+                // Get document details
+                const response = await fetch(apiUrl + '?action=get_document&id=' + id);
+                const doc = await response.json();
+
+                if (!doc || doc.error) {
+                    alert('Error al cargar documento: ' + (doc.error || 'No encontrado'));
+                    return;
+                }
+
+                // Switch to Subir tab
+                switchTab('subir');
+
+                // Fill form with document data
+                document.getElementById('docTipo').value = doc.tipo;
+                document.getElementById('docNumero').value = doc.numero;
+                document.getElementById('docFecha').value = doc.fecha;
+                document.getElementById('docProveedor').value = doc.proveedor || '';
+                document.getElementById('docCodes').value = doc.codes_text || '';
+
+                // Update form title and button
+                document.querySelector('#tab-subir h3').textContent = 'Editar Documento';
+                document.getElementById('uploadBtn').innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Guardar Cambios
+                `;
+
+                // Store doc ID for update
+                document.getElementById('uploadForm').dataset.editId = id;
+
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
 
         async function deleteDoc(id) {
             if (!confirm('¿Eliminar este documento?')) return;
