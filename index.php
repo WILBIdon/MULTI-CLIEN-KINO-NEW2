@@ -910,9 +910,21 @@ COD001
                         <!-- Snippet oculto para usuario final 
                         ${doc.snippet ? `<div class="result-meta" style="margin-top: 0.5rem; font-style: italic; background: rgba(255,235,59,0.1); padding: 0.5rem; border-radius: 4px;">"${doc.snippet}"</div>` : ''}
                         -->
-                        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            <a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(result.query)}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Documento</a>
-                            ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Original</a>` : ''}
+                        <div class="result-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(result.query)}" 
+                               class="btn btn-primary btn-sm" target="_blank" style="flex: 1; justify-content: center;">
+                                👁️ Ver Documento
+                            </a>
+                            
+                            ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary btn-sm" style="flex: 0; white-space: nowrap;">📄 Original</a>` : ''}
+
+                            <button onclick="editDoc(${doc.id})" class="btn btn-sm" style="flex: 0; background: #f59e0b; color: white;" title="Editar">
+                                ✏️
+                            </button>
+
+                            <button onclick="deleteDoc(${doc.id})" class="btn btn-sm" style="flex: 0; background: #ef4444; color: white;" title="Eliminar">
+                                🗑️
+                            </button>
                         </div>
                     </div>
                 `;
