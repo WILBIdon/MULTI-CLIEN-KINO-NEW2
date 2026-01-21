@@ -158,6 +158,118 @@ try {
             ]);
 
         // ====================
+        // ACTUALIZAR DOCUMENTO
+        // ====================
+        case 'update':
+            $id = (int) ($_POST['id'] ?? 0);
+            $tipo = trim($_POST['tipo'] ?? '');
+            $numero = trim($_POST['numero'] ?? '');
+            $fecha = trim($_POST['fecha'] ?? '');
+            $proveedor = trim($_POST['proveedor'] ?? '');
+            $currentFile = trim($_POST['current_file'] ?? '');
+
+            if (!$id || !$tipo || !$numero || !$fecha) {
+                json_exit(['error' => 'Faltan campos requeridos']);
+            }
+
+            // Parse codes
+            $codes = array_filter(array_map('trim', explode("\n", $_POST['codes'] ?? '')));
+
+            // Check if document exists
+            $stmt = $db->prepare("SELECT id, ruta_archivo FROM documentos WHERE id = ?");
+            $stmt->execute([$id]);
+            $doc = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$doc) {
+                json_exit(['error' => 'Documento no encontrado']);
+            }
+
+            $rutaArchivo = $doc['ruta_archivo'];
+            $hash = null;
+            $datosExtraidos = null;
+
+            // Check if a new file was uploaded
+            if (isset($_FILES['file']) && $_FILES['file']['error'] === UPLOAD_ERR_OK) {
+                $clientDir = CLIENTS_DIR . '/' . $clientCode;
+                $uploadDir = $clientDir . '/uploads/' . $tipo;
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0777, true);
+                }
+
+                // Delete old file if it exists and is different from the new location
+                $oldFilePath = $clientDir . '/uploads/' . $doc['ruta_archivo'];
+                if (file_exists($oldFilePath)) {
+                    unlink($oldFilePath);
+                }
+
+                // Upload new file
+                $ext = pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION);
+                $targetName = uniqid($tipo . '_', true) . '.' . $ext;
+                $targetPath = $uploadDir . '/' . $targetName;
+                move_uploaded_file($_FILES['file']['tmp_name'], $targetPath);
+
+                // Calculate hash and extract text
+                $hash = hash_file('sha256', $targetPath);
+                $rutaArchivo = $tipo . '/' . $targetName;
+
+                if (strtolower($ext) === 'pdf') {
+                    $extractResult = extract_codes_from_pdf($targetPath);
+                    if ($extractResult['success']) {
+                        $datosExtraidos = [
+                            'text' => substr($extractResult['text'], 0, 10000),
+                            'auto_codes' => $extractResult['codes']
+                        ];
+                    }
+                }
+            }
+
+            // Update document
+            if ($hash && $datosExtraidos) {
+                // New file uploaded - update everything
+                $stmt = $db->prepare("
+                    UPDATE documentos 
+                    SET tipo = ?, numero = ?, fecha = ?, proveedor = ?, 
+                        ruta_archivo = ?, hash_archivo = ?, datos_extraidos = ?
+                    WHERE id = ?
+                ");
+                $stmt->execute([
+                    $tipo,
+                    $numero,
+                    $fecha,
+                    $proveedor,
+                    $rutaArchivo,
+                    $hash,
+                    json_encode($datosExtraidos),
+                    $id
+                ]);
+            } else {
+                // No new file - update only metadata
+                $stmt = $db->prepare("
+                    UPDATE documentos 
+                    SET tipo = ?, numero = ?, fecha = ?, proveedor = ?
+                    WHERE id = ?
+                ");
+                $stmt->execute([$tipo, $numero, $fecha, $proveedor, $id]);
+            }
+
+            // Update codes - delete old codes and insert new ones
+            $db->prepare("DELETE FROM codigos WHERE documento_id = ?")->execute([$id]);
+
+            if (!empty($codes)) {
+                $insertCode = $db->prepare("INSERT INTO codigos (documento_id, codigo) VALUES (?, ?)");
+                foreach (array_unique($codes) as $code) {
+                    $insertCode->execute([$id, $code]);
+                }
+            }
+
+            json_exit([
+                'success' => true,
+                'message' => 'Documento actualizado',
+                'document_id' => $id,
+                'codes_count' => count($codes)
+            ]);
+
+        // ====================
         // BÚSQUEDA VORAZ DE CÓDIGOS
         // ====================
         case 'search':

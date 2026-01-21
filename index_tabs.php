@@ -9,13 +9,13 @@
  * - Búsqueda por Código: Single code search
  */
 session_start();
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/helpers/tenant.php';
-require_once __DIR__ . '/helpers/search_engine.php';
+require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../helpers/tenant.php';
+require_once __DIR__ . '/../../helpers/search_engine.php';
 
 // Verify authentication
 if (!isset($_SESSION['client_code'])) {
-    header('Location: login.php');
+    header('Location: ../../login.php');
     exit;
 }
 
@@ -25,7 +25,7 @@ $stats = get_search_stats($db);
 
 // For sidebar
 $currentModule = 'gestor';
-$baseUrl = './';
+$baseUrl = '../../';
 $pageTitle = 'Gestor de Documentos';
 ?>
 <!DOCTYPE html>
@@ -35,7 +35,7 @@ $pageTitle = 'Gestor de Documentos';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestor de Documentos - KINO TRACE</title>
-    <link rel="stylesheet" href="assets/css/styles.css">
+    <link rel="stylesheet" href="../../assets/css/styles.css">
     <style>
         /* Additional styles for this module */
         .results-list {
@@ -148,10 +148,10 @@ $pageTitle = 'Gestor de Documentos';
 
 <body>
     <div class="dashboard-container">
-        <?php include __DIR__ . '/includes/sidebar.php'; ?>
+        <?php include __DIR__ . '/../../includes/sidebar.php'; ?>
 
         <main class="main-content">
-            <?php include __DIR__ . '/includes/header.php'; ?>
+            <?php include __DIR__ . '/../../includes/header.php'; ?>
 
             <div class="page-content">
                 <!-- Stats Bar -->
@@ -409,7 +409,7 @@ COD001
                 </div>
             </div>
 
-            <?php include __DIR__ . '/includes/footer.php'; ?>
+            <?php include __DIR__ . '/../../includes/footer.php'; ?>
         </main>
     </div>
 
@@ -431,27 +431,6 @@ COD001
                 }
             });
         });
-
-        // Function to programmatically switch tabs
-        function switchTab(tabName) {
-            document.querySelectorAll('#mainTabs .tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
-            const targetTab = document.querySelector(`#mainTabs .tab[data-tab="${tabName}"]`);
-            if (targetTab) {
-                targetTab.classList.add('active');
-            }
-
-            const targetContent = document.getElementById('tab-' + tabName);
-            if (targetContent) {
-                targetContent.classList.add('active');
-            }
-
-            if (tabName === 'consultar') {
-                loadDocuments();
-            }
-        }
-
 
         // ============ Search Tab ============
         document.getElementById('searchForm').addEventListener('submit', async (e) => {
@@ -580,83 +559,35 @@ COD001
             }
         }
 
-        function resetUploadForm() {
-            const form = document.getElementById('uploadForm');
-            const uploadZone = document.getElementById('uploadZone');
-            const fileNameDisplay = document.getElementById('fileName');
-
-            // Reset form
-            form.reset();
-
-            // Clear edit mode flags
-            delete form.dataset.editId;
-            delete form.dataset.currentFile;
-
-            // Reset upload zone
-            uploadZone.querySelector('p').textContent = 'Arrastra un archivo PDF o haz clic para seleccionar';
-            uploadZone.style.borderColor = '';
-            uploadZone.style.background = '';
-
-            // Reset file name display
-            fileNameDisplay.classList.add('hidden');
-            fileNameDisplay.style.color = '';
-
-            // Reset title and button
-            document.querySelector('#tab-subir h3').textContent = 'Subir Documento';
-            document.getElementById('uploadBtn').innerHTML = `
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-                Subir Documento
-            `;
-        }
-
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const form = e.target;
-            const isEditMode = !!form.dataset.editId;
-
-            // In edit mode, file is optional; in create mode, it's required
-            if (!isEditMode && !fileInput.files.length) {
+            if (!fileInput.files.length) {
                 alert('Selecciona un archivo PDF');
                 return;
             }
 
             const btn = document.getElementById('uploadBtn');
             btn.disabled = true;
-            btn.textContent = isEditMode ? 'Guardando...' : 'Subiendo...';
+            btn.textContent = 'Subiendo...';
 
             const formData = new FormData();
-            formData.append('action', isEditMode ? 'update' : 'upload');
+            formData.append('action', 'upload');
             formData.append('tipo', document.getElementById('docTipo').value);
             formData.append('numero', document.getElementById('docNumero').value);
             formData.append('fecha', document.getElementById('docFecha').value);
             formData.append('proveedor', document.getElementById('docProveedor').value);
             formData.append('codes', document.getElementById('docCodes').value);
-
-            // Add document ID if editing
-            if (isEditMode) {
-                formData.append('id', form.dataset.editId);
-                formData.append('current_file', form.dataset.currentFile);
-            }
-
-            // Add file only if a new one was selected
-            if (fileInput.files.length) {
-                formData.append('file', fileInput.files[0]);
-            }
+            formData.append('file', fileInput.files[0]);
 
             try {
                 const response = await fetch(apiUrl, { method: 'POST', body: formData });
                 const result = await response.json();
 
                 if (result.success) {
-                    alert(isEditMode ? 'Documento actualizado correctamente' : 'Documento subido correctamente');
-                    resetUploadForm();
-
-                    // Switch to Consultar tab and reload documents
-                    switchTab('consultar');
-                    loadDocuments();
+                    alert('Documento subido correctamente');
+                    document.getElementById('uploadForm').reset();
+                    document.getElementById('fileName').classList.add('hidden');
                 } else {
                     alert('Error: ' + (result.error || 'Error desconocido'));
                 }
@@ -717,11 +648,6 @@ COD001
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                 </svg>
                             </a>
-                            <button class="btn btn-secondary btn-icon" title="Editar" onclick="editDoc(${doc.id})">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                            </button>
                             <button class="btn btn-secondary btn-icon" title="Eliminar" onclick="deleteDoc(${doc.id})">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -746,63 +672,6 @@ COD001
         document.getElementById('filterTipo').addEventListener('change', (e) => {
             loadDocuments(1, e.target.value);
         });
-
-        async function editDoc(id) {
-            try {
-                // Get document details using correct API action
-                const response = await fetch(apiUrl + '?action=get&id=' + id);
-                const doc = await response.json();
-
-                if (!doc || doc.error) {
-                    alert('Error al cargar documento: ' + (doc.error || 'No encontrado'));
-                    return;
-                }
-
-                // Switch to Subir tab
-                switchTab('subir');
-
-                // Fill form with document data
-                document.getElementById('docTipo').value = doc.tipo;
-                document.getElementById('docNumero').value = doc.numero;
-                document.getElementById('docFecha').value = doc.fecha;
-                document.getElementById('docProveedor').value = doc.proveedor || '';
-                // Convert codes array to newline-separated text
-                document.getElementById('docCodes').value = (doc.codes || []).join('\n');
-
-                // Show current PDF filename and make upload optional
-                const uploadZone = document.getElementById('uploadZone');
-                const fileNameDisplay = document.getElementById('fileName');
-
-                if (doc.ruta_archivo) {
-                    fileNameDisplay.textContent = `📄 PDF actual: ${doc.ruta_archivo}`;
-                    fileNameDisplay.classList.remove('hidden');
-                    fileNameDisplay.style.color = 'var(--accent-success)';
-
-                    // Update upload zone text
-                    uploadZone.querySelector('p').textContent = 'PDF actual cargado. Arrastra uno nuevo solo si deseas reemplazarlo';
-                    uploadZone.style.borderColor = 'var(--accent-success)';
-                    uploadZone.style.background = 'rgba(16, 185, 129, 0.05)';
-                }
-
-                // Update form title and button
-                document.querySelector('#tab-subir h3').textContent = 'Editar Documento';
-                document.getElementById('uploadBtn').innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                    Guardar Cambios
-                `;
-
-                // Store doc ID and current file path for update
-                const form = document.getElementById('uploadForm');
-                form.dataset.editId = id;
-                form.dataset.currentFile = doc.ruta_archivo || '';
-
-
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
 
         async function deleteDoc(id) {
             if (!confirm('¿Eliminar este documento?')) return;
