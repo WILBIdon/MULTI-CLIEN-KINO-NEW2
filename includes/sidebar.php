@@ -46,7 +46,7 @@ $currentModule = $currentModule ?? '';
     <nav class="sidebar-nav">
         
         <!-- 1. GESTOR / DASHBOARD -->
-        <a href="<?= $baseUrl ?? '' ?>index.php" 
+        <a href="<?= $baseUrl ?? '' ?>modules/busqueda/" 
             class="nav-item <?= $currentModule === 'gestor' ? 'active' : '' ?>">
             <span class="nav-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
