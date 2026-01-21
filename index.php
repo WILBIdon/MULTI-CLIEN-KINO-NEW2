@@ -432,6 +432,27 @@ COD001
             });
         });
 
+        // Function to programmatically switch tabs
+        function switchTab(tabName) {
+            document.querySelectorAll('#mainTabs .tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            const targetTab = document.querySelector(`#mainTabs .tab[data-tab="${tabName}"]`);
+            if (targetTab) {
+                targetTab.classList.add('active');
+            }
+
+            const targetContent = document.getElementById('tab-' + tabName);
+            if (targetContent) {
+                targetContent.classList.add('active');
+            }
+
+            if (tabName === 'consultar') {
+                loadDocuments();
+            }
+        }
+
+
         // ============ Search Tab ============
         document.getElementById('searchForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -954,7 +975,7 @@ COD001
                     if (doc.ruta_archivo) {
                         if (doc.ruta_archivo.includes('/')) {
                             pdfUrl = `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`;
-             } else {
+                        } else {
                             pdfUrl = `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
                         }
                     }
