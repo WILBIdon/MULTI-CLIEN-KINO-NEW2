@@ -261,7 +261,7 @@ $pageTitle = 'Resaltar Documento';
                                     <?php foreach ($documents as $doc): ?>
                                         <option value="<?= htmlspecialchars($doc['ruta_archivo']) ?>"
                                             data-tipo="<?= htmlspecialchars($doc['tipo']) ?>">
-                                            <?= htmlspecialchars('[' . strtoupper($doc['tipo']) . '] ' . $doc['numero'] . ' (' . $doc['fecha'] . ')') ?>
+                                            📄 <?= htmlspecialchars(basename($doc['ruta_archivo'])) ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -418,7 +418,7 @@ $pageTitle = 'Resaltar Documento';
             if (!path) return;
 
             const type = option.dataset.tipo || 'documento';
-            
+
             // Logic to determine full path similar to index.php
             let fullPath;
             if (path.includes('/')) {
@@ -426,7 +426,7 @@ $pageTitle = 'Resaltar Documento';
             } else {
                 fullPath = `../../clients/${clientCode}/uploads/${type}/${path}`;
             }
-            
+
             loadPdfFromUrl(fullPath);
         });
 
