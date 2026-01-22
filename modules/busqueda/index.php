@@ -453,19 +453,22 @@ COD001
                 const result = await response.json();
 
                 document.getElementById('searchLoading').classList.add('hidden');
-                showSearchResults(result);
+                showSearchResults(result, codes); // Pass original search codes
             } catch (error) {
                 document.getElementById('searchLoading').classList.add('hidden');
                 alert('Error en la búsqueda: ' + error.message);
             }
         });
 
-        function showSearchResults(result) {
+        function showSearchResults(result, searchedCodes) {
             document.getElementById('searchResults').classList.remove('hidden');
 
             const coveredCount = result.total_covered || 0;
             const totalSearched = result.total_searched || 0;
             const notFound = result.not_found || [];
+
+            // Parse searched codes into array for matching
+            const codesArray = searchedCodes.split('\n').map(c => c.trim()).filter(c => c);
 
             let summaryHtml = `
                 <div class="summary-box${notFound.length > 0 ? ' warning' : ''}">
@@ -516,7 +519,7 @@ COD001
                             ${(doc.matched_codes || doc.codes || []).map(c => `<span class="code-tag">${c}</span>`).join('')}
                         </div>
                         <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            ${pdfUrl ? `<a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(firstCode)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</a>` : ''}
+                            ${pdfUrl && firstCode ? `<a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(firstCode)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</a>` : ''}
                             ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
                         </div>
                     </div>
