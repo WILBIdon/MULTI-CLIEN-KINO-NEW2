@@ -293,6 +293,47 @@ try {
             ]);
 
         // ====================
+        // ELIMINAR DOCUMENTO
+        // ====================
+        case 'delete':
+            $id = (int) ($_POST['id'] ?? $_GET['id'] ?? 0);
+
+            if (!$id) {
+                json_exit(api_error('VALIDATION_001', 'ID de documento requerido'));
+            }
+
+            // Get document info first
+            $stmt = $db->prepare('SELECT ruta_archivo, tipo FROM documentos WHERE id = ?');
+            $stmt->execute([$id]);
+            $doc = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$doc) {
+                json_exit(api_error('DOC_001'));
+            }
+
+            // Delete physical file
+            $uploadsDir = CLIENTS_DIR . "/{$clientCode}/uploads/";
+            $filePath = $uploadsDir . $doc['ruta_archivo'];
+
+            if (file_exists($filePath)) {
+                unlink($filePath);
+            }
+
+            // Delete from database (cascade will delete codes)
+            $stmt = $db->prepare('DELETE FROM documentos WHERE id = ?');
+            $stmt->execute([$id]);
+
+            Logger::info('Document deleted', [
+                'doc_id' => $id,
+                'file' => $doc['ruta_archivo']
+            ]);
+
+            json_exit([
+                'success' => true,
+                'message' => 'Documento eliminado correctamente'
+            ]);
+
+        // ====================
         // BÚSQUEDA VORAZ DE CÓDIGOS
         // ====================
         case 'search':

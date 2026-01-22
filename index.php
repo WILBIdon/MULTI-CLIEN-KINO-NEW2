@@ -525,6 +525,7 @@ COD001
 
                 // Get the first matched code for highlighting
                 const firstCode = (doc.matched_codes && doc.matched_codes[0]) || (doc.codes && doc.codes[0]) || '';
+                const allCodes = doc.matched_codes || doc.codes || [];
 
                 html += `
                     <div class="result-card">
@@ -534,13 +535,31 @@ COD001
                         </div>
                         <div class="result-title">${doc.numero}</div>
                         <div class="result-meta">${doc.proveedor || ''}</div>
-                        <div class="codes-list">
-                            ${(doc.matched_codes || doc.codes || []).map(c => `<span class="code-tag">${c}</span>`).join('')}
+                        
+                        <!-- Ver Códigos Button (Collapsible) -->
+                        <button onclick="toggleCodes(${doc.id})" class="btn-ver-codigos" style="margin-top: 0.75rem; display: inline-flex; align-items: center; gap: 0.5rem; background: none; border: 1px solid var(--border-color); padding: 0.5rem 1rem; border-radius: var(--radius-md); cursor: pointer; font-size: 0.875rem;">
+                            <span id="icon-${doc.id}">▶</span> Ver Códigos (${allCodes.length})
+                        </button>
+                        
+                        <div id="codes-${doc.id}" class="codes-list" style="display: none; margin-top: 0.75rem;">
+                            ${allCodes.map(c => `<span class="code-tag">${c}</span>`).join('')}
                         </div>
-                        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            <a href="modules/documento/view.php?id=${doc.id}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Códigos</a>
-                            ${pdfUrl ? `<a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(firstCode)}" class="btn btn-secondary" style="padding: 0.5rem 1rem; background: #fbbf24; color: #000;">🖍️ Resaltar</a>` : ''}
+                        
+                        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                            ${pdfUrl ? `<a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(firstCode)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #7cb342; border: none;">🖍️ Resaltar</a>` : ''}
                             ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
+                            <button onclick="editDoc(${doc.id})" class="btn btn-icon" style="padding: 0.5rem 1rem; background: #3b82f6; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                Editar
+                            </button>
+                            <button onclick="confirmDelete(${doc.id}, '${doc.numero.replace(/'/g, "\\'")}')" class="btn btn-icon" style="padding: 0.5rem 1rem; background: #ef4444; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                Eliminar
+                            </button>
                         </div>
                     </div>
                 `;
@@ -1095,6 +1114,52 @@ COD001
                 suggestionsDiv.classList.add('hidden');
             }
         });
+
+        // ============ Toggle Codes Display ============
+        function toggleCodes(docId) {
+            const codesDiv = document.getElementById('codes-' + docId);
+            const icon = document.getElementById('icon-' + docId);
+            
+            if (codesDiv.style.display === 'none') {
+                codesDiv.style.display = 'block';
+                icon.textContent = '▼';
+            } else {
+                codesDiv.style.display = 'none';
+                icon.textContent = '▶';
+            }
+        }
+
+        // ============ Edit Document ============
+        function editDoc(docId) {
+            // Redirect to document view/edit page
+            window.location.href = `modules/documento/view.php?id=${docId}&edit=1`;
+        }
+
+        // ============ Delete Document ============
+        async function confirmDelete(docId, docNumero) {
+            if (!confirm(`¿Estás seguro de eliminar el documento "${docNumero}"?\n\nEsta acción no se puede deshacer.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${apiUrl}?action=delete\u0026id=${docId}`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+
+                if (result.error) {
+                    alert('Error: ' + result.error);
+                    return;
+                }
+
+                alert('✅ Documento eliminado correctamente');
+                
+                // Reload documents list
+                loadDocuments();
+            } catch (error) {
+                alert('Error al eliminar: ' + error.message);
+            }
+        }
     </script>
 </body>
 
