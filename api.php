@@ -12,6 +12,8 @@
 session_start();
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/helpers/tenant.php';
+require_once __DIR__ . '/helpers/logger.php';
+require_once __DIR__ . '/helpers/error_codes.php';
 require_once __DIR__ . '/helpers/search_engine.php';
 require_once __DIR__ . '/helpers/pdf_extractor.php';
 require_once __DIR__ . '/helpers/gemini_ai.php';
@@ -29,15 +31,19 @@ function json_exit($data): void
 
 // Verificar autenticación
 if (!isset($_SESSION['client_code'])) {
-    json_exit(['error' => 'No autenticado', 'code' => 401]);
+    send_error_response(api_error('AUTH_002'));
 }
 
 $clientCode = $_SESSION['client_code'];
 
 try {
     $db = open_client_db($clientCode);
+} catch (PDOException $e) {
+    Logger::exception($e, ['client' => $clientCode]);
+    send_error_response(api_error('DB_001', null, ['db_error' => $e->getMessage()]));
 } catch (Exception $e) {
-    json_exit(['error' => 'Error de base de datos', 'code' => 500]);
+    Logger::exception($e, ['client' => $clientCode]);
+    send_error_response(api_error('SYS_001'));
 }
 
 $action = $_REQUEST['action'] ?? '';
@@ -87,14 +93,31 @@ try {
         // SUBIR DOCUMENTO CON CÓDIGOS
         // ====================
         case 'upload':
-            $tipo = sanitize_code($_POST['tipo'] ?? 'documento');
-            $numero = trim($_POST['numero'] ?? '');
-            $fecha = trim($_POST['fecha'] ?? date('Y-m-d'));
+            // Validar campos requireridos
+            $validationError = validate_required_fields($_POST, ['tipo', 'numero', 'fecha']);
+            if ($validationError) {
+                json_exit($validationError);
+            }
+
+            $tipo = sanitize_code($_POST['tipo']);
+            $numero = trim($_POST['numero']);
+            $fecha = trim($_POST['fecha']);
             $proveedor = trim($_POST['proveedor'] ?? '');
             $codes = array_filter(array_map('trim', explode("\n", $_POST['codes'] ?? '')));
 
+            // Validar archivo
             if (empty($_FILES['file']['tmp_name'])) {
-                json_exit(['error' => 'Archivo no recibido']);
+                json_exit(api_error('FILE_005'));
+            }
+
+            $fileValidation = validate_file_type($_FILES['file']);
+            if ($fileValidation) {
+                json_exit($fileValidation);
+            }
+
+            $sizeValidation = validate_file_size($_FILES['file']);
+            if ($sizeValidation) {
+                json_exit($sizeValidation);
             }
 
             // Crear directorio de uploads

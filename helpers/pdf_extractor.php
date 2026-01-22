@@ -19,7 +19,9 @@
 function extract_text_from_pdf(string $pdfPath): string
 {
     if (!file_exists($pdfPath)) {
-        error_log("PDF Extractor: Archivo no encontrado - $pdfPath");
+        if (class_exists('Logger')) {
+            Logger::error('PDF file not found', ['path' => $pdfPath]);
+        }
         throw new Exception("Archivo PDF no encontrado: $pdfPath");
     }
 
@@ -43,24 +45,33 @@ function extract_text_from_pdf(string $pdfPath): string
         return $text;
     }
 
-    error_log("PDF Extractor: No se pudo extraer texto de $pdfPath");
+    if (class_exists('Logger')) {
+        Logger::warning('Failed to extract text from PDF', ['path' => $pdfPath]);
+    }
     return '';
 }
 
 /**
  * Extrae texto usando pdftotext (poppler-utils)
+ * 
+ * @param string $pdfPath Ruta al PDF
+ * @param int $timeoutSeconds Timeout en segundos (default: 30)
+ * @return string Texto extraído o cadena vacía
  */
-function extract_with_pdftotext(string $pdfPath): string
+function extract_with_pdftotext(string $pdfPath, int $timeoutSeconds = 30): string
 {
     $pdftotextPath = find_pdftotext();
     if (!$pdftotextPath) {
+        if (class_exists('Logger')) {
+            Logger::warning('pdftotext not available', ['path' => $pdfPath]);
+        }
         return '';
     }
 
     $escaped = escapeshellarg($pdfPath);
     $cmd = "$pdftotextPath -layout -enc UTF-8 $escaped -";
 
-    // Usar proc_open para capturar errores
+    // Usar proc_open para capturar errores y controlar timeout
     $descriptors = [
         0 => ['pipe', 'r'],
         1 => ['pipe', 'w'],
@@ -69,21 +80,65 @@ function extract_with_pdftotext(string $pdfPath): string
 
     $process = proc_open($cmd, $descriptors, $pipes);
 
-    if (is_resource($process)) {
-        fclose($pipes[0]);
-        $output = stream_get_contents($pipes[1]);
-        $errors = stream_get_contents($pipes[2]);
+    if (!is_resource($process)) {
+        if (class_exists('Logger')) {
+            Logger::error('Failed to start pdftotext process', ['command' => $cmd]);
+        }
+        return '';
+    }
+
+    fclose($pipes[0]);
+
+    // Configurar pipes como no bloqueantes para timeout
+    stream_set_blocking($pipes[1], false);
+    stream_set_blocking($pipes[2], false);
+
+    $startTime = time();
+    $output = '';
+    $errors = '';
+
+    // Leer con timeout
+    while (time() - $startTime < $timeoutSeconds) {
+        $output .= stream_get_contents($pipes[1]);
+        $errors .= stream_get_contents($pipes[2]);
+
+        $status = proc_get_status($process);
+        if (!$status['running']) {
+            break;
+        }
+
+        usleep(100000); // 100ms
+    }
+
+    // Si excedió timeout, terminar proceso
+    if (time() - $startTime >= $timeoutSeconds) {
+        proc_terminate($process, 9); // SIGKILL
         fclose($pipes[1]);
         fclose($pipes[2]);
-        $returnCode = proc_close($process);
+        proc_close($process);
 
-        if ($returnCode === 0 && !empty(trim($output))) {
-            return $output;
+        if (class_exists('Logger')) {
+            Logger::error('PDF extraction timeout', [
+                'path' => $pdfPath,
+                'timeout' => $timeoutSeconds
+            ]);
         }
+        return '';
+    }
 
-        if (!empty($errors)) {
-            error_log("pdftotext error: $errors");
-        }
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $returnCode = proc_close($process);
+
+    if ($returnCode === 0 && !empty(trim($output))) {
+        return $output;
+    }
+
+    if (!empty($errors) && class_exists('Logger')) {
+        Logger::warning('pdftotext error output', [
+            'path' => $pdfPath,
+            'error' => substr($errors, 0, 500)
+        ]);
     }
 
     return '';
@@ -109,7 +164,12 @@ function extract_with_smalot(string $pdfPath): string
         $pdf = $parser->parseFile($pdfPath);
         return $pdf->getText();
     } catch (Exception $e) {
-        error_log("Smalot Parser error: " . $e->getMessage());
+        if (class_exists('Logger')) {
+            Logger::error('Smalot parser error', [
+                'path' => $pdfPath,
+                'error' => $e->getMessage()
+            ]);
+        }
         return '';
     }
 }
