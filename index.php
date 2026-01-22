@@ -1162,6 +1162,9 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                 const firstCode = (doc.matched_codes && doc.matched_codes[0]) || '';
                 const allCodes = doc.matched_codes || doc.codes || [];
 
+                // Use the first searched code that matches this document
+                const searchedCode = searchedCodes.find(sc => allCodes.includes(sc)) || firstCode;
+
                 html += `
                     <div class="result-card">
                         <div class="result-header">
@@ -1173,7 +1176,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                             ${allCodes.map(c => `<span class="code-tag">${c}</span>`).join('')}
                         </div>
                         <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
-                            ${pdfUrl ? `<a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(firstCode)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</a>` : ''}
+                            ${pdfUrl ? `<a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(searchedCode)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</a>` : ''}
                         </div>
                     </div>
                 `;
