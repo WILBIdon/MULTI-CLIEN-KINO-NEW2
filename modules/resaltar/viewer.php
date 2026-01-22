@@ -281,6 +281,54 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             }
         }
 
+        /* Print Modal */
+        .print-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .print-modal.active {
+            display: flex;
+        }
+
+        .print-modal-content {
+            background: var(--bg-primary);
+            padding: 2rem;
+            border-radius: var(--radius-lg);
+            max-width: 500px;
+            width: 90%;
+            box-shadow: var(--shadow-xl);
+        }
+
+        .print-modal h3 {
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .print-modal p {
+            margin-bottom: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        .print-modal-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .print-modal-buttons button {
+            flex: 1;
+            min-width: 120px;
+        }
+
         .loading-pages {
             text-align: center;
             padding: 3rem;
@@ -348,7 +396,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                             </div>
                         <?php endif; ?>
 
-                        <button class="btn-print" onclick="window.print()">
+                        <button class="btn-print" onclick="showPrintModal()">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none"
                                 viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -377,6 +425,25 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
             <?php include __DIR__ . '/../../includes/footer.php'; ?>
         </main>
+    </div>
+
+    <!-- Print Modal -->
+    <div class="print-modal" id="printModal">
+        <div class="print-modal-content">
+            <h3>📄 Imprimir Documento</h3>
+            <p>¿Qué deseas imprimir?</p>
+            <div class="print-modal-buttons">
+                <button class="btn btn-primary" onclick="printFullDocument()">
+                    📄 Documento Completo
+                </button>
+                <button class="btn btn-success" style="background: #038802;" onclick="printHighlightedPages()">
+                    🖍️ Solo Páginas Resaltadas
+                </button>
+                <button class="btn btn-secondary" onclick="closePrintModal()">
+                    ✕ Cancelar
+                </button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -547,6 +614,73 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         }
 
         renderPDF();
+
+        // ============ Print Modal Functions ============
+        function showPrintModal() {
+            document.getElementById('printModal').classList.add('active');
+        }
+
+        function closePrintModal() {
+            document.getElementById('printModal').classList.remove('active');
+        }
+
+        function printFullDocument() {
+            closePrintModal();
+            window.print();
+        }
+
+        function printHighlightedPages() {
+            closePrintModal();
+
+            // Get all pages with highlights
+            const markedPages = document.querySelectorAll('.pdf-page-wrapper mark');
+
+            if (markedPages.length === 0) {
+                alert('⚠️ No hay páginas con resaltados para imprimir.\n\nPor favor, busca un término primero.');
+                return;
+            }
+
+            // Hide all pages without highlights
+            const allPagesWrappers = document.querySelectorAll('.pdf-page-wrapper');
+            const pagesWithMarks = new Set();
+
+            markedPages.forEach(mark => {
+                const pageWrapper = mark.closest('.pdf-page-wrapper');
+                if (pageWrapper) {
+                    pagesWithMarks.add(pageWrapper);
+                }
+            });
+
+            allPagesWrappers.forEach(page => {
+                if (!pagesWithMarks.has(page)) {
+                    page.style.display = 'none';
+                }
+            });
+
+            // Print
+            window.print();
+
+            // Restore all pages after print
+            setTimeout(() => {
+                allPagesWrappers.forEach(page => {
+                    page.style.display = '';
+                });
+            }, 500);
+        }
+
+        // Close modal on ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closePrintModal();
+            }
+        });
+
+        // Close modal clicking outside
+        document.getElementById('printModal').addEventListener('click', (e) => {
+            if (e.target.id === 'printModal') {
+                closePrintModal();
+            }
+        });
     </script>
 </body>
 

@@ -992,7 +992,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                             <div class="result-title">${doc.numero}</div>
                             <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                                 <a href="../documento/view.php?id=${doc.id}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Códigos</a>
-                                ${pdfUrl ? `<a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(code)}" class="btn btn-secondary" style="padding: 0.5rem 1rem; background: #fbbf24; color: #000;">🖍️ Resaltar</a>` : ''}
+                                ${pdfUrl ? `<a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(code)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</a>` : ''}
                                 ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
                             </div>
                         </div>
