@@ -201,7 +201,6 @@ $pageTitle = 'Gestor de Documentos';
                 <div class="card">
                     <div class="tabs" id="mainTabs">
                         <button class="tab active" data-tab="voraz">🎯 Búsqueda Voraz</button>
-                        <button class="tab" data-tab="buscar">Buscar</button>
                         <button class="tab" data-tab="subir">Subir</button>
                         <button class="tab" data-tab="consultar">Consultar</button>
                         <button class="tab" data-tab="codigo">Búsqueda por Código</button>
@@ -211,7 +210,8 @@ $pageTitle = 'Gestor de Documentos';
                     <!-- Tab: Búsqueda Voraz -->
                     <div class="tab-content active" id="tab-voraz">
                         <h3 style="margin-bottom: 1rem;">🎯 Búsqueda Voraz Inteligente</h3>
-                        <p class="text-muted mb-4">Pega un bloque de texto con códigos. El sistema extraerá automáticamente la primera columna y buscará esos códigos.</p>
+                        <p class="text-muted mb-4">Pega un bloque de texto con códigos. El sistema extraerá
+                            automáticamente la primera columna y buscará esos códigos.</p>
 
                         <div class="form-group">
                             <label class="form-label">Texto con códigos (se extraerá la primera columna)</label>
@@ -226,8 +226,10 @@ Se extraerán solo los códigos de la izquierda."></textarea>
 
                         <div class="flex gap-3">
                             <button type="button" class="btn btn-primary" onclick="processBulkSearch()">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none"
+                                    viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
                                 Extraer y Buscar Códigos
                             </button>
@@ -249,43 +251,6 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                         <div id="bulkResults" class="hidden mt-4">
                             <div id="bulkSummary"></div>
                             <div id="bulkDocumentList" class="results-list"></div>
-                        </div>
-                    </div>
-
-                    <!-- Tab: Buscar -->
-                    <div class="tab-content" id="tab-buscar">
-                        <h3 style="margin-bottom: 1rem;">Búsqueda Inteligente</h3>
-                        <p class="text-muted mb-4">Pega aquí tus códigos o bloque de texto. El sistema encontrará los
-                            documentos que los contienen.</p>
-
-                        <form id="searchForm">
-                            <div class="form-group">
-                                <textarea class="form-textarea" id="codesInput" rows="6" placeholder="ABC123
-XYZ789
-COD001
-..."></textarea>
-                            </div>
-                            <div class="flex gap-3">
-                                <button type="submit" class="btn btn-primary">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none"
-                                        viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                    </svg>
-                                    Buscar
-                                </button>
-                                <button type="button" class="btn btn-secondary" onclick="clearSearch()">Limpiar</button>
-                            </div>
-                        </form>
-
-                        <div id="searchLoading" class="loading hidden">
-                            <div class="spinner"></div>
-                            <p>Buscando documentos...</p>
-                        </div>
-
-                        <div id="searchResults" class="hidden mt-4">
-                            <div id="searchSummary"></div>
-                            <div id="documentList" class="results-list"></div>
                         </div>
                     </div>
 
@@ -1165,7 +1130,7 @@ COD001
         function toggleCodes(docId) {
             const codesDiv = document.getElementById('codes-' + docId);
             const icon = document.getElementById('icon-' + docId);
-            
+
             if (codesDiv.style.display === 'none') {
                 codesDiv.style.display = 'block';
                 icon.textContent = '▼';
@@ -1199,7 +1164,7 @@ COD001
                 }
 
                 alert('✅ Documento eliminado correctamente');
-                
+
                 // Reload documents list
                 loadDocuments();
             } catch (error) {
@@ -1208,15 +1173,15 @@ COD001
         }
 
         // ============ Búsqueda Voraz Inteligente ============
-        
+
         function extractFirstColumn(text) {
             const lines = text.trim().split('\n');
             const codes = [];
-            
+
             for (const line of lines) {
                 const trimmed = line.trim();
                 if (trimmed === '') continue;
-                
+
                 let code = '';
                 if (trimmed.includes('\t')) {
                     code = trimmed.split('\t')[0].trim();
@@ -1225,10 +1190,10 @@ COD001
                 } else {
                     code = trimmed.split(/\s+/)[0].trim();
                 }
-                
+
                 if (code.length > 0) codes.push(code);
             }
-            
+
             return [...new Set(codes)];
         }
 
@@ -1245,7 +1210,7 @@ COD001
                 return;
             }
 
-            document.getElementById('extractedCodesList').innerHTML = extractedCodes.map(c => 
+            document.getElementById('extractedCodesList').innerHTML = extractedCodes.map(c =>
                 `<span class="code-tag">${c}</span>`
             ).join('');
             document.getElementById('extractedCodesPreview').classList.remove('hidden');
@@ -1260,7 +1225,7 @@ COD001
                     body: formData
                 });
                 const result = await response.json();
-                
+
                 document.getElementById('bulkLoading').classList.add('hidden');
                 if (result.error) {
                     alert(result.error);
@@ -1312,7 +1277,7 @@ COD001
                     </div>
                 `;
             }
-            
+
             document.getElementById('bulkDocumentList').innerHTML = html;
         }
 

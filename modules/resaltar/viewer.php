@@ -174,7 +174,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         }
 
         .text-layer mark {
-            background: #7cb342 !important;
+            background: #038802 !important;
             color: transparent;
             padding: 2px;
             border-radius: 2px;
@@ -275,7 +275,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             }
 
             .text-layer mark {
-                background: #7cb342 !important;
+                background: #038802 !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
