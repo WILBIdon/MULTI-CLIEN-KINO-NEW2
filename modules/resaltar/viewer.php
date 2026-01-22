@@ -489,45 +489,49 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                     // Apply highlighting
                     if (searchTerm) {
                         const marker = new Mark(textLayer);
+
+                        // Try exact match first
                         marker.mark(searchTerm, {
                             separateWordSearch: false,
-                            accuracy: 'partially',
+                            accuracy: 'exactly',
                             caseSensitive: false,
+                            diacritics: false,
+                            debug: true,
                             done: function (totalMatches) {
-                                // If this page has matches and we haven't scrolled yet -> Scroll!
-                                // Note: matching is async, so we assume PHP passed correct page numbers
-                                // to prioritize scrolling.
+                                if (totalMatches > 0 && !scrolledToFirstMatch) {
+                                    setTimeout(() => {
+                                        const firstMark = textLayer.querySelector('mark');
+                                        if (firstMark && !scrolledToFirstMatch) {
+                                            scrolledToFirstMatch = true;
+                                            wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        }
+                                    }, 100);
+                                }
+
+                                // If no exact match, try partial match
+                                if (totalMatches === 0) {
+                                    marker.mark(searchTerm, {
+                                        separateWordSearch: false,
+                                        accuracy: 'partially',
+                                        caseSensitive: false,
+                                        diacritics: false,
+                                        wildcards: 'enabled',
+                                        done: function (partialMatches) {
+                                            console.log('Page', pageNum, '- Partial matches:', partialMatches);
+                                            if (partialMatches > 0 && !scrolledToFirstMatch) {
+                                                setTimeout(() => {
+                                                    const firstMark = textLayer.querySelector('mark');
+                                                    if (firstMark) {
+                                                        scrolledToFirstMatch = true;
+                                                        wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                    }
+                                                }, 100);
+                                            }
+                                        }
+                                    });
+                                }
                             }
                         });
-                    }
-
-                    // Auto-scroll logic: If this page is in the matchedPages list
-                    // Warning: matchedPages is 0-indexed in array logic usually? No, PDF pages 1-indexed.
-                    // PHP search returns byte offsets, not page numbers directly in the text extractor helper...
-                    // Wait, extraction helper returns raw text, we derived page based on string position?
-                    // "pagesWithMatches" in PHP was calculated.
-
-                    // Actually, my PHP code calculated 'pagesWithMatches' as character positions, NOT page numbers!
-                    // See: $pagesWithMatches[] = $pos; 
-                    // This is wrong for page identification unless the valid pages were extracted separately.
-                    // But for highlighting, `mark.js` will just find it on the page if text is there.
-
-                    // Since I cannot trust matching pages blindly from that logic,
-                    // I rely on `mark.js` finding it.
-                    // But scrolling happens best if I know where.
-
-                    // Improved strategy: 
-                    // Let's just scroll to the first occurrence found by mark.js
-                    if (searchTerm && !scrolledToFirstMatch) {
-                        // Check if DOM actually has the <mark> element
-                        // Use a small timeout to let mark.js render
-                        setTimeout(() => {
-                            const firstMark = textLayer.querySelector('mark');
-                            if (firstMark && !scrolledToFirstMatch) {
-                                scrolledToFirstMatch = true;
-                                wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }
-                        }, 100);
                     }
                 }
             } catch (error) {

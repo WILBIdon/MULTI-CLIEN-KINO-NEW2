@@ -465,123 +465,6 @@ Se extraerán solo los códigos de la izquierda."></textarea>
         }
 
 
-        // ============ Search Tab ============
-        document.getElementById('searchForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const codes = document.getElementById('codesInput').value.trim();
-            if (!codes) {
-                alert('Ingresa al menos un código');
-                return;
-            }
-
-            document.getElementById('searchLoading').classList.remove('hidden');
-            document.getElementById('searchResults').classList.add('hidden');
-
-            try {
-                const formData = new FormData();
-                formData.append('action', 'search');
-                formData.append('codes', codes);
-
-                const response = await fetch(apiUrl, { method: 'POST', body: formData });
-                const result = await response.json();
-
-                document.getElementById('searchLoading').classList.add('hidden');
-                showSearchResults(result);
-            } catch (error) {
-                document.getElementById('searchLoading').classList.add('hidden');
-                alert('Error en la búsqueda: ' + error.message);
-            }
-        });
-
-        function showSearchResults(result) {
-            document.getElementById('searchResults').classList.remove('hidden');
-
-            const coveredCount = result.total_covered || 0;
-            const totalSearched = result.total_searched || 0;
-            const notFound = result.not_found || [];
-
-            let summaryHtml = `
-                <div class="summary-box${notFound.length > 0 ? ' warning' : ''}">
-                    <strong>${coveredCount}/${totalSearched}</strong> códigos encontrados en 
-                    <strong>${result.documents?.length || 0}</strong> documento(s)
-                    ${notFound.length > 0 ? `
-                        <div style="margin-top: 0.5rem;">
-                            <span style="color: var(--accent-danger);">No encontrados:</span>
-                            <div class="codes-list">
-                                ${notFound.map(c => `<span class="code-tag" style="background: rgba(239,68,68,0.1); color: var(--accent-danger);">${c}</span>`).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-            document.getElementById('searchSummary').innerHTML = summaryHtml;
-
-            if (!result.documents || result.documents.length === 0) {
-                document.getElementById('documentList').innerHTML = '<p class="text-muted">No se encontraron documentos.</p>';
-                return;
-            }
-
-            let html = '';
-            for (const doc of result.documents) {
-                // Construir ruta del PDF correctamente
-                let pdfUrl = '';
-                if (doc.ruta_archivo) {
-                    // Si la ruta ya incluye el tipo (ej: documento/archivo.pdf)
-                    if (doc.ruta_archivo.includes('/')) {
-                        pdfUrl = `clients/${clientCode}/uploads/${doc.ruta_archivo}`;
-                    } else {
-                        pdfUrl = `clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
-                    }
-                }
-
-                // Get the first matched code for highlighting
-                const firstCode = (doc.matched_codes && doc.matched_codes[0]) || (doc.codes && doc.codes[0]) || '';
-                const allCodes = doc.matched_codes || doc.codes || [];
-
-                html += `
-                    <div class="result-card">
-                        <div class="result-header">
-                            <span class="badge badge-primary">${doc.tipo.toUpperCase()}</span>
-                            <span class="result-meta">${doc.fecha}</span>
-                        </div>
-                        <div class="result-title">${doc.numero}</div>
-                        <div class="result-meta">${doc.proveedor || ''}</div>
-                        
-                        <!-- Ver Códigos Button (Collapsible) -->
-                        <button onclick="toggleCodes(${doc.id})" class="btn-ver-codigos" style="margin-top: 0.75rem; display: inline-flex; align-items: center; gap: 0.5rem; background: none; border: 1px solid var(--border-color); padding: 0.5rem 1rem; border-radius: var(--radius-md); cursor: pointer; font-size: 0.875rem;">
-                            <span id="icon-${doc.id}">▶</span> Ver Códigos (${allCodes.length})
-                        </button>
-                        
-                        <div id="codes-${doc.id}" class="codes-list" style="display: none; margin-top: 0.75rem;">
-                            ${allCodes.map(c => `<span class="code-tag">${c}</span>`).join('')}
-                        </div>
-                        
-                        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-                            ${pdfUrl ? `<a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(firstCode)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #7cb342; border: none;">🖍️ Resaltar</a>` : ''}
-                            ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
-                            <button onclick="editDoc(${doc.id})" class="btn btn-icon" style="padding: 0.5rem 1rem; background: #3b82f6; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem;">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                                Editar
-                            </button>
-                            <button onclick="confirmDelete(${doc.id}, '${doc.numero.replace(/'/g, "\\'")}')" class="btn btn-icon" style="padding: 0.5rem 1rem; background: #ef4444; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem;">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                Eliminar
-                            </button>
-                        </div>
-                    </div>
-                `;
-            }
-            document.getElementById('documentList').innerHTML = html;
-        }
-
-        function clearSearch() {
-            document.getElementById('codesInput').value = '';
-            document.getElementById('searchResults').classList.add('hidden');
-        }
 
         // ============ Upload Tab ============
         const uploadZone = document.getElementById('uploadZone');
@@ -1243,12 +1126,30 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             const coveredCount = result.total_covered || 0;
             const notFound = result.not_found || [];
 
-            document.getElementById('bulkSummary').innerHTML = `
-                <div class="summary-box">
+            let summaryHtml = `
+                <div class="summary-box${notFound.length > 0 ? ' warning' : ''}">
                     <strong>${coveredCount}/${searchedCodes.length}</strong> códigos encontrados en 
                     <strong>${result.documents?.length || 0}</strong> documento(s)
-                </div>
             `;
+
+            // Llamado de atención para códigos no encontrados
+            if (notFound.length > 0) {
+                summaryHtml += `
+                    <div style="margin-top: 1rem; padding: 1rem; background: rgba(239,68,68,0.1); border-left: 4px solid #ef4444; border-radius: var(--radius-md);">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <span style="font-size: 1.5rem;">⚠️</span>
+                            <strong style="color: #dc2626;">ATENCIÓN: ${notFound.length} código(s) no encontrado(s)</strong>
+                        </div>
+                        <div class="codes-list">
+                            ${notFound.map(c => `<span class="code-tag" style="background: rgba(239,68,68,0.15); color: #dc2626; border: 1px solid #ef4444; font-weight: 600;">${c}</span>`).join('')}
+                        </div>
+                        <p style="margin-top: 0.5rem; font-size: 0.875rem; color: #991b1b;">Estos códigos no existen en ningún documento. Verifica que estén correctamente escritos.</p>
+                    </div>
+                `;
+            }
+
+            summaryHtml += `</div>`;
+            document.getElementById('bulkSummary').innerHTML = summaryHtml;
 
             if (!result.documents || result.documents.length === 0) {
                 document.getElementById('bulkDocumentList').innerHTML = '<p class="text-muted">No se encontraron documentos.</p>';
@@ -1272,7 +1173,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                             ${allCodes.map(c => `<span class="code-tag">${c}</span>`).join('')}
                         </div>
                         <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
-                            ${pdfUrl ? `<a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(firstCode)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #7cb342;">🖍️ Resaltar</a>` : ''}
+                            ${pdfUrl ? `<a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(firstCode)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</a>` : ''}
                         </div>
                     </div>
                 `;
