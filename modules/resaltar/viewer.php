@@ -553,52 +553,88 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                     pageContainer.appendChild(pageLabel);
                     container.appendChild(pageContainer);
 
-                    // Apply highlighting
+                    // Smart highlighting with code variations
                     if (searchTerm) {
                         const marker = new Mark(textLayer);
 
-                        // Try exact match first
-                        marker.mark(searchTerm, {
-                            separateWordSearch: false,
-                            accuracy: 'exactly',
-                            caseSensitive: false,
-                            diacritics: false,
-                            debug: true,
-                            done: function (totalMatches) {
-                                if (totalMatches > 0 && !scrolledToFirstMatch) {
-                                    setTimeout(() => {
-                                        const firstMark = textLayer.querySelector('mark');
-                                        if (firstMark && !scrolledToFirstMatch) {
-                                            scrolledToFirstMatch = true;
-                                            wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                        }
-                                    }, 100);
+                        // Generate variations of the search term
+                        function getCodeVariations(term) {
+                            const variations = [term];
+
+                            // For numeric codes, try common variations
+                            if (/^\d+$/.test(term)) {
+                                const digits = term.split('');
+
+                                // Try with spaces between all digits
+                                if (digits.length > 1) {
+                                    variations.push(digits.join(' '));
                                 }
 
-                                // If no exact match, try partial match
-                                if (totalMatches === 0) {
-                                    marker.mark(searchTerm, {
-                                        separateWordSearch: false,
-                                        accuracy: 'partially',
-                                        caseSensitive: false,
-                                        diacritics: false,
-                                        wildcards: 'enabled',
-                                        done: function (partialMatches) {
-                                            console.log('Page', pageNum, '- Partial matches:', partialMatches);
-                                            if (partialMatches > 0 && !scrolledToFirstMatch) {
-                                                setTimeout(() => {
-                                                    const firstMark = textLayer.querySelector('mark');
-                                                    if (firstMark) {
-                                                        scrolledToFirstMatch = true;
-                                                        wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                                    }
-                                                }, 100);
-                                            }
-                                        }
-                                    });
+                                // Try common 4-digit patterns
+                                if (digits.length === 4) {
+                                    variations.push(`${digits[0]}${digits[1]} ${digits[2]}${digits[3]}`); // "15 43"
+                                    variations.push(`${digits[0]} ${digits[1]}${digits[2]}${digits[3]}`); // "1 543"
+                                    variations.push(`${digits[0]}${digits[1]}-${digits[2]}${digits[3]}`); // "15-43"
                                 }
                             }
-                        });
+
+                            return [...new Set(variations)];
+                        }
+
+                        const variations = getCodeVariations(searchTerm);
+                        let foundMatch = false;
+
+                        // Try each variation sequentially
+                        for (let i = 0; i < variations.length && !foundMatch; i++) {
+                            const variation = variations[i];
+
+                            marker.mark(variation, {
+                                separateWordSearch: false,
+                                accuracy: 'exactly',
+                                caseSensitive: false,
+                                diacritics: false,
+                                done: function (totalMatches) {
+                                    if (totalMatches > 0) {
+                                        foundMatch = true;
+                                        console.log(`✅ Found ${totalMatches} matches for "${variation}"`);
+
+                                        if (!scrolledToFirstMatch) {
+                                            setTimeout(() => {
+                                                const firstMark = textLayer.querySelector('mark');
+                                                if (firstMark) {
+                                                    scrolledToFirstMatch = true;
+                                                    wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                }
+                                            }, 100);
+                                        }
+                                    }
+                                }
+                            });
+
+                            if (foundMatch) break;
+                        }
+
+                        // Last resort: partial matching
+                        if (!foundMatch) {
+                            marker.mark(searchTerm, {
+                                separateWordSearch: false,
+                                accuracy: 'partially',
+                                caseSensitive: false,
+                                diacritics: false,
+                                done: function (partialMatches) {
+                                    if (partialMatches > 0 && !scrolledToFirstMatch) {
+                                        console.log(`⚠️ Partial match: ${partialMatches} results for "${searchTerm}"`);
+                                        setTimeout(() => {
+                                            const firstMark = textLayer.querySelector('mark');
+                                            if (firstMark) {
+                                                scrolledToFirstMatch = true;
+                                                wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                            }
+                                        }, 100);
+                                    }
+                                }
+                            });
+                        }
                     }
                 }
             } catch (error) {
