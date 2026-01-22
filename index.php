@@ -200,14 +200,60 @@ $pageTitle = 'Gestor de Documentos';
                 <!-- Tabs -->
                 <div class="card">
                     <div class="tabs" id="mainTabs">
-                        <button class="tab active" data-tab="buscar">Buscar</button>
+                        <button class="tab active" data-tab="voraz">🎯 Búsqueda Voraz</button>
+                        <button class="tab" data-tab="buscar">Buscar</button>
                         <button class="tab" data-tab="subir">Subir</button>
                         <button class="tab" data-tab="consultar">Consultar</button>
                         <button class="tab" data-tab="codigo">Búsqueda por Código</button>
                     </div>
 
                     <!-- Tab: Buscar -->
-                    <div class="tab-content active" id="tab-buscar">
+                    <!-- Tab: Búsqueda Voraz -->
+                    <div class="tab-content active" id="tab-voraz">
+                        <h3 style="margin-bottom: 1rem;">🎯 Búsqueda Voraz Inteligente</h3>
+                        <p class="text-muted mb-4">Pega un bloque de texto con códigos. El sistema extraerá automáticamente la primera columna y buscará esos códigos.</p>
+
+                        <div class="form-group">
+                            <label class="form-label">Texto con códigos (se extraerá la primera columna)</label>
+                            <textarea class="form-textarea" id="bulkInput" rows="10" placeholder="Pega aquí tu texto. Ejemplo:
+
+COD001    Descripción del producto 1
+COD002    Otra descripción aquí
+COD003    Más productos...
+
+Se extraerán solo los códigos de la izquierda."></textarea>
+                        </div>
+
+                        <div class="flex gap-3">
+                            <button type="button" class="btn btn-primary" onclick="processBulkSearch()">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                Extraer y Buscar Códigos
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="clearBulkSearch()">Limpiar</button>
+                        </div>
+
+                        <div id="bulkLoading" class="loading hidden">
+                            <div class="spinner"></div>
+                            <p>Extrayendo códigos y buscando...</p>
+                        </div>
+
+                        <div id="extractedCodesPreview" class="hidden mt-4">
+                            <div class="summary-box">
+                                <h4 style="margin-bottom: 0.75rem;">📋 Códigos Extraídos</h4>
+                                <div id="extractedCodesList" class="codes-list"></div>
+                            </div>
+                        </div>
+
+                        <div id="bulkResults" class="hidden mt-4">
+                            <div id="bulkSummary"></div>
+                            <div id="bulkDocumentList" class="results-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- Tab: Buscar -->
+                    <div class="tab-content" id="tab-buscar">
                         <h3 style="margin-bottom: 1rem;">Búsqueda Inteligente</h3>
                         <p class="text-muted mb-4">Pega aquí tus códigos o bloque de texto. El sistema encontrará los
                             documentos que los contienen.</p>
@@ -1159,6 +1205,121 @@ COD001
             } catch (error) {
                 alert('Error al eliminar: ' + error.message);
             }
+        }
+
+        // ============ Búsqueda Voraz Inteligente ============
+        
+        function extractFirstColumn(text) {
+            const lines = text.trim().split('\n');
+            const codes = [];
+            
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed === '') continue;
+                
+                let code = '';
+                if (trimmed.includes('\t')) {
+                    code = trimmed.split('\t')[0].trim();
+                } else if (trimmed.match(/\s{2,}/)) {
+                    code = trimmed.split(/\s{2,}/)[0].trim();
+                } else {
+                    code = trimmed.split(/\s+/)[0].trim();
+                }
+                
+                if (code.length > 0) codes.push(code);
+            }
+            
+            return [...new Set(codes)];
+        }
+
+        async function processBulkSearch() {
+            const input = document.getElementById('bulkInput').value;
+            if (!input.trim()) {
+                alert('Por favor pega el texto con códigos');
+                return;
+            }
+
+            const extractedCodes = extractFirstColumn(input);
+            if (extractedCodes.length === 0) {
+                alert('No se pudieron extraer códigos del texto pegado');
+                return;
+            }
+
+            document.getElementById('extractedCodesList').innerHTML = extractedCodes.map(c => 
+                `<span class="code-tag">${c}</span>`
+            ).join('');
+            document.getElementById('extractedCodesPreview').classList.remove('hidden');
+            document.getElementById('bulkLoading').classList.remove('hidden');
+
+            try {
+                const formData = new FormData();
+                formData.append('codes', extractedCodes.join('\n'));
+
+                const response = await fetch(`${apiUrl}?action=search`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                
+                document.getElementById('bulkLoading').classList.add('hidden');
+                if (result.error) {
+                    alert(result.error);
+                    return;
+                }
+                showBulkResults(result, extractedCodes);
+            } catch (error) {
+                document.getElementById('bulkLoading').classList.add('hidden');
+                alert('Error: ' + error.message);
+            }
+        }
+
+        function showBulkResults(result, searchedCodes) {
+            document.getElementById('bulkResults').classList.remove('hidden');
+            const coveredCount = result.total_covered || 0;
+            const notFound = result.not_found || [];
+
+            document.getElementById('bulkSummary').innerHTML = `
+                <div class="summary-box">
+                    <strong>${coveredCount}/${searchedCodes.length}</strong> códigos encontrados en 
+                    <strong>${result.documents?.length || 0}</strong> documento(s)
+                </div>
+            `;
+
+            if (!result.documents || result.documents.length === 0) {
+                document.getElementById('bulkDocumentList').innerHTML = '<p class="text-muted">No se encontraron documentos.</p>';
+                return;
+            }
+
+            let html = '';
+            for (const doc of result.documents) {
+                let pdfUrl = doc.ruta_archivo ? `clients/${clientCode}/uploads/${doc.ruta_archivo.includes('/') ? doc.ruta_archivo : doc.tipo + '/' + doc.ruta_archivo}` : '';
+                const firstCode = (doc.matched_codes && doc.matched_codes[0]) || '';
+                const allCodes = doc.matched_codes || doc.codes || [];
+
+                html += `
+                    <div class="result-card">
+                        <div class="result-header">
+                            <span class="badge badge-primary">${doc.tipo.toUpperCase()}</span>
+                            <span class="result-meta">${doc.fecha}</span>
+                        </div>
+                        <div class="result-title">${doc.numero}</div>
+                        <div class="codes-list" style="margin-top: 0.75rem;">
+                            ${allCodes.map(c => `<span class="code-tag">${c}</span>`).join('')}
+                        </div>
+                        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+                            ${pdfUrl ? `<a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(firstCode)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #7cb342;">🖍️ Resaltar</a>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('bulkDocumentList').innerHTML = html;
+        }
+
+        function clearBulkSearch() {
+            document.getElementById('bulkInput').value = '';
+            document.getElementById('extractedCodesPreview').classList.add('hidden');
+            document.getElementById('bulkResults').classList.add('hidden');
         }
     </script>
 </body>

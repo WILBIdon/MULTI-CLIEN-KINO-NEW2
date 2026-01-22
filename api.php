@@ -388,7 +388,7 @@ try {
                 LEFT JOIN codigos c ON d.id = c.documento_id
                 $where
                 GROUP BY d.id
-                ORDER BY d.fecha DESC
+                ORDER BY d.fecha DESC, d.id DESC
                 LIMIT ? OFFSET ?
             ");
 
@@ -577,7 +577,7 @@ try {
                     d.datos_extraidos
                 FROM documentos d
                 WHERE d.datos_extraidos LIKE ? OR d.numero LIKE ?
-                ORDER BY d.fecha DESC
+                ORDER BY d.fecha DESC, d.id DESC
                 LIMIT ?
             ");
             $likeQuery = '%' . $query . '%';
