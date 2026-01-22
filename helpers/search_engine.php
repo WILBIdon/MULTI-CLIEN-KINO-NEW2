@@ -58,82 +58,92 @@ function greedy_search(PDO $db, array $codes): array
         return ['documents' => [], 'covered' => [], 'not_found' => []];
     }
 
-    // Construir condición para buscar cualquiera de los códigos
-    $placeholders = implode(',', array_fill(0, count($codes), '?'));
-    $params = array_map('strtoupper', $codes);
+    // Get client code from session for PDF access
+    $clientCode = $_SESSION['client_code'] ?? '';
+    if (empty($clientCode)) {
+        return ['documents' => [], 'covered' => [], 'not_found' => $codes];
+    }
 
+    $uploadsDir = CLIENTS_DIR . "/{$clientCode}/uploads/";
+
+    // Get all documents with extracted text
     $stmt = $db->prepare("
-        SELECT
+        SELECT DISTINCT
             d.id,
             d.tipo,
             d.numero,
             d.fecha,
             d.proveedor,
             d.ruta_archivo,
+            d.datos_extraidos,
             GROUP_CONCAT(c.codigo, '||') AS codigos
         FROM documentos d
-        JOIN codigos c ON d.id = c.documento_id
-        WHERE UPPER(c.codigo) IN ($placeholders)
+        LEFT JOIN codigos c ON d.id = c.documento_id
+        WHERE d.datos_extraidos IS NOT NULL AND d.datos_extraidos != ''
         GROUP BY d.id
         ORDER BY d.fecha DESC
+        LIMIT 200
     ");
 
-    $stmt->execute($params);
+    $stmt->execute();
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Convertir a estructura de documentos con array de códigos
     $documents = [];
+    $covered = [];
+
+    // Search for each code in PDF text
     foreach ($rows as $row) {
-        $docCodes = array_filter(explode('||', $row['codigos']));
-        $documents[$row['id']] = [
-            'id' => (int) $row['id'],
-            'tipo' => $row['tipo'],
-            'numero' => $row['numero'],
-            'fecha' => $row['fecha'],
-            'proveedor' => $row['proveedor'],
-            'ruta_archivo' => $row['ruta_archivo'],
-            'codes' => $docCodes
-        ];
-    }
+        $data = json_decode($row['datos_extraidos'], true);
+        $text = $data['text'] ?? '';
 
-    // Algoritmo voraz: seleccionar documentos que cubran más códigos
-    $remaining = array_map('strtoupper', $codes);
-    $selected = [];
+        if (empty($text)) {
+            continue;
+        }
 
-    while (!empty($remaining) && !empty($documents)) {
-        $best = null;
-        $bestCover = [];
+        $foundCodes = [];
+        $codeSnippets = [];
 
-        foreach ($documents as $doc) {
-            $docCodesUpper = array_map('strtoupper', $doc['codes']);
-            $cover = array_intersect($docCodesUpper, $remaining);
+        // Check which codes appear in this document's text
+        foreach ($codes as $code) {
+            $pos = stripos($text, $code);
+            if ($pos !== false) {
+                $foundCodes[] = $code;
+                $covered[] = strtoupper($code);
 
-            if ($best === null || count($cover) > count($bestCover)) {
-                $best = $doc;
-                $bestCover = $cover;
-            } elseif (count($cover) === count($bestCover) && $doc['fecha'] > $best['fecha']) {
-                // Si empatan, preferir el más reciente
-                $best = $doc;
-                $bestCover = $cover;
+                // Extract exact snippet showing how code appears
+                $start = max(0, $pos);
+                $end = min(strlen($text), $pos + strlen($code));
+                $exactMatch = substr($text, $start, $end - $start);
+                $codeSnippets[$code] = trim($exactMatch);
             }
         }
 
-        if ($best === null || empty($bestCover)) {
-            break;
+        if (!empty($foundCodes)) {
+            $documents[] = [
+                'id' => (int) $row['id'],
+                'tipo' => $row['tipo'],
+                'numero' => $row['numero'],
+                'fecha' => $row['fecha'],
+                'proveedor' => $row['proveedor'],
+                'ruta_archivo' => $row['ruta_archivo'],
+                'codes' => $row['codigos'] ? array_filter(explode('||', $row['codigos'])) : [],
+                'matched_codes' => $foundCodes,
+                'code_snippets' => $codeSnippets // How codes actually appear in PDF
+            ];
         }
-
-        $best['matched_codes'] = array_values($bestCover);
-        $selected[] = $best;
-        $remaining = array_diff($remaining, $bestCover);
-        unset($documents[$best['id']]);
     }
 
+    // Calculate not found
+    $coveredUnique = array_unique(array_map('strtoupper', $covered));
+    $codesUpper = array_map('strtoupper', $codes);
+    $notFound = array_diff($codesUpper, $coveredUnique);
+
     return [
-        'documents' => $selected,
-        'covered' => array_diff(array_map('strtoupper', $codes), $remaining),
-        'not_found' => array_values($remaining),
+        'documents' => $documents,
+        'covered' => array_values($coveredUnique),
+        'not_found' => array_values($notFound),
         'total_searched' => count($codes),
-        'total_covered' => count($codes) - count($remaining)
+        'total_covered' => count($coveredUnique)
     ];
 }
 
