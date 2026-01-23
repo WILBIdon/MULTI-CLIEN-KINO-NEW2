@@ -648,16 +648,15 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                 return;
             }
 
-            // Validar si parece un código o número
-            // Si tiene números y no tiene espacios, es probable que sea un código
-            if (/^\d+$/.test(query) || (/^[\w-]+$/.test(query) && /\d/.test(query))) {
-                alert('⚠️ Este buscador es solo para PALABRAS y NOMBRES de documentos.\n\nPara buscar por CÓDIGOS (ej: ' + query + '), por favor usa la pestaña "Buscar" (Búsqueda Inteligente).');
 
-                // Opcional: Cambiar a la pestaña de búsqueda automáticamente
-                // switchTab('buscar');
-                // document.getElementById('searchScores').value = query;
+            const query = fulltextInput.value.trim();
+            if (query.length < 3) {
+                alert('Ingresa al menos 3 caracteres');
                 return;
             }
+
+            // Validación eliminada a petición del usuario
+            // Ahora permite buscar cualquier término (incluyendo números/códigos)
 
             const btn = document.getElementById('fulltextBtn');
             btn.disabled = true;
