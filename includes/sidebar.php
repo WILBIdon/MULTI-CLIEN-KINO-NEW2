@@ -44,9 +44,9 @@ $currentModule = $currentModule ?? '';
 
     <!-- Navigation - SOLO 5 BOTONES PRINCIPALES -->
     <nav class="sidebar-nav">
-        
+
         <!-- 1. GESTOR / DASHBOARD -->
-        <a href="<?= $baseUrl ?? '' ?>modules/busqueda/" 
+        <a href="<?= $baseUrl ?? '' ?>modules/busqueda/"
             class="nav-item <?= $currentModule === 'gestor' ? 'active' : '' ?>">
             <span class="nav-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -58,7 +58,7 @@ $currentModule = $currentModule ?? '';
         </a>
 
         <!-- 2. RESALTADOR -->
-        <a href="<?= $baseUrl ?? '' ?>modules/resaltar/" 
+        <a href="<?= $baseUrl ?? '' ?>modules/resaltar/"
             class="nav-item <?= $currentModule === 'resaltar' ? 'active' : '' ?>">
             <span class="nav-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -110,6 +110,9 @@ $currentModule = $currentModule ?? '';
                 <a href="<?= $baseUrl ?? '' ?>modules/excel_import/" class="nav-subitem">
                     📊 Importar Data Excel
                 </a>
+                <a href="<?= $baseUrl ?? '' ?>modules/importar/" class="nav-subitem">
+                    📡 Importar Backup (SQL)
+                </a>
                 <a href="<?= $baseUrl ?? '' ?>modules/lote/" class="nav-subitem">
                     📦 Subida por Lote
                 </a>
@@ -129,7 +132,7 @@ $currentModule = $currentModule ?? '';
         </div>
 
         <!-- 5. BACKUP -->
-        <a href="<?= $baseUrl ?? '' ?>admin/backup.php" 
+        <a href="<?= $baseUrl ?? '' ?>admin/backup.php"
             class="nav-item <?= $currentModule === 'backup' ? 'active' : '' ?>">
             <span class="nav-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -164,107 +167,107 @@ $currentModule = $currentModule ?? '';
 </aside>
 
 <style>
-/* Estilos para menús expandibles */
-.nav-item-expandable {
-    margin-bottom: 0.25rem;
-}
+    /* Estilos para menús expandibles */
+    .nav-item-expandable {
+        margin-bottom: 0.25rem;
+    }
 
-.nav-toggle {
-    width: 100%;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-    position: relative;
-}
+    .nav-toggle {
+        width: 100%;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        position: relative;
+    }
 
-.nav-toggle .nav-arrow {
-    position: absolute;
-    right: 1rem;
-    transition: transform 0.2s ease;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
+    .nav-toggle .nav-arrow {
+        position: absolute;
+        right: 1rem;
+        transition: transform 0.2s ease;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
 
-.nav-toggle.active .nav-arrow {
-    transform: rotate(180deg);
-}
+    .nav-toggle.active .nav-arrow {
+        transform: rotate(180deg);
+    }
 
-.nav-submenu {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease;
-    background: var(--bg-tertiary);
-    border-radius: var(--radius-md);
-    margin: 0.25rem 0 0.5rem 0;
-}
+    .nav-submenu {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-md);
+        margin: 0.25rem 0 0.5rem 0;
+    }
 
-.nav-submenu.open {
-    max-height: 500px;
-    padding: 0.5rem 0;
-}
+    .nav-submenu.open {
+        max-height: 500px;
+        padding: 0.5rem 0;
+    }
 
-.nav-subitem {
-    display: block;
-    padding: 0.75rem 1rem 0.75rem 3rem;
-    color: var(--text-secondary);
-    text-decoration: none;
-    font-size: 0.875rem;
-    transition: all 0.2s ease;
-    border-left: 3px solid transparent;
-}
+    .nav-subitem {
+        display: block;
+        padding: 0.75rem 1rem 0.75rem 3rem;
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 0.875rem;
+        transition: all 0.2s ease;
+        border-left: 3px solid transparent;
+    }
 
-.nav-subitem:hover {
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    border-left-color: var(--accent-primary);
-}
+    .nav-subitem:hover {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border-left-color: var(--accent-primary);
+    }
 
-.logout-btn {
-    margin-top: 0.5rem;
-    border-top: 1px solid var(--border-color);
-    padding-top: 0.75rem;
-}
+    .logout-btn {
+        margin-top: 0.5rem;
+        border-top: 1px solid var(--border-color);
+        padding-top: 0.75rem;
+    }
 </style>
 
 <script>
-function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebarOverlay');
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
 
-    if (window.innerWidth <= 768) {
-        sidebar.classList.toggle('open');
-        overlay.classList.toggle('active');
-    } else {
-        sidebar.classList.toggle('collapsed');
+        if (window.innerWidth <= 768) {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        } else {
+            sidebar.classList.toggle('collapsed');
+        }
     }
-}
 
-function toggleSubmenu(menuId) {
-    const submenu = document.getElementById('submenu-' + menuId);
-    const button = submenu.previousElementSibling;
-    
-    // Close all other submenus
-    document.querySelectorAll('.nav-submenu').forEach(menu => {
-        if (menu !== submenu) {
-            menu.classList.remove('open');
-            menu.previousElementSibling.classList.remove('active');
+    function toggleSubmenu(menuId) {
+        const submenu = document.getElementById('submenu-' + menuId);
+        const button = submenu.previousElementSibling;
+
+        // Close all other submenus
+        document.querySelectorAll('.nav-submenu').forEach(menu => {
+            if (menu !== submenu) {
+                menu.classList.remove('open');
+                menu.previousElementSibling.classList.remove('active');
+            }
+        });
+
+        // Toggle current submenu
+        submenu.classList.toggle('open');
+        button.classList.toggle('active');
+    }
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+
+        if (window.innerWidth > 768) {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
         }
     });
-    
-    // Toggle current submenu
-    submenu.classList.toggle('open');
-    button.classList.toggle('active');
-}
-
-// Handle window resize
-window.addEventListener('resize', () => {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebarOverlay');
-
-    if (window.innerWidth > 768) {
-        sidebar.classList.remove('open');
-        overlay.classList.remove('active');
-    }
-});
 </script>
