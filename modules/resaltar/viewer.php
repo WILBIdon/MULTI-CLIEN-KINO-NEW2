@@ -695,23 +695,30 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                             return [...new Set(variations)];
                         }
 
-                        const variations = getCodeVariations(searchTerm);
-                        let foundMatch = false;
+                        // ✨ SOLUCIÓN REGEX: Búsqueda flexible para códigos numéricos
+                        // Si es numérico (o alfanumérico corto), usamos regex para tolerar espacios
+                        if (/^[\w\-\.]+$/.test(searchTerm) && searchTerm.length >= 3) {
+                            // Escapar caracteres especiales de regex
+                            const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                            
+                            // Crear patrón regex que permite espacios, guiones o puntos entre caracteres
+                            // Ejemplo: 1543 -> /1[\s\-\.]*5[\s\-\.]*4[\s\-\.]*3/gi
+                            const patternStr = searchTerm.split('').map(char => {
+                                // Escapar cada caracter por seguridad
+                                const safeChar = char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                return safeChar;
+                            }).join('[\\s\\-\\.]*');
+                            
+                            const regex = new RegExp(patternStr, 'gi');
+                            console.log('🔍 Regex Search:', patternStr);
 
-                        // Try each variation sequentially
-                        for (let i = 0; i < variations.length && !foundMatch; i++) {
-                            const variation = variations[i];
-
-                            marker.mark(variation, {
+                            marker.markRegExp(regex, {
                                 separateWordSearch: false,
-                                accuracy: 'exactly',
-                                caseSensitive: false,
-                                diacritics: false,
-                                done: function (totalMatches) {
+                                acrossElements: true,
+                                done: function(totalMatches) {
                                     if (totalMatches > 0) {
                                         foundMatch = true;
-                                        console.log(`✅ Found ${totalMatches} matches for "${variation}"`);
-
+                                        console.log(`✅ Regex Match: Found ${totalMatches}`);
                                         if (!scrolledToFirstMatch) {
                                             setTimeout(() => {
                                                 const firstMark = textLayer.querySelector('mark');
@@ -724,8 +731,31 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                                     }
                                 }
                             });
+                        }
 
-                            if (foundMatch) break;
+                        // Si regex no encontró nada (o no era aplicable), probar búsqueda exacta estándar
+                        if (!foundMatch) {
+                             marker.mark(searchTerm, {
+                                separateWordSearch: false,
+                                accuracy: 'exactly',
+                                caseSensitive: false,
+                                diacritics: false,
+                                done: function (totalMatches) {
+                                    if (totalMatches > 0) {
+                                        foundMatch = true;
+                                        // Scroll logic...
+                                        if (!scrolledToFirstMatch) {
+                                            setTimeout(() => {
+                                                const firstMark = textLayer.querySelector('mark');
+                                                if (firstMark) {
+                                                    scrolledToFirstMatch = true;
+                                                    wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                }
+                                            }, 100);
+                                        }
+                                    }
+                                }
+                            });
                         }
 
                         // Last resort: partial matching
