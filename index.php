@@ -1068,8 +1068,16 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                         <div class="codes-list" style="margin-top: 0.75rem;">
                             ${allCodes.map(c => `<span class="code-tag">${c}</span>`).join('')}
                         </div>
-                        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
-                            ${pdfUrl ? `<a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(searchedCode)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</a>` : ''}
+                        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            ${pdfUrl ? `
+                                <a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(searchedCode)}" 
+                                   class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;" target="_blank">
+                                    🖍️ Resaltar "${searchedCode}"
+                                </a>
+                                <a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">
+                                    📄 Original
+                                </a>
+                            ` : ''}
                         </div>
                     </div>
                 `;
