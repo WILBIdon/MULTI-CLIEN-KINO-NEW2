@@ -115,7 +115,58 @@ if (!empty($searchTerm)) {
             }
         }
     } else {
-        $validationWarning = "⚠️ Este documento no tiene texto indexado. Es posible que necesite ser re-indexado.";
+        // ✨ AUTO-FIX: Documento no indexado → Indexar "Just-in-Time"
+        try {
+            // Intentar extraer texto ahora mismo
+            $extractResult = extract_codes_from_pdf($pdfPath);
+
+            if ($extractResult['success'] && !empty($extractResult['text'])) {
+                // Guardar en BD para futuras búsquedas (persistencia)
+                $newDatosExtraidos = [
+                    'text' => substr($extractResult['text'], 0, 50000), // Límite seguro de almacenamiento
+                    'auto_codes' => $extractResult['codes'],
+                    'indexed_at' => date('Y-m-d H:i:s'),
+                    'source' => 'viewer_auto_index'
+                ];
+
+                $updateStmt = $db->prepare("UPDATE documentos SET datos_extraidos = ? WHERE id = ?");
+                $updateStmt->execute([json_encode($newDatosExtraidos, JSON_UNESCAPED_UNICODE), $documentId]);
+
+                // Actualizar variables locales
+                $indexedText = $extractResult['text'];
+
+                // Re-verificar término con el texto recién extraído
+                $termInIndexedText = stripos($indexedText, $searchTerm) !== false;
+
+                if ($termInIndexedText) {
+                    // ¡Éxito! Encontrado tras auto-indexar
+                    // No mostramos warning, o uno muy sutil informativo
+                    // $validationWarning = "ℹ️ Documento indexado automáticamente."; 
+                } else {
+                    // Aún no se encuentra, intentar variaciones nuevamente
+                    // (Lógica duplicada simplificada para este caso edge)
+                    if (preg_match('/^\d+$/', $searchTerm)) {
+                        $digits = str_split($searchTerm);
+                        $vars = [implode(' ', $digits), implode('-', $digits)];
+                        foreach ($vars as $v) {
+                            if (stripos($indexedText, $v) !== false) {
+                                $termInIndexedText = true;
+                                $validationWarning = "Documento auto-indexado. Término encontrado como: \"$v\"";
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!$termInIndexedText) {
+                        $validationWarning = "⚠️ Documento indexado automáticamente, pero el término \"$searchTerm\" no aparece en el texto del PDF.";
+                    }
+                }
+            } else {
+                $validationWarning = "⚠️ Error al intentar indexar el documento automáticamente: " . ($extractResult['error'] ?? 'El PDF no contiene texto extraíble (posiblemente imagen escaneada).');
+            }
+        } catch (Exception $e) {
+            $validationWarning = "⚠️ Falló la indexación automática: " . $e->getMessage();
+        }
     }
 }
 
