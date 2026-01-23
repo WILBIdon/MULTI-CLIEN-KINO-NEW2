@@ -496,7 +496,6 @@ COD001
                 // Construir ruta del PDF correctamente
                 let pdfUrl = '';
                 if (doc.ruta_archivo) {
-                    // Si la ruta ya incluye el tipo (ej: documento/archivo.pdf)
                     if (doc.ruta_archivo.includes('/')) {
                         pdfUrl = `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`;
                     } else {
@@ -504,8 +503,16 @@ COD001
                     }
                 }
 
-                // Get the first matched code for highlighting
-                const firstCode = (doc.matched_codes && doc.matched_codes[0]) || (doc.codes && doc.codes[0]) || '';
+                // 1. CÓDIGO OFICIAL (Tal cual está en BD)
+                // Mantenemos los guiones para que el usuario vea el código correcto en la pantalla
+                const officialCode = (doc.matched_codes && doc.matched_codes[0]) || (doc.codes && doc.codes[0]) || '';
+
+                // 2. TÉRMINO OPTIMIZADO PARA EL VISOR (Limpieza Total)
+                // - .toString(): Asegura que sea texto.
+                // - .replace(/[\r\n]+/g, ''): Elimina "enters" ocultos (basura invisible).
+                // - .replace(/[^a-zA-Z0-9]/g, ''): Quita guiones y puntos para dejar el "esqueleto" (S-345 -> S345).
+                // Esto garantiza que el visor encuentre el código en el PDF sin importar el formato.
+                const viewerTerm = officialCode.toString().replace(/[\r\n]+/g, '').replace(/[^a-zA-Z0-9]/g, '');
 
                 html += `
                     <div class="result-card">
@@ -515,11 +522,14 @@ COD001
                         </div>
                         <div class="result-title">${doc.numero}</div>
                         <div class="result-meta">${doc.proveedor || ''}</div>
+                        
                         <div class="codes-list">
                             ${(doc.matched_codes || doc.codes || []).map(c => `<span class="code-tag">${c}</span>`).join('')}
                         </div>
+                        
                         <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            ${pdfUrl && firstCode ? `<a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(firstCode)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</a>` : ''}
+                            ${pdfUrl && officialCode ? `<a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(viewerTerm)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</a>` : ''}
+                            
                             ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
                         </div>
                     </div>
