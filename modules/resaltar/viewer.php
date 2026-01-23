@@ -68,7 +68,58 @@ $currentModule = 'resaltar';
 $baseUrl = '../../';
 $pageTitle = 'Visor con Resaltado';
 
-// Extract text if search term provided
+// ✨ SOLUCIÓN: Validar contra datos_extraidos (texto indexado)
+$indexedText = '';
+$termInIndexedText = false;
+$validationWarning = '';
+
+if (!empty($searchTerm)) {
+    // Obtener texto indexado de la BD
+    $datosExtraidos = json_decode($document['datos_extraidos'] ?? '{}', true);
+    $indexedText = $datosExtraidos['text'] ?? '';
+
+    if (!empty($indexedText)) {
+        // Verificar si el término está en el texto indexado
+        $termInIndexedText = stripos($indexedText, $searchTerm) !== false;
+
+        if (!$termInIndexedText) {
+            // ⚠️ El término NO está en el texto indexado
+            // Intentar con variaciones comunes
+            $variations = [];
+
+            // Si es numérico, probar con espacios/guiones
+            if (preg_match('/^\d+$/', $searchTerm)) {
+                $digits = str_split($searchTerm);
+                $variations[] = implode(' ', $digits);
+                $variations[] = implode('-', $digits);
+
+                if (strlen($searchTerm) === 4) {
+                    $variations[] = substr($searchTerm, 0, 2) . ' ' . substr($searchTerm, 2);
+                    $variations[] = substr($searchTerm, 0, 2) . '-' . substr($searchTerm, 2);
+                }
+            }
+
+            // Probar variaciones
+            foreach ($variations as $variation) {
+                if (stripos($indexedText, $variation) !== false) {
+                    $termInIndexedText = true;
+                    $validationWarning = "El término exacto no se encontró, pero se encontró una variación: \"$variation\"";
+                    break;
+                }
+            }
+
+            if (!$termInIndexedText) {
+                $validationWarning = "⚠️ El término \"$searchTerm\" no se encontró en el texto indexado de este documento. " .
+                    "Posibles causas: el término está en un formato diferente en el PDF, " .
+                    "el documento necesita re-indexarse, o el código fue agregado manualmente pero no está en el PDF.";
+            }
+        }
+    } else {
+        $validationWarning = "⚠️ Este documento no tiene texto indexado. Es posible que necesite ser re-indexado.";
+    }
+}
+
+// Extract text if search term provided (mantenemos la lógica original como fallback)
 $pagesWithMatches = [];
 $fullText = '';
 
@@ -385,6 +436,18 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                                 </button>
                             </form>
                         </div>
+
+                        <?php if (!empty($validationWarning)): ?>
+                            <div class="summary-box warning" style="margin-bottom: 1rem; font-size: 0.875rem;">
+                                <strong>⚠️ Advertencia</strong><br>
+                                <?= nl2br(htmlspecialchars($validationWarning)) ?>
+                                <br><br>
+                                <strong>Opciones:</strong><br>
+                                • Intenta buscar con un formato diferente<br>
+                                • <a href="../../index.php" style="color: var(--accent-primary);">Re-indexar documento</a>
+                                (tab Consultar → Re-indexar)
+                            </div>
+                        <?php endif; ?>
 
                         <?php if (!empty($searchTerm)): ?>
                             <div class="match-badge">
