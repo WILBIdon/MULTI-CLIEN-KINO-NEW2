@@ -29,8 +29,12 @@ require_once __DIR__ . '/config.php';
 $helpers = [
     'tenant',
     'logger',
-    'error_codes'
+    'error_codes',
+    'secure_uploader',
+    'rate_limiter',
+    'csrf_protection'
 ];
+
 
 foreach ($helpers as $helper) {
     $helperFile = __DIR__ . '/helpers/' . $helper . '.php';
