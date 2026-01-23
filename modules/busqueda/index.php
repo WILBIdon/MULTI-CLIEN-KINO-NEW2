@@ -506,13 +506,10 @@ COD001
                 // 1. CÓDIGO OFICIAL (Tal cual está en BD)
                 // Mantenemos los guiones para que el usuario vea el código correcto en la pantalla
                 const officialCode = (doc.matched_codes && doc.matched_codes[0]) || (doc.codes && doc.codes[0]) || '';
-
-                // 2. TÉRMINO OPTIMIZADO PARA EL VISOR (Limpieza Total)
-                // - .toString(): Asegura que sea texto.
-                // - .replace(/[\r\n]+/g, ''): Elimina "enters" ocultos (basura invisible).
-                // - .replace(/[^a-zA-Z0-9]/g, ''): Quita guiones y puntos para dejar el "esqueleto" (S-345 -> S345).
-                // Esto garantiza que el visor encuentre el código en el PDF sin importar el formato.
-                const viewerTerm = officialCode.toString().replace(/[\r\n]+/g, '').replace(/[^a-zA-Z0-9]/g, '');
+ // 2. CÓDIGO LIMPIO (Para el visor)
+                // SOLO quitamos saltos de línea y espacios de los bordes.
+                // Los guiones internos (S-543) SE QUEDAN INTACTOS.
+                const viewerTerm = officialCode.toString().replace(/[\r\n]+/g, '').trim();
 
                 html += `
                     <div class="result-card">
