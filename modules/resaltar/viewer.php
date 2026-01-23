@@ -669,6 +669,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
                     // Smart highlighting with code variations
                     if (searchTerm) {
+                        let foundMatch = false; // Initialize flag for this page
                         const marker = new Mark(textLayer);
 
                         // Generate variations of the search term
@@ -700,7 +701,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                         if (/^[\w\-\.]+$/.test(searchTerm) && searchTerm.length >= 3) {
                             // Escapar caracteres especiales de regex
                             const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                            
+
                             // Crear patrón regex que permite espacios, guiones o puntos entre caracteres
                             // Ejemplo: 1543 -> /1[\s\-\.]*5[\s\-\.]*4[\s\-\.]*3/gi
                             const patternStr = searchTerm.split('').map(char => {
@@ -708,14 +709,14 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                                 const safeChar = char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                                 return safeChar;
                             }).join('[\\s\\-\\.]*');
-                            
+
                             const regex = new RegExp(patternStr, 'gi');
                             console.log('🔍 Regex Search:', patternStr);
 
                             marker.markRegExp(regex, {
                                 separateWordSearch: false,
                                 acrossElements: true,
-                                done: function(totalMatches) {
+                                done: function (totalMatches) {
                                     if (totalMatches > 0) {
                                         foundMatch = true;
                                         console.log(`✅ Regex Match: Found ${totalMatches}`);
@@ -735,7 +736,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
                         // Si regex no encontró nada (o no era aplicable), probar búsqueda exacta estándar
                         if (!foundMatch) {
-                             marker.mark(searchTerm, {
+                            marker.mark(searchTerm, {
                                 separateWordSearch: false,
                                 accuracy: 'exactly',
                                 caseSensitive: false,
