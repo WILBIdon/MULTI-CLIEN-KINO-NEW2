@@ -1,303 +1,252 @@
 <?php
 /**
- * Módulo de Importación de Bases de Datos
- *
- * Permite importar datos desde archivos CSV/SQL/Excel
- * con mapeo de columnas y preview antes de importar.
+ * Módulo de Importación Inteligente (Smart Merge)
+ * - Valida congruencia estructural.
+ * - Fusiona datos sin sobrescribir (INSERT OR IGNORE).
+ * - Vincula archivos automáticamente.
  */
 session_start();
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../helpers/tenant.php';
-require_once __DIR__ . '/../../helpers/import_engine.php';
 
-// Verificar autenticación
+// Configuración para cargas pesadas
+ini_set('memory_limit', '512M');
+ini_set('upload_max_filesize', '128M');
+ini_set('post_max_size', '128M');
+ini_set('max_execution_time', 600);
+
 if (!isset($_SESSION['client_code'])) {
     header('Location: ../../login.php');
     exit;
 }
 
-$code = $_SESSION['client_code'];
-$db = open_client_db($code);
+$clientCode = $_SESSION['client_code'];
+$db = open_client_db($clientCode);
+$uploadsDir = __DIR__ . "/../../clients/$clientCode/uploads/";
+$backupsDir = __DIR__ . "/../../clients/$clientCode/backups/";
+
+// Asegurar directorios
+if (!file_exists($backupsDir)) {
+    mkdir($backupsDir, 0755, true);
+}
 
 $message = '';
 $error = '';
-$previewData = null;
-$mapping = null;
+$logs = [];
 
-// Procesar importación final
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+// --- HERRAMIENTAS DE VALIDACIÓN Y PROCESAMIENTO ---
 
-    if ($_POST['action'] === 'preview') {
+/**
+ * Verifica si la estructura del SQL entrante es CONGRUENTE con la BD actual.
+ * Devuelve array de errores o array vacío si todo está OK.
+ */
+function verificar_congruencia($db, $rutaSql)
+{
+    $problemas = [];
+
+    // 1. Mapa de la BD Actual
+    $estructura_bd = [];
+    $tablas = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")->fetchAll(PDO::FETCH_COLUMN);
+    foreach ($tablas as $t) {
+        $cols = $db->query("PRAGMA table_info($t)")->fetchAll(PDO::FETCH_ASSOC);
+        $estructura_bd[$t] = array_column($cols, 'name');
+    }
+
+    // 2. Escanear el SQL (sin ejecutarlo)
+    $handle = fopen($rutaSql, "r");
+    if ($handle) {
+        while (($line = fgets($handle)) !== false) {
+            // Detectar intentos de inserción
+            if (preg_match('/INSERT\s+(?:OR\s+\w+\s+)?INTO\s+[`"]?(\w+)[`"]?\s*\(([^)]+)\)/i', $line, $matches)) {
+                $tabla = $matches[1];
+                $columnas_sql = array_map(function ($c) {
+                    return trim($c, " `\"'"); }, explode(',', $matches[2]));
+
+                // A. ¿La tabla existe?
+                if (!isset($estructura_bd[$tabla])) {
+                    $problemas[] = "⚠️ <b>Incongruencia:</b> El archivo intenta insertar en la tabla '{$tabla}' que NO existe en tu sistema.";
+                    continue;
+                }
+
+                // B. ¿Las columnas existen?
+                $col_faltantes = array_diff($columnas_sql, $estructura_bd[$tabla]);
+                if (!empty($col_faltantes)) {
+                    $problemas[] = "⛔ <b>Estructura Incompatible:</b> La tabla '{$tabla}' en el archivo tiene columnas que tú no tienes: " . implode(', ', $col_faltantes);
+                }
+            }
+        }
+        fclose($handle);
+    }
+
+    // Eliminar duplicados en el reporte
+    return array_unique($problemas);
+}
+
+// --- LÓGICA PRINCIPAL ---
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+    // ACCIÓN: LIMPIEZA TOTAL (WIPE)
+    if ($_POST['action'] === 'wipe_data') {
         try {
-            if (empty($_FILES['file']['tmp_name'])) {
-                throw new Exception('Archivo no recibido');
-            }
-
-            $ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
-
-            if ($ext === 'csv') {
-                $delimiter = $_POST['delimiter'] ?? ',';
-                $previewData = parse_csv($_FILES['file']['tmp_name'], $delimiter);
-            } elseif ($ext === 'sql') {
-                $previewData = parse_sql_inserts($_FILES['file']['tmp_name']);
-            } else {
-                throw new Exception('Formato no soportado. Use CSV o SQL.');
-            }
-
-            if (isset($previewData['headers'])) {
-                $mapping = suggest_column_mapping($previewData['headers']);
-            }
-
-            // Guardar archivo temporalmente para importación posterior
-            $tempPath = sys_get_temp_dir() . '/import_' . session_id() . '.' . $ext;
-            move_uploaded_file($_FILES['file']['tmp_name'], $tempPath);
-            $_SESSION['import_temp_file'] = $tempPath;
-            $_SESSION['import_type'] = $ext;
-
+            $db->exec("PRAGMA foreign_keys = OFF");
+            $db->exec("DELETE FROM vinculos");
+            $db->exec("DELETE FROM codigos");
+            $db->exec("DELETE FROM documentos");
+            $db->exec("DELETE FROM sqlite_sequence WHERE name IN ('vinculos','codigos','documentos')");
+            $message = "🗑️ Base de datos vaciada. Lista para nuevos datos.";
         } catch (Exception $e) {
-            $error = $e->getMessage();
+            $error = "Error al borrar: " . $e->getMessage();
         }
     }
 
-    if ($_POST['action'] === 'import') {
+    // ACCIÓN: IMPORTACIÓN INTELIGENTE (FUSIONAR)
+    if ($_POST['action'] === 'smart_import') {
         try {
-            if (!isset($_SESSION['import_temp_file']) || !file_exists($_SESSION['import_temp_file'])) {
-                throw new Exception('Primero suba un archivo para previsualizar');
+            if (empty($_FILES['sql_file']['tmp_name']) || empty($_FILES['zip_file']['tmp_name'])) {
+                throw new Exception("Por favor sube ambos archivos (SQL y ZIP).");
             }
 
-            $tempPath = $_SESSION['import_temp_file'];
-            $ext = $_SESSION['import_type'];
-            $importType = $_POST['import_type'] ?? 'codigos';
+            $sqlTemp = $_FILES['sql_file']['tmp_name'];
+            $zipTemp = $_FILES['zip_file']['tmp_name'];
+            $modo = $_POST['mode'] ?? 'merge'; // 'merge' (fusionar) o 'replace' (reemplazar)
 
-            // Parsear el archivo guardado
-            if ($ext === 'csv') {
-                $delimiter = $_POST['delimiter'] ?? ',';
-                $data = parse_csv($tempPath, $delimiter);
-                $rows = $data['rows'];
+            // PASO 1: VERIFICAR CONGRUENCIA
+            $incongruencias = verificar_congruencia($db, $sqlTemp);
+
+            if (!empty($incongruencias)) {
+                // Si hay errores estructurales graves, detenemos todo.
+                $htmlErrores = implode('<br>', $incongruencias);
+                throw new Exception("NO SE PUEDE IMPORTAR. La estructura no es congruente:<br><br>$htmlErrores");
+            }
+
+            $db->beginTransaction();
+
+            // PASO 2: PREPARAR BD
+            if ($modo === 'replace') {
+                // Borrado total previo
+                $db->exec("PRAGMA foreign_keys = OFF");
+                $db->exec("DELETE FROM vinculos; DELETE FROM codigos; DELETE FROM documentos;");
+                $logs[] = "🗑️ Datos antiguos eliminados.";
+            }
+
+            // PASO 3: PROCESAR SQL (MAGIA "NO SOBRESCRIBIR")
+            $sqlContent = file_get_contents($sqlTemp);
+
+            if ($modo === 'merge') {
+                // Transformar INSERTs normales en INSERT OR IGNORE para SQLite
+                // Esto hace que si el ID ya existe, se salte el error y no haga nada (protege el dato existente)
+                $sqlContent = str_ireplace('INSERT INTO', 'INSERT OR IGNORE INTO', $sqlContent);
+                $logs[] = "🛡️ Modo Fusión activado: Se ignorarán los registros duplicados.";
+            }
+
+            // Ejecutar importación
+            $db->exec($sqlContent);
+            $logs[] = "✅ Datos procesados en la base de datos.";
+
+            // PASO 4: PROCESAR ARCHIVOS (ZIP)
+            $zip = new ZipArchive;
+            if ($zip->open($zipTemp) === TRUE) {
+                // Extraer sin borrar lo que ya existe
+                $zip->extractTo($uploadsDir);
+                $zip->close();
+                $logs[] = "📦 Archivos extraídos en la nube.";
             } else {
-                $data = parse_sql_inserts($tempPath);
-                // Tomar primera tabla
-                $firstTable = reset($data['tables']);
-                $rows = $firstTable['rows'] ?? [];
+                $logs[] = "⚠️ No se pudo procesar el ZIP (¿Quizás está dañado?).";
             }
 
-            // Obtener mapeo del formulario
-            $columnMapping = [];
-            foreach ($_POST as $key => $value) {
-                if (strpos($key, 'map_') === 0 && $value !== '') {
-                    $sourceCol = substr($key, 4);
-                    $columnMapping[$value] = $sourceCol;
+            // PASO 5: VINCULADOR DE ARCHIVOS (REPARADOR)
+            $stmtUpdate = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE id = ?");
+            $docs = $db->query("SELECT id, numero, ruta_archivo FROM documentos")->fetchAll(PDO::FETCH_ASSOC);
+            $vinculados = 0;
+
+            foreach ($docs as $doc) {
+                // Solo buscamos si no tiene ruta o si la ruta no existe
+                $rutaActual = $uploadsDir . ($doc['ruta_archivo'] ?? 'x');
+
+                if (empty($doc['ruta_archivo']) || !file_exists($rutaActual)) {
+                    // Buscar archivo PDF que contenga el número
+                    $nombreLimpio = preg_replace('/[^a-zA-Z0-9]/', '*', $doc['numero']);
+                    $patron = $uploadsDir . "*" . $nombreLimpio . "*.pdf";
+                    $encontrados = glob($patron);
+
+                    if (!empty($encontrados)) {
+                        $archivoReal = basename($encontrados[0]);
+                        $stmtUpdate->execute([$archivoReal, $doc['id']]);
+                        $vinculados++;
+                    }
                 }
             }
-
-            // Importar
-            $result = import_to_database($db, $rows, $columnMapping, $importType);
-
-            $message = "✅ Importación completada: {$result['imported']} registros importados";
-
-            if (!empty($result['errors'])) {
-                $message .= " (" . count($result['errors']) . " errores)";
+            if ($vinculados > 0) {
+                $logs[] = "🔗 Se encontraron y vincularon $vinculados documentos nuevos.";
             }
 
-            // Limpiar temporal
-            @unlink($tempPath);
-            unset($_SESSION['import_temp_file'], $_SESSION['import_type']);
+            $db->commit();
+            $message = "🎉 <b>Proceso Terminado:</b><br>" . implode('<br>', $logs);
 
         } catch (Exception $e) {
+            if ($db->inTransaction())
+                $db->rollBack();
             $error = $e->getMessage();
         }
     }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="es">
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Importar Datos - KINO TRACE</title>
+    <title>Importador Inteligente</title>
     <link rel="stylesheet" href="../../assets/css/styles.css">
     <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: #f3f4f6;
-            margin: 0;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 1rem;
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-        }
-
-        .header h1 {
-            margin: 0;
-            color: #1f2937;
-        }
-
-        .nav-links a {
-            margin-left: 1rem;
-            color: #2563eb;
-            text-decoration: none;
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-top: 1rem;
         }
 
         .card {
-            background: white;
-            border-radius: 12px;
             padding: 1.5rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            margin-bottom: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
-        .card h2 {
-            margin-top: 0;
-            color: #1f2937;
+        .card-import {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
         }
 
-        .form-group {
-            margin-bottom: 1rem;
+        .card-danger {
+            background: #fff1f2;
+            border: 1px solid #fecdd3;
+            opacity: 0.8;
         }
 
-        .form-group label {
+        .btn-block {
             display: block;
-            font-weight: 600;
-            margin-bottom: 0.25rem;
-        }
-
-        .form-group input,
-        .form-group select {
             width: 100%;
-            padding: 0.75rem;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            font-size: 1rem;
-        }
-
-        .file-upload {
-            border: 2px dashed #d1d5db;
-            border-radius: 12px;
-            padding: 2rem;
-            text-align: center;
-            cursor: pointer;
-            background: #f9fafb;
-        }
-
-        .file-upload:hover {
-            border-color: #2563eb;
-        }
-
-        .file-upload input {
-            display: none;
-        }
-
-        .format-options {
-            display: flex;
-            gap: 1rem;
-            margin: 1rem 0;
-        }
-
-        .format-option {
-            flex: 1;
-            padding: 1rem;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .format-option:hover {
-            border-color: #2563eb;
-            background: #eff6ff;
-        }
-
-        .format-option.selected {
-            border-color: #2563eb;
-            background: #dbeafe;
-        }
-
-        .format-option .icon {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            cursor: pointer;
-        }
-
-        .btn-primary {
-            background: #2563eb;
-            color: white;
-        }
-
-        .btn-success {
-            background: #22c55e;
-            color: white;
-        }
-
-        table.preview {
-            width: 100%;
-            border-collapse: collapse;
             margin-top: 1rem;
-            font-size: 0.875rem;
-        }
-
-        table.preview th,
-        table.preview td {
-            padding: 0.5rem;
-            border: 1px solid #e5e7eb;
-            text-align: left;
-        }
-
-        table.preview th {
-            background: #f3f4f6;
-        }
-
-        table.preview tr:nth-child(even) {
-            background: #f9fafb;
-        }
-
-        .mapping-row {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            gap: 1rem;
-            align-items: center;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid #e5e7eb;
-        }
-
-        .mapping-row .arrow {
-            color: #6b7280;
-        }
-
-        .message {
-            background: #dcfce7;
-            color: #166534;
             padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
+            font-size: 1.1rem;
         }
 
-        .error {
-            background: #fee2e2;
-            color: #dc2626;
+        .option-group {
+            background: white;
             padding: 1rem;
-            border-radius: 8px;
+            border-radius: 6px;
+            margin: 1rem 0;
+            border: 1px solid #e0f2fe;
+        }
+
+        .log-box {
+            background: #1e293b;
+            color: #a5f3fc;
+            padding: 1rem;
+            border-radius: 6px;
+            font-family: monospace;
             margin-bottom: 1rem;
         }
     </style>
@@ -305,219 +254,88 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 <body>
     <div class="container">
-        <div class="header">
-            <h1>📥 Importar Datos</h1>
-            <div class="nav-links">
-                <a href="../trazabilidad/dashboard.php">🏠 Dashboard</a>
-                <a href="../busqueda/">🔍 Buscar</a>
-                <a href="../../logout.php">Salir</a>
-            </div>
-        </div>
+        <h1>📡 Centro de Importación y Sincronización</h1>
 
         <?php if ($message): ?>
-            <div class="message">
-                <?= htmlspecialchars($message) ?>
-            </div>
+            <div class="log-box"><?= $message ?></div>
         <?php endif; ?>
+
         <?php if ($error): ?>
-            <div class="error">
-                <?= htmlspecialchars($error) ?>
-            </div>
+            <div class="alert alert-error"><?= $error ?></div>
         <?php endif; ?>
 
-        <!-- Paso 1: Subir archivo -->
-        <div class="card">
-            <h2>📁 Paso 1: Seleccionar Archivo</h2>
+        <div class="grid-container">
 
-            <form method="POST" enctype="multipart/form-data" id="uploadForm">
-                <input type="hidden" name="action" value="preview">
+            <div class="card card-import">
+                <h2 style="color: #0369a1; margin-top:0;">📥 Importar Datos</h2>
+                <p>Sube tu respaldo (SQL + ZIP). El sistema verificará la estructura antes de procesar.</p>
 
-                <div class="format-options">
-                    <div class="format-option" onclick="selectFormat('csv')">
-                        <div class="icon">📊</div>
-                        <strong>CSV</strong>
-                        <p style="font-size:0.875rem;color:#6b7280;">Valores separados por comas</p>
+                <form method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="action" value="smart_import">
+
+                    <div style="margin-bottom: 1rem;">
+                        <label><strong>1. Archivo SQL</strong> (Base de datos)</label>
+                        <input type="file" name="sql_file" accept=".sql" required style="width:100%">
                     </div>
-                    <div class="format-option" onclick="selectFormat('sql')">
-                        <div class="icon">🗄️</div>
-                        <strong>SQL</strong>
-                        <p style="font-size:0.875rem;color:#6b7280;">Sentencias INSERT</p>
+
+                    <div style="margin-bottom: 1rem;">
+                        <label><strong>2. Archivo ZIP</strong> (Documentos)</label>
+                        <input type="file" name="zip_file" accept=".zip" required style="width:100%">
                     </div>
-                </div>
 
-                <div class="file-upload" onclick="document.getElementById('fileInput').click()">
-                    <div style="font-size:2rem;">📄</div>
-                    <p id="fileName">Haz clic o arrastra un archivo CSV/SQL</p>
-                    <input type="file" name="file" id="fileInput" accept=".csv,.sql,.txt" required>
-                </div>
+                    <div class="option-group">
+                        <p style="margin:0 0 0.5rem 0; font-weight:bold; color:#0c4a6e;">Modo de Importación:</p>
 
-                <div class="form-group" style="margin-top:1rem;">
-                    <label>Delimitador (para CSV)</label>
-                    <select name="delimiter">
-                        <option value=",">Coma (,)</option>
-                        <option value=";">Punto y coma (;)</option>
-                        <option value="	">Tabulador</option>
-                    </select>
-                </div>
-
-                <button type="submit" class="btn btn-primary" style="margin-top:1rem;">
-                    🔍 Previsualizar Datos
-                </button>
-            </form>
-        </div>
-
-        <?php if ($previewData): ?>
-            <!-- Paso 2: Preview y Mapeo -->
-            <div class="card">
-                <h2>📋 Paso 2: Previsualizar y Mapear Columnas</h2>
-
-                <?php if (isset($previewData['headers'])): ?>
-                    <p><strong>
-                            <?= count($previewData['rows']) ?>
-                        </strong> filas encontradas</p>
-
-                    <h4>Vista previa (primeras 5 filas):</h4>
-                    <table class="preview">
-                        <thead>
-                            <tr>
-                                <?php foreach ($previewData['headers'] as $h): ?>
-                                    <th>
-                                        <?= htmlspecialchars($h) ?>
-                                    </th>
-                                <?php endforeach; ?>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach (array_slice($previewData['rows'], 0, 5) as $row): ?>
-                                <tr>
-                                    <?php foreach ($previewData['headers'] as $h): ?>
-                                        <td>
-                                            <?= htmlspecialchars($row[$h] ?? '') ?>
-                                        </td>
-                                    <?php endforeach; ?>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-
-                    <form method="POST" style="margin-top:1.5rem;">
-                        <input type="hidden" name="action" value="import">
-
-                        <h4>Mapeo de columnas:</h4>
-                        <p style="color:#6b7280;">Selecciona a qué campo corresponde cada columna del archivo</p>
-
-                        <?php foreach ($previewData['headers'] as $h): ?>
-                            <div class="mapping-row">
-                                <span><strong>
-                                        <?= htmlspecialchars($h) ?>
-                                    </strong></span>
-                                <span class="arrow">→</span>
-                                <select name="map_<?= htmlspecialchars($h) ?>">
-                                    <option value="">-- Ignorar --</option>
-                                    <option value="codigo" <?= ($mapping[$h] ?? '') === 'codigo' ? 'selected' : '' ?>>Código</option>
-                                    <option value="descripcion" <?= ($mapping[$h] ?? '') === 'descripcion' ? 'selected' : '' ?>
-                                        >Descripción</option>
-                                    <option value="cantidad" <?= ($mapping[$h] ?? '') === 'cantidad' ? 'selected' : '' ?>>Cantidad
-                                    </option>
-                                    <option value="valor" <?= ($mapping[$h] ?? '') === 'valor' ? 'selected' : '' ?>>Valor</option>
-                                    <option value="fecha" <?= ($mapping[$h] ?? '') === 'fecha' ? 'selected' : '' ?>>Fecha</option>
-                                    <option value="proveedor" <?= ($mapping[$h] ?? '') === 'proveedor' ? 'selected' : '' ?>>Proveedor
-                                    </option>
-                                    <option value="tipo" <?= ($mapping[$h] ?? '') === 'tipo' ? 'selected' : '' ?>>Tipo</option>
-                                    <option value="numero" <?= ($mapping[$h] ?? '') === 'numero' ? 'selected' : '' ?>>Número Doc
-                                    </option>
-                                </select>
+                        <label style="display:block; margin-bottom:0.5rem; cursor:pointer;">
+                            <input type="radio" name="mode" value="merge" checked>
+                            <strong>🛡️ Fusión Segura (Recomendado)</strong>
+                            <div style="font-size:0.85em; color:#555; margin-left:1.5rem;">
+                                No borra nada. Si un dato ya existe, lo respeta. Solo agrega lo nuevo.
                             </div>
-                        <?php endforeach; ?>
+                        </label>
 
-                        <div class="form-group" style="margin-top:1rem;">
-                            <label>Tipo de importación</label>
-                            <select name="import_type">
-                                <option value="codigos">Códigos de productos</option>
-                                <option value="documentos">Documentos</option>
-                            </select>
-                        </div>
+                        <label style="display:block; cursor:pointer;">
+                            <input type="radio" name="mode" value="replace">
+                            <strong>⚠️ Reemplazo Total</strong>
+                            <div style="font-size:0.85em; color:#555; margin-left:1.5rem;">
+                                Borra TODA la base de datos actual y pone la del archivo.
+                            </div>
+                        </label>
+                    </div>
 
-                        <button type="submit" class="btn btn-success" style="margin-top:1rem;">
-                            ✅ Importar
-                            <?= count($previewData['rows']) ?> registros
-                        </button>
-                    </form>
-
-                <?php elseif (isset($previewData['tables'])): ?>
-                    <p><strong>
-                            <?= $previewData['total_rows'] ?>
-                        </strong> filas en
-                        <?= count($previewData['tables']) ?> tabla(s)
-                    </p>
-
-                    <?php foreach ($previewData['tables'] as $tableName => $tableData): ?>
-                        <h4>Tabla:
-                            <?= htmlspecialchars($tableName) ?> (
-                            <?= count($tableData['rows']) ?> filas)
-                        </h4>
-                        <table class="preview">
-                            <thead>
-                                <tr>
-                                    <?php foreach ($tableData['columns'] as $col): ?>
-                                        <th>
-                                            <?= htmlspecialchars($col) ?>
-                                        </th>
-                                    <?php endforeach; ?>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach (array_slice($tableData['rows'], 0, 5) as $row): ?>
-                                    <tr>
-                                        <?php foreach ($tableData['columns'] as $col): ?>
-                                            <td>
-                                                <?= htmlspecialchars($row[$col] ?? '') ?>
-                                            </td>
-                                        <?php endforeach; ?>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    <?php endforeach; ?>
-
-                    <form method="POST" style="margin-top:1.5rem;">
-                        <input type="hidden" name="action" value="import">
-
-                        <div class="form-group">
-                            <label>Tipo de importación</label>
-                            <select name="import_type">
-                                <option value="codigos">Códigos de productos</option>
-                                <option value="documentos">Documentos</option>
-                            </select>
-                        </div>
-
-                        <button type="submit" class="btn btn-success">
-                            ✅ Importar Datos
-                        </button>
-                    </form>
-                <?php endif; ?>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        🚀 Iniciar Importación
+                    </button>
+                </form>
             </div>
-        <?php endif; ?>
+
+            <div>
+                <div class="card card-danger">
+                    <h3 style="color: #9f1239; margin-top:0;">☢️ Zona de Limpieza</h3>
+                    <p style="font-size:0.9rem;">Solo usar si necesitas reiniciar el sistema completamente a cero.</p>
+                    <form method="POST"
+                        onsubmit="return confirm('¿ESTÁS SEGURO? Se borrarán todos los datos permanentemente.');">
+                        <input type="hidden" name="action" value="wipe_data">
+                        <button type="submit" class="btn btn-danger" style="width:100%">🗑️ Borrar Todo (Reset)</button>
+                    </form>
+                </div>
+
+                <div class="card" style="margin-top: 1rem; background: #f8fafc;">
+                    <h3>ℹ️ ¿Cómo funciona la "Fusión"?</h3>
+                    <ul style="font-size: 0.9rem; padding-left: 1.2rem; color: #475569;">
+                        <li><strong>Estructura:</strong> Primero lee el SQL y verifica que las columnas coincidan con tu
+                            sistema. Si no coinciden, cancela todo para evitar daños.</li>
+                        <li><strong>Datos:</strong> Usa la técnica <code>INSERT OR IGNORE</code>. Intenta insertar el
+                            dato; si el ID ya está ocupado, simplemente pasa al siguiente sin dar error y sin borrar el
+                            dato viejo.</li>
+                        <li><strong>Archivos:</strong> Descomprime el ZIP y busca automáticamente qué PDF pertenece a
+                            qué documento nuevo.</li>
+                    </ul>
+                </div>
+            </div>
+
+        </div>
     </div>
-
-    <script>
-        document.getElementById('fileInput').addEventListener('change', function () {
-            document.getElementById('fileName').textContent = this.files[0]?.name || 'Selecciona un archivo';
-        });
-
-        function selectFormat(format) {
-            document.querySelectorAll('.format-option').forEach(el => el.classList.remove('selected'));
-            event.currentTarget.classList.add('selected');
-
-            // Actualizar aceptación del input
-            const input = document.getElementById('fileInput');
-            if (format === 'csv') {
-                input.accept = '.csv,.txt';
-            } else if (format === 'sql') {
-                input.accept = '.sql,.txt';
-            }
-        }
-    </script>
 </body>
 
 </html>
