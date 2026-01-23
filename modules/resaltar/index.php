@@ -41,182 +41,8 @@ $pageTitle = 'Resaltar Documento';
     <title>Resaltar Doc - KINO TRACE</title>
     <link rel="stylesheet" href="../../assets/css/styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <style>
-        .highlighter-container {
-            display: grid;
-            grid-template-columns: 300px 1fr;
-            gap: 1.5rem;
-            min-height: calc(100vh - 200px);
-        }
-
-        @media (max-width: 900px) {
-            .highlighter-container {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .controls-panel {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg);
-            padding: 1.5rem;
-            height: fit-content;
-            position: sticky;
-            top: 80px;
-        }
-
-        .controls-panel h3 {
-            margin-bottom: 1rem;
-            font-size: 1rem;
-        }
-
-        .pdf-viewer {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg);
-            padding: 1.5rem;
-            min-height: 600px;
-        }
-
-        .pdf-canvas-container {
-            overflow: auto;
-            max-height: calc(100vh - 250px);
-        }
-
-        .pdf-page {
-            margin-bottom: 1rem;
-            box-shadow: var(--shadow-md);
-        }
-
-        .text-layer {
-            position: absolute;
-            left: 0;
-            top: 0;
-            right: 0;
-            bottom: 0;
-            overflow: hidden;
-            pointer-events: none;
-        }
-
-        .text-layer span {
-            position: absolute;
-            white-space: pre;
-            transform-origin: 0 0;
-        }
-
-        .highlight-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            background: var(--bg-tertiary);
-            padding: 0.5rem 0.75rem;
-            border-radius: var(--radius-md);
-            margin-bottom: 0.5rem;
-            font-size: 0.875rem;
-        }
-
-        .highlight-tag .color-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-        }
-
-        .highlight-tag button {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            padding: 0;
-            display: flex;
-        }
-
-        .highlight-tag button:hover {
-            color: var(--accent-danger);
-        }
-
-        .color-picker {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .color-option {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            border: 2px solid transparent;
-            cursor: pointer;
-            transition: all var(--transition-fast);
-        }
-
-        .color-option:hover,
-        .color-option.active {
-            border-color: var(--text-primary);
-            transform: scale(1.1);
-        }
-
-        .highlight-preview {
-            padding: 0.5rem;
-            border-radius: var(--radius-sm);
-            margin-top: 0.5rem;
-            font-family: var(--font-mono);
-            font-size: 0.75rem;
-        }
-
-        .pdf-text-content {
-            font-family: var(--font-mono);
-            font-size: 0.875rem;
-            line-height: 1.6;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-
-        .pdf-text-content mark {
-            padding: 0.125rem 0.25rem;
-            border-radius: 2px;
-        }
-
-        .source-tabs {
-            display: flex;
-            gap: 0.25rem;
-            margin-bottom: 1rem;
-        }
-
-        .source-tab {
-            flex: 1;
-            padding: 0.5rem;
-            font-size: 0.75rem;
-            background: var(--bg-tertiary);
-            border: none;
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            transition: all var(--transition-fast);
-        }
-
-        .source-tab.active {
-            background: var(--accent-primary);
-            color: white;
-        }
-
-        .upload-area {
-            border: 2px dashed var(--border-color);
-            border-radius: var(--radius-md);
-            padding: 1.5rem;
-            text-align: center;
-            cursor: pointer;
-            transition: all var(--transition-fast);
-            margin-bottom: 1rem;
-        }
-
-        .upload-area:hover {
-            border-color: var(--accent-primary);
-        }
-
-        .upload-area.hidden {
-            display: none;
-        }
-    </style>
 </head>
+
 
 <body>
     <div class="dashboard-container">
@@ -458,7 +284,7 @@ $pageTitle = 'Resaltar Documento';
             document.getElementById('pdfPlaceholder').classList.add('hidden');
             const container = document.getElementById('pdfTextContainer'); // Reutilizamos contenedor
             container.classList.remove('hidden');
-            
+
             // Limpiar contenedor y usar id correcto para el contenido
             const contentDiv = document.getElementById('pdfTextContent');
             contentDiv.innerHTML = '';
@@ -471,7 +297,7 @@ $pageTitle = 'Resaltar Documento';
 
                 for (let i = 1; i <= pdf.numPages; i++) {
                     const page = await pdf.getPage(i);
-                    
+
                     // Crear wrapper para la página
                     const wrapper = document.createElement('div');
                     wrapper.className = 'pdf-page-wrapper';
@@ -479,11 +305,11 @@ $pageTitle = 'Resaltar Documento';
                     wrapper.style.marginBottom = '20px';
                     wrapper.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
                     wrapper.style.border = '1px solid #e5e7eb';
-                    
+
                     // Crear Canvas
                     const canvas = document.createElement('canvas');
                     const context = canvas.getContext('2d');
-                    
+
                     // Ajustar escala para que se vea bien
                     const viewport = page.getViewport({ scale: 1.5 });
                     canvas.height = viewport.height;
@@ -491,7 +317,7 @@ $pageTitle = 'Resaltar Documento';
                     canvas.style.width = '100%';
                     canvas.style.height = 'auto';
                     canvas.style.display = 'block';
-                    
+
                     wrapper.appendChild(canvas);
                     contentDiv.appendChild(wrapper);
 
