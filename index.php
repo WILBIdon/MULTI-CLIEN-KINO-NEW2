@@ -649,11 +649,9 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             }
 
 
-            const query = fulltextInput.value.trim();
-            if (query.length < 3) {
-                alert('Ingresa al menos 3 caracteres');
-                return;
-            }
+
+            // Validación eliminada a petición del usuario
+            // Ahora permite buscar cualquier término (incluyendo números/códigos)
 
             // Validación eliminada a petición del usuario
             // Ahora permite buscar cualquier término (incluyendo números/códigos)
