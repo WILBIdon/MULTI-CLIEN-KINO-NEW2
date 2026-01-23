@@ -3,10 +3,49 @@
  * Header Component
  * 
  * Top navigation bar with sidebar toggle, page title, and actions.
+ * Incluye meta tags de seguridad (CSRF)
  */
 
 $pageTitle = $pageTitle ?? 'Dashboard';
+
+// 🛡️ SEGURIDAD: Meta tag CSRF para AJAX
+if (file_exists(__DIR__ . '/../helpers/csrf_protection.php')) {
+    require_once __DIR__ . '/../helpers/csrf_protection.php';
+    $csrfToken = CsrfProtection::getToken();
+} else {
+    $csrfToken = '';
+}
 ?>
+
+<!-- 🛡️ CSRF Token para requests AJAX -->
+<?php if ($csrfToken): ?>
+    <meta name="csrf-token" content="<?= htmlspecialchars($csrfToken) ?>">
+    <script>
+        // Configurar CSRF token global para fetch
+        (function () {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+            if (!csrfToken) return;
+
+            // Sobrescribir fetch para incluir token automáticamente
+            const originalFetch = window.fetch;
+            window.fetch = function (url, options = {}) {
+                const method = (options.method || 'GET').toUpperCase();
+
+                // Agregar token en métodos que modifican datos
+                if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+                    options.headers = options.headers || {};
+
+                    // Solo agregar si no existe ya
+                    if (!options.headers['X-CSRF-Token'] && !options.headers['x-csrf-token']) {
+                        options.headers['X-CSRF-Token'] = csrfToken;
+                    }
+                }
+
+                return originalFetch(url, options);
+            };
+        })();
+    </script>
+<?php endif; ?>
 
 <header class="main-header">
     <div class="header-left">

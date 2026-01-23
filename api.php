@@ -10,13 +10,16 @@
  */
 
 session_start();
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/helpers/tenant.php';
-require_once __DIR__ . '/helpers/logger.php';
-require_once __DIR__ . '/helpers/error_codes.php';
-require_once __DIR__ . '/helpers/search_engine.php';
-require_once __DIR__ . '/helpers/pdf_extractor.php';
-require_once __DIR__ . '/helpers/gemini_ai.php';
+
+// ✨ Autoload centralizado
+require_once __DIR__ . '/autoload.php';
+
+// ✨ Cargar helpers específicos bajo demanda
+load_helpers(['search_engine', 'pdf_extractor', 'gemini_ai']);
+
+// ✨ SEGURIDAD: Aplicar middlewares
+RateLimiter::middleware();    // Limitar a 100 req/min por IP
+CsrfProtection::middleware(); // Validar tokens en POST/DELETE
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -105,36 +108,29 @@ try {
             $proveedor = trim($_POST['proveedor'] ?? '');
             $codes = array_filter(array_map('trim', explode("\n", $_POST['codes'] ?? '')));
 
-            // Validar archivo
-            if (empty($_FILES['file']['tmp_name'])) {
-                json_exit(api_error('FILE_005'));
+            // ✨ SEGURIDAD: Validación robusta de archivo
+            $uploadResult = SecureFileUploader::secureMove(
+                $_FILES['file'],
+                $clientCode,
+                $tipo
+            );
+
+            if (isset($uploadResult['error'])) {
+                json_exit(['error' => $uploadResult['error']]);
             }
 
-            $fileValidation = validate_file_type($_FILES['file']);
-            if ($fileValidation) {
-                json_exit($fileValidation);
+            // Verificar duplicado por hash
+            $duplicate = SecureFileUploader::checkDuplicate($db, $uploadResult['hash']);
+            if ($duplicate) {
+                json_exit([
+                    'warning' => 'Este archivo ya existe',
+                    'existing_doc' => $duplicate,
+                    'message' => 'El documento "' . $duplicate['numero'] . '" ya contiene este archivo'
+                ]);
             }
 
-            $sizeValidation = validate_file_size($_FILES['file']);
-            if ($sizeValidation) {
-                json_exit($sizeValidation);
-            }
-
-            // Crear directorio de uploads
-            $clientDir = CLIENTS_DIR . '/' . $clientCode;
-            $uploadDir = $clientDir . '/uploads/' . $tipo;
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0777, true);
-            }
-
-            // Mover archivo
-            $ext = pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION);
-            $targetName = uniqid($tipo . '_', true) . '.' . $ext;
-            $targetPath = $uploadDir . '/' . $targetName;
-            move_uploaded_file($_FILES['file']['tmp_name'], $targetPath);
-
-            // Hash del archivo
-            $hash = hash_file('sha256', $targetPath);
+            $targetPath = CLIENTS_DIR . '/' . $clientCode . '/uploads/' . $uploadResult['path'];
+            $hash = $uploadResult['hash'];
 
             // Extraer texto si es PDF
             $datosExtraidos = [];
@@ -226,14 +222,20 @@ try {
                 }
 
                 // Upload new file
-                $ext = pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION);
-                $targetName = uniqid($tipo . '_', true) . '.' . $ext;
-                $targetPath = $uploadDir . '/' . $targetName;
-                move_uploaded_file($_FILES['file']['tmp_name'], $targetPath);
+                // ✨ SEGURIDAD: Upload seguro
+                $uploadResult = SecureFileUploader::secureMove(
+                    $_FILES['file'],
+                    $clientCode,
+                    $tipo
+                );
 
-                // Calculate hash and extract text
-                $hash = hash_file('sha256', $targetPath);
-                $rutaArchivo = $tipo . '/' . $targetName;
+                if (isset($uploadResult['error'])) {
+                    json_exit(['error' => $uploadResult['error']]);
+                }
+
+                $targetPath = $uploadDir . '/' . basename($uploadResult['path']);
+                $hash = $uploadResult['hash'];
+                $rutaArchivo = $uploadResult['path'];
 
                 if (strtolower($ext) === 'pdf') {
                     $extractResult = extract_codes_from_pdf($targetPath);
@@ -439,34 +441,6 @@ try {
             unset($doc['codigos']);
 
             json_exit($doc);
-
-        // ====================
-        // ELIMINAR DOCUMENTO
-        // ====================
-        case 'delete':
-            $id = (int) ($_REQUEST['id'] ?? 0);
-            if (!$id) {
-                json_exit(['error' => 'ID inválido']);
-            }
-
-            // Obtener ruta del archivo
-            $stmt = $db->prepare("SELECT ruta_archivo FROM documentos WHERE id = ?");
-            $stmt->execute([$id]);
-            $path = $stmt->fetchColumn();
-
-            // Eliminar archivo
-            if ($path) {
-                $fullPath = CLIENTS_DIR . '/' . $clientCode . '/uploads/' . $path;
-                if (file_exists($fullPath)) {
-                    @unlink($fullPath);
-                }
-            }
-
-            // Eliminar de DB
-            $db->prepare("DELETE FROM codigos WHERE documento_id = ?")->execute([$id]);
-            $db->prepare("DELETE FROM documentos WHERE id = ?")->execute([$id]);
-
-            json_exit(['success' => true, 'message' => 'Documento eliminado']);
 
         // ====================
         // ESTADÍSTICAS
