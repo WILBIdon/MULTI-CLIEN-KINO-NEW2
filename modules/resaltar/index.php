@@ -86,8 +86,9 @@ $pageTitle = 'Resaltar Documento';
                                     <option value="">Seleccionar documento...</option>
                                     <?php foreach ($documents as $doc): ?>
                                         <option value="<?= htmlspecialchars($doc['ruta_archivo']) ?>"
-                                            data-tipo="<?= htmlspecialchars($doc['tipo']) ?>">
-                                            📄 <?= htmlspecialchars(basename($doc['ruta_archivo'])) ?>
+                                            data-tipo="<?= htmlspecialchars($doc['tipo']) ?>"
+                                            data-doc-id="<?= $doc['id'] ?>">
+                                            📄 <?= htmlspecialchars($doc['numero']) ?> (<?= $doc['fecha'] ?>)
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -403,36 +404,38 @@ $pageTitle = 'Resaltar Documento';
             renderHighlightsList();
         }
 
-        // Apply highlights
+        // ✨ SOLUCIÓN: Redirigir a viewer.php que funciona correctamente
         document.getElementById('applyHighlightsBtn').addEventListener('click', () => {
-            if (!pdfText) {
-                alert('Primero carga un PDF');
+            if (highlights.length === 0) {
+                alert('Agrega al menos un patrón de resaltado');
                 return;
             }
 
-            let resultText = pdfText;
-            let matchCount = 0;
-
-            for (const h of highlights) {
-                if (h.end) {
-                    // Match everything between start and end
-                    const regex = new RegExp(escapeRegex(h.start) + '([\\s\\S]*?)' + escapeRegex(h.end), 'gi');
-                    resultText = resultText.replace(regex, (match) => {
-                        matchCount++;
-                        return `<mark style="background: ${h.color};">${match}</mark>`;
-                    });
-                } else {
-                    // Just match the start pattern
-                    const regex = new RegExp(escapeRegex(h.start), 'gi');
-                    resultText = resultText.replace(regex, (match) => {
-                        matchCount++;
-                        return `<mark style="background: ${h.color};">${match}</mark>`;
-                    });
-                }
+            // Obtener el primer patrón (viewer.php solo soporta un término por ahora)
+            const firstPattern = highlights[0].start;
+            
+            // Verificar si seleccionó un documento existente
+            const docSelect = document.getElementById('docSelect');
+            const selectedOption = docSelect?.selectedOptions[0];
+            
+            if (selectedOption && selectedOption.dataset.docId) {
+                // ✅ Documento existente - redirigir a viewer.php
+                const docId = selectedOption.dataset.docId;
+                const redirectUrl = `viewer.php?doc=${docId}&term=${encodeURIComponent(firstPattern)}`;
+                
+                window.location.href = redirectUrl;
+            } else {
+                // ❌ No hay documento seleccionado o es upload
+                alert(
+                    '⚠️ Por favor selecciona un documento existente de la base de datos.\n\n' +
+                    'El resaltador funciona mejor con documentos ya guardados.\n\n' +
+                    'Pasos:\n' +
+                    '1. Haz clic en "Doc Existente"\n' +
+                    '2. Selecciona un documento del menú\n' +
+                    '3. Define el patrón a resaltar\n' +
+                    '4. Haz clic en "Aplicar Resaltados"'
+                );
             }
-
-            document.getElementById('pdfTextContent').innerHTML = resultText;
-            document.getElementById('matchCount').textContent = matchCount + ' coincidencia(s)';
         });
 
         function escapeHtml(text) {
