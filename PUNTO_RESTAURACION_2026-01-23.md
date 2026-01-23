@@ -30,6 +30,12 @@ Este documento registra las optimizaciones realizadas el 23 de enero de 2026 y p
   - `assets/css/styles.css` (+334 líneas)
 - **Impacto**: -282 líneas netas, mejor organización
 
+### 5. Unificación y Mejora del Resaltado PDF
+- **Archivos modificados**: `modules/resaltar/index.php`, `viewer.php`, `index.php`, `modules/busqueda/index.php`
+- **Propósito**: Unificar lógica de búsqueda, corregir resaltado en PDF, eliminar restricciones
+- **Impacto**: Búsqueda confiable en PDF, limpieza de caracteres, interfaz unificada
+
+
 ---
 
 ## 📊 Estadísticas
@@ -57,6 +63,11 @@ OPTIMIZACION-INICIO-2026-01-23
 ### Commit de Optimización
 ```
 954df3b - Fase 1: Autoload, componentes y consolidación CSS
+```
+
+### Commit de Resaltado PDF (Actual)
+```
+[Hash pendiente] - Unificación y corrección de resaltado PDF + Punto de Restauración
 ```
 
 ---
