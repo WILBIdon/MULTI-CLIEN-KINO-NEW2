@@ -309,13 +309,42 @@ try {
             $relativePath = 'sql_import/' . basename($filename);
 
             // 1. Intento directo y robusto
-            $stmtLink = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?))");
-            $stmtLink->execute([$relativePath, $basename]);
+            // Estrategia: Buscar si el numero en DB es un prefijo del nombre del archivo.
+            // Ej: Archivo "12345_Factura.pdf" debería coincidir con Documento Numero "12345"
 
-            if ($stmtLink->rowCount() > 0) {
+            // Primero intentamos match exacto (rápido)
+            $stmtExact = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?))");
+            $stmtExact->execute([$relativePath, $basename]); // Intento 1: basename completo
+
+            if ($stmtExact->rowCount() > 0) {
                 $updatedDocs++;
-                logMsg("✅ Vinculado: $basename", "success");
-            } else {
+                logMsg("✅ Vinculado (Exacto): $basename", "success");
+                continue;
+            }
+
+            // Si falla, intentamos match por prefijo con separadores comunes
+            // SQLite permite concatenación con ||
+            // Buscamos documentos cuyo numero sea el inicio del nombre del archivo seguido de un separador
+            $separators = ['_', '-', ' '];
+            $linked = false;
+
+            foreach ($separators as $sep) {
+                // UPDATE documentos SET ruta_archivo = ... WHERE 'filename' LIKE numero || '_' || '%'
+                $stmtPrefix = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE ? LIKE numero || ? || '%'");
+                $stmtPrefix->execute([$relativePath, $basename, $sep]);
+
+                if ($stmtPrefix->rowCount() > 0) {
+                    $updatedDocs++;
+                    logMsg("✅ Vinculado (Sufijo '$sep'): $basename", "success");
+                    $linked = true;
+                    break;
+                }
+            }
+
+            if (!$linked) {
+                // Último intento: Buscar si el archivo COMIENZA con el numero exacto (riesgoso si numero='1' y archivo='10_...')
+                // Para mitigar, podriamos exigir length(numero) > 3?
+                // Por ahora reportamos warning si falla lo anterior.
                 logMsg("⚠️ No encontrado en DB: $basename", "warning");
             }
         }
