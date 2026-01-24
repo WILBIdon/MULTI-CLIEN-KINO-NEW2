@@ -34,16 +34,24 @@ try {
     // 0. Reset Logic
     if (isset($_POST['action']) && $_POST['action'] === 'reset') {
         try {
+            $db->exec("SET FOREIGN_KEY_CHECKS = 0");
             $db->beginTransaction();
+            $db->exec("DELETE FROM vinculos"); // Explicit delete just in case
             $db->exec("DELETE FROM codigos");
             $db->exec("DELETE FROM documentos");
-            // Optional: db->exec("DELETE FROM vinculos");
+            // Also reset auto_increment if possible with TRUNCATE, but DELETE is safer for per-client DBs sometimes.
+            // Let's stick to DELETE for now but with explicit FK disable.
             $db->commit();
-            echo json_encode(['success' => true, 'logs' => [['msg' => 'Base de datos limpiada correctamente. Listo para importar.', 'type' => 'success']]]);
+            $db->exec("SET FOREIGN_KEY_CHECKS = 1");
+
+            echo json_encode(['success' => true, 'logs' => [['msg' => '⚠️ BASE DE DATOS LIMPIADA TOTALMENTE (Doc + Cod + Vinc).', 'type' => 'success']]]);
             exit;
         } catch (Exception $e) {
-            $db->rollBack();
-            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            $db->exec("SET FOREIGN_KEY_CHECKS = 1");
+            echo json_encode(['success' => false, 'error' => 'Error al limpiar: ' . $e->getMessage()]);
             exit;
         }
     }
