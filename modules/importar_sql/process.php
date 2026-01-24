@@ -44,7 +44,7 @@ try {
             $db->commit();
             $db->exec("SET FOREIGN_KEY_CHECKS = 1");
 
-            $msg = "⚠️ LIMPIEZA COMPLETA: Documentos ($countDocumentos), Códigos ($countCodigos), Vínculos ($countVinculos).";
+            $msg = "⚠️ LIMPIEZA COMPLETA ($dbPath):\n- Documentos: $countDocumentos\n- Códigos: $countCodigos\n- Vínculos: $countVinculos";
             echo json_encode(['success' => true, 'logs' => [['msg' => $msg, 'type' => 'success']]]);
             exit;
         } catch (Exception $e) {
