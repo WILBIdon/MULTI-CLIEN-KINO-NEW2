@@ -342,47 +342,52 @@ try {
             }
 
             if (!$linked) {
-                // 3. Intento por CÓDIGO (Búsqueda inversa)
-                // Si el nombre del archivo NO es el numero de documento, tal vez es uno de los CÓDIGOS contenidos.
-                // Ej: Documento #999 tiene códigos ["AA-100", "BB-200"]. Archivo se llama "AA-100.pdf".
+                // 3. ESTRATEGIA MAESTRA: Tokenización (Búsqueda Profunda)
+                // El archivo puede tener el código en cualquier parte.
+                // Ej: "1763056495_JUEGO TAILOR 032025001910624-3.pdf"
+                // Tokens: ["1763056495", "JUEGO", "TAILOR", "032025001910624-3"]
 
-                $searchKeys = [$basename]; // Probar nombre completo
+                // Usamos regex para separar por _, -, . o espacio
+                $tokens = preg_split('/[\s_\-.]+/', $basename);
+                // Filtramos tokens muy cortos para evitar falsos positivos con palabras comunes (ej: "de", "la")
+                $tokens = array_filter($tokens, function ($t) {
+                    return strlen($t) > 2; });
+                $tokens = array_unique($tokens);
 
-                // Probar prefijos (ej: "AA-100_algo" -> "AA-100")
-                foreach ($separators as $sep) {
-                    if (strpos($basename, $sep) !== false) {
-                        $parts = explode($sep, $basename);
-                        if (!empty($parts[0])) {
-                            $searchKeys[] = $parts[0];
-                        }
+                foreach ($tokens as $token) {
+                    $token = trim($token);
+                    if (empty($token))
+                        continue;
+
+                    // A) ¿Es un numero de documento?
+                    $stmtDoc = $db->prepare("SELECT id FROM documentos WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?)) LIMIT 1");
+                    $stmtDoc->execute([$token]);
+                    $docId = $stmtDoc->fetchColumn();
+
+                    if (!$docId) {
+                        // B) ¿Es un código?
+                        $stmtCode = $db->prepare("SELECT documento_id FROM codigos WHERE TRIM(LOWER(codigo)) = TRIM(LOWER(?)) LIMIT 1");
+                        $stmtCode->execute([$token]);
+                        $docId = $stmtCode->fetchColumn();
                     }
-                }
-                $searchKeys = array_unique($searchKeys);
-
-                foreach ($searchKeys as $key) {
-                    // Buscar este key en la tabla de codigos
-                    $stmtCode = $db->prepare("SELECT documento_id FROM codigos WHERE TRIM(LOWER(codigo)) = TRIM(LOWER(?)) LIMIT 1");
-                    $stmtCode->execute([$key]);
-                    $docId = $stmtCode->fetchColumn();
 
                     if ($docId) {
-                        // Encontramos el documento dueño de este código
+                        // ¡Encontrado!
                         $stmtLink = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE id = ?");
                         $stmtLink->execute([$relativePath, $docId]);
 
                         if ($stmtLink->rowCount() > 0) {
                             $updatedDocs++;
-                            logMsg("✅ Vinculado por CÓDIGO ($key): $basename", "success");
+                            logMsg("✅ Vinculado por TOKEN ($token): $basename", "success");
                             $linked = true;
-                            break; // Dejar de buscar keys
+                            break; // Dejar de buscar en este archivo
                         }
                     }
                 }
             }
 
             if (!$linked) {
-                // Último intento: Buscar si el archivo COMIENZA con el numero exacto (riesgoso si numero='1' y archivo='10_...')
-                logMsg("⚠️ No encontrado en DB (Ni por Doc ni Código): $basename", "warning");
+                logMsg("⚠️ No encontrado en DB (Busqué tokens en: $basename)", "warning");
             }
         }
         $zip->close();
