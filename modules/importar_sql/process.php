@@ -119,7 +119,7 @@ try {
             return null;
         };
 
-        $stmtDoc = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, estado) VALUES (?, ?, ?, ?, 'pendiente')");
+        $stmtDoc = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, estado, ruta_archivo) VALUES (?, ?, ?, ?, 'pendiente', 'pending')");
 
         foreach ($docRows as $row) {
             // Mapeo seguro
