@@ -342,10 +342,47 @@ try {
             }
 
             if (!$linked) {
+                // 3. Intento por CÓDIGO (Búsqueda inversa)
+                // Si el nombre del archivo NO es el numero de documento, tal vez es uno de los CÓDIGOS contenidos.
+                // Ej: Documento #999 tiene códigos ["AA-100", "BB-200"]. Archivo se llama "AA-100.pdf".
+
+                $searchKeys = [$basename]; // Probar nombre completo
+
+                // Probar prefijos (ej: "AA-100_algo" -> "AA-100")
+                foreach ($separators as $sep) {
+                    if (strpos($basename, $sep) !== false) {
+                        $parts = explode($sep, $basename);
+                        if (!empty($parts[0])) {
+                            $searchKeys[] = $parts[0];
+                        }
+                    }
+                }
+                $searchKeys = array_unique($searchKeys);
+
+                foreach ($searchKeys as $key) {
+                    // Buscar este key en la tabla de codigos
+                    $stmtCode = $db->prepare("SELECT documento_id FROM codigos WHERE TRIM(LOWER(codigo)) = TRIM(LOWER(?)) LIMIT 1");
+                    $stmtCode->execute([$key]);
+                    $docId = $stmtCode->fetchColumn();
+
+                    if ($docId) {
+                        // Encontramos el documento dueño de este código
+                        $stmtLink = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE id = ?");
+                        $stmtLink->execute([$relativePath, $docId]);
+
+                        if ($stmtLink->rowCount() > 0) {
+                            $updatedDocs++;
+                            logMsg("✅ Vinculado por CÓDIGO ($key): $basename", "success");
+                            $linked = true;
+                            break; // Dejar de buscar keys
+                        }
+                    }
+                }
+            }
+
+            if (!$linked) {
                 // Último intento: Buscar si el archivo COMIENZA con el numero exacto (riesgoso si numero='1' y archivo='10_...')
-                // Para mitigar, podriamos exigir length(numero) > 3?
-                // Por ahora reportamos warning si falla lo anterior.
-                logMsg("⚠️ No encontrado en DB: $basename", "warning");
+                logMsg("⚠️ No encontrado en DB (Ni por Doc ni Código): $basename", "warning");
             }
         }
         $zip->close();
