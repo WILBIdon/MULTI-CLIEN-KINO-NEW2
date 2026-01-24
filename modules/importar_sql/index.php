@@ -16,6 +16,7 @@ $clientCode = $_SESSION['client_code'];
 
 // Logica de sidebar
 $currentModule = 'importar_sql';
+$baseUrl = '../../';
 $pageTitle = 'Importación Avanzada';
 ?>
 <!DOCTYPE html>

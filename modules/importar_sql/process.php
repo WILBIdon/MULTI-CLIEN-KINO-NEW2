@@ -205,12 +205,20 @@ try {
             copy("zip://" . $zipFile['tmp_name'] . "#" . $filename, $targetPath);
 
             // Vincular
-            // UPDATE documentos SET ruta_archivo = ? WHERE numero = ? AND ruta_archivo IS NULL (opcional)
-            $stmtLink = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE numero = ?");
-            $stmtLink->execute(['sql_import/' . basename($filename), $basename]);
+            // UPDATE documentos SET ruta_archivo = ? WHERE numero = ? (Robust matching)
+            // Intentamos coincidencia exacta y luego case-insensitive/trim
+
+            $relativePath = 'sql_import/' . basename($filename);
+
+            // 1. Intento directo y robusto
+            $stmtLink = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?))");
+            $stmtLink->execute([$relativePath, $basename]);
 
             if ($stmtLink->rowCount() > 0) {
                 $updatedDocs++;
+                logMsg("✅ Vinculado: $basename", "success");
+            } else {
+                logMsg("⚠️ No encontrado en DB: $basename", "warning");
             }
         }
         $zip->close();
