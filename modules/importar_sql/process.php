@@ -347,13 +347,23 @@ try {
                 // Ej: "1763056495_JUEGO TAILOR 032025001910624-3.pdf"
                 // Tokens: ["1763056495", "JUEGO", "TAILOR", "032025001910624-3"]
 
-                // Usamos regex para separar por _, -, . o espacio
-                $tokens = preg_split('/[\s_\-.]+/', $basename);
-                // Filtramos tokens muy cortos para evitar falsos positivos con palabras comunes (ej: "de", "la")
-                $tokens = array_filter($tokens, function ($t) {
-                    return strlen($t) > 2;
-                });
+                // Usamos DOS estrategias de tokenización combinadas:
+
+                // Estrategia A: Conservar guiones (para códigos como "032025-3")
+                // Solo separamos por espacios o guiones bajos
+                $tokensA = preg_split('/[\s_]+/', $basename);
+
+                // Estrategia B: Separar todo (para casos tipo "Factura-123")
+                // Separamos por espacios, guiones bajos, guiones medios y puntos
+                $tokensB = preg_split('/[\s_\-.]+/', $basename);
+
+                // Combinar y limpiar
+                $tokens = array_merge($tokensA ? $tokensA : [], $tokensB ? $tokensB : []);
                 $tokens = array_unique($tokens);
+
+                // Filtramos tokens muy cortos
+                $tokens = array_filter($tokens, function ($t) {
+                    return strlen($t) >= 4; }); // >= 4 permite años "2025" o codigos cortos "1611"
 
                 foreach ($tokens as $token) {
                     $token = trim($token);
