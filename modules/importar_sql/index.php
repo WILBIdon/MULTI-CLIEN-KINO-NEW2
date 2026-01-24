@@ -279,6 +279,30 @@ $pageTitle = 'Importación Avanzada';
             });
         });
 
+        function log(msg, type = 'info') {
+            const consoleLog = document.getElementById('consoleLog');
+            if (!consoleLog) return;
+
+            const line = document.createElement('div');
+            line.className = 'console-line';
+
+            const time = new Date().toLocaleTimeString('es-ES', { hour12: false });
+
+            let color = '#ccc';
+            if (type === 'info') color = '#60a5fa';
+            if (type === 'success') color = '#34d399';
+            if (type === 'error') color = '#f87171';
+            if (type === 'warning') color = '#fbbf24';
+
+            line.innerHTML = `
+                <span class="console-time">[${time}]</span>
+                <span style="color: ${color}">${msg}</span>
+            `;
+
+            consoleLog.appendChild(line);
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+
         async function resetDatabase() {
             if (!confirm('⚠️ ¿ESTÁS SEGURO?\n\nEsto borrará TODOS los documentos y códigos de la base de datos actual.')) return;
 
