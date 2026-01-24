@@ -9,6 +9,11 @@
  * Access: Client-only (logged in users)
  */
 
+// 1. ROMPER LÍMITES DE TIEMPO Y MEMORIA
+set_time_limit(0);              // Evita el error "Maximum execution time exceeded"
+ini_set('memory_limit', '1024M'); // Aumenta RAM a 1GB para procesar ZIPs grandes
+ini_set('max_execution_time', 0); // Refuerzo para servidores estrictos
+
 session_start();
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../helpers/tenant.php';
