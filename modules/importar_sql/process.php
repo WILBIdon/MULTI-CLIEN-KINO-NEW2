@@ -34,25 +34,79 @@ try {
     // 0. Reset Logic
     if (isset($_POST['action']) && $_POST['action'] === 'reset') {
         try {
-            $db->exec("SET FOREIGN_KEY_CHECKS = 0");
-            $db->beginTransaction();
-            $countVinculos = $db->exec("DELETE FROM vinculos");
-            $countCodigos = $db->exec("DELETE FROM codigos");
-            $countDocumentos = $db->exec("DELETE FROM documentos");
-            // Also reset auto_increment if possible with TRUNCATE, but DELETE is safer for per-client DBs sometimes.
-            // Let's stick to DELETE for now but with explicit FK disable.
-            $db->commit();
-            $db->exec("SET FOREIGN_KEY_CHECKS = 1");
+            $dbPath = client_db_path($clientCode);
 
-            $msg = "⚠️ LIMPIEZA COMPLETA ($dbPath):\n- Documentos: $countDocumentos\n- Códigos: $countCodigos\n- Vínculos: $countVinculos";
-            echo json_encode(['success' => true, 'logs' => [['msg' => $msg, 'type' => 'success']]]);
+            // 2. Cerrar conexión actual (importante para poder borrar archivo en Windows)
+            $db = null;
+            gc_collect_cycles();
+
+            // 3. Borrar archivo físico (HARD RESET)
+            if (file_exists($dbPath)) {
+                if (!unlink($dbPath)) {
+                    // Si falla unlink (candado), intentamos DELETE masivo como fallback
+                    $db = open_client_db($clientCode);
+                    $db->exec("DELETE FROM vinculos");
+                    $db->exec("DELETE FROM codigos");
+                    $db->exec("DELETE FROM documentos");
+                    $msg = "⚠️ HARD RESET PARCIAL (Archivo bloqueado, se usó DELETE):\n- Tablas vaciadas.";
+                } else {
+                    $msg = "⚠️ HARD RESET COMPLETADO:\n- Archivo DB ($dbPath) eliminado.";
+                }
+            } else {
+                $msg = "⚠️ DB No existía, se creará nueva.";
+            }
+
+            // 4. Recrear estructura limpia
+            $db = open_client_db($clientCode);
+
+            $db->exec(
+                "CREATE TABLE IF NOT EXISTS documentos (\n"
+                . "    id INTEGER PRIMARY KEY AUTOINCREMENT,\n"
+                . "    tipo TEXT NOT NULL,\n"
+                . "    numero TEXT NOT NULL,\n"
+                . "    fecha DATE NOT NULL,\n"
+                . "    fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,\n"
+                . "    proveedor TEXT,\n"
+                . "    naviera TEXT,\n"
+                . "    peso_kg REAL,\n"
+                . "    valor_usd REAL,\n"
+                . "    ruta_archivo TEXT NOT NULL,\n"
+                . "    hash_archivo TEXT,\n"
+                . "    datos_extraidos TEXT,\n"
+                . "    ai_confianza REAL,\n"
+                . "    requiere_revision INTEGER DEFAULT 0,\n"
+                . "    estado TEXT DEFAULT 'pendiente',\n"
+                . "    notas TEXT\n"
+                . ");\n"
+                . "CREATE TABLE IF NOT EXISTS codigos (\n"
+                . "    id INTEGER PRIMARY KEY AUTOINCREMENT,\n"
+                . "    documento_id INTEGER NOT NULL,\n"
+                . "    codigo TEXT NOT NULL,\n"
+                . "    descripcion TEXT,\n"
+                . "    cantidad INTEGER,\n"
+                . "    valor_unitario REAL,\n"
+                . "    validado INTEGER DEFAULT 0,\n"
+                . "    alerta TEXT,\n"
+                . "    FOREIGN KEY(documento_id) REFERENCES documentos(id) ON DELETE CASCADE\n"
+                . ");\n"
+                . "CREATE TABLE IF NOT EXISTS vinculos (\n"
+                . "    id INTEGER PRIMARY KEY AUTOINCREMENT,\n"
+                . "    documento_origen_id INTEGER NOT NULL,\n"
+                . "    documento_destino_id INTEGER NOT NULL,\n"
+                . "    tipo_vinculo TEXT NOT NULL,\n"
+                . "    codigos_coinciden INTEGER DEFAULT 0,\n"
+                . "    codigos_faltan INTEGER DEFAULT 0,\n"
+                . "    codigos_extra INTEGER DEFAULT 0,\n"
+                . "    discrepancias TEXT,\n"
+                . "    FOREIGN KEY(documento_origen_id) REFERENCES documentos(id) ON DELETE CASCADE,\n"
+                . "    FOREIGN KEY(documento_destino_id) REFERENCES documentos(id) ON DELETE CASCADE\n"
+                . ");"
+            );
+
+            echo json_encode(['success' => true, 'logs' => [['msg' => $msg . "\n- Estructura regenerada.", 'type' => 'success']]]);
             exit;
         } catch (Exception $e) {
-            if ($db->inTransaction()) {
-                $db->rollBack();
-            }
-            $db->exec("SET FOREIGN_KEY_CHECKS = 1");
-            echo json_encode(['success' => false, 'error' => 'Error al limpiar: ' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'error' => 'Error fatal en Hard Reset: ' . $e->getMessage()]);
             exit;
         }
     }
