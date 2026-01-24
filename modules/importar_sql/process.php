@@ -363,10 +363,9 @@ try {
                     if (strlen($token) < 4)
                         continue;
 
-                    // 2. Debe contener al menos un número (evita palabras genericas como "JUEGO", "TAILOR", "SANSE")
-                    // Si tus codigos son SOLO letras (ej: "AB-CD"), quita esta linea. Pero para este caso parece seguro.
-                    if (!preg_match('/[0-9]/', $token))
-                        continue;
+                    // 2. [REMOVIDO] El usuario indicó que pueden haber códigos solo letras (aunque raros).
+                    // Confiamos en que la coincidencia en DB sea suficiente filtro.
+                    // if (!preg_match('/[0-9]/', $token)) continue; 
 
                     // A) ¿Es un numero de documento?
                     $stmtDoc = $db->prepare("SELECT id FROM documentos WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?)) LIMIT 1");
