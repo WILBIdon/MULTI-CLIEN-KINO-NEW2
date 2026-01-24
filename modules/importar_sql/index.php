@@ -202,12 +202,13 @@ $pageTitle = 'Importación Avanzada';
                     </div>
 
                     <div class="flex gap-4" style="display: flex; gap: 1rem;">
-                        <button type="button" class="btn-process" id="processBtn" onclick="submitForm()">
+                        <button type="button" class="btn-process" id="processBtn" onclick="submitForm()" disabled>
                             <span class="btn-text">INICIAR IMPORTACIÓN</span>
                             <div class="loading-spinner hidden" id="spinner"></div>
                         </button>
-                        
-                        <button type="button" class="btn-process" style="background: var(--accent-danger); width: auto;" onclick="resetDatabase()">
+
+                        <button type="button" class="btn-process" style="background: var(--accent-danger); width: auto;"
+                            onclick="resetDatabase()">
                             🗑️ Limpiar Todo
                         </button>
                     </div>
@@ -228,19 +229,36 @@ $pageTitle = 'Importación Avanzada';
     </div>
 
     <script>
-        function handleFileSelect(input, areaId, nameId) {
-            const file = input.files[0];
-            const area = document.getElementById(areaId);
-            const nameDisplay = document.getElementById(nameId);
-            const card = area.parentElement;
+    function handleFileSelect(input, areaId, nameId) {
+        const file = input.files[0];
+        const area = document.getElementById(areaId);
+        const nameDisplay = document.getElementById(nameId);
+        const card = area.parentElement;
 
-            if (file) {
-                card.classList.add('active');
-                area.style.opacity = '0.3';
-                nameDisplay.textContent = '✓ ' + file.name + ' (' + (file.size / 1024 / 1024).toFixed(2) + ' MB)';
-                nameDisplay.classList.remove('hidden');
-            }
+        if (file) {
+            card.classList.add('active');
+            area.style.opacity = '0.3';
+            nameDisplay.textContent = '✓ ' + file.name + ' (' + (file.size/1024/1024).toFixed(2) + ' MB)';
+            nameDisplay.classList.remove('hidden');
         }
+        validateFiles();
+    }
+
+    function validateFiles() {
+        const sqlInput = document.querySelector('input[name="sql_file"]');
+        const zipInput = document.querySelector('input[name="zip_file"]');
+        const btn = document.getElementById('processBtn');
+        
+        if (sqlInput.files.length > 0 && zipInput.files.length > 0) {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.style.filter = 'none';
+        } else {
+            btn.disabled = true;
+            btn.style.opacity = '0.7';
+            btn.style.filter = 'grayscale(1)';
+        }
+    }
 
     async function resetDatabase() {
         if(!confirm('⚠️ ¿ESTÁS SEGURO?\n\nEsto borrará TODOS los documentos y códigos de la base de datos actual.')) return;
