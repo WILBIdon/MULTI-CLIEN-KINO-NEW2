@@ -202,7 +202,7 @@ $pageTitle = 'Importación Avanzada';
                     </div>
 
                     <div class="flex gap-4" style="display: flex; gap: 1rem;">
-                        <button type="button" class="btn-process" id="processBtn" onclick="submitForm()" disabled>
+                        <button type="button" class="btn-process" id="processBtn" disabled>
                             <span class="btn-text">INICIAR IMPORTACIÓN</span>
                             <div class="loading-spinner hidden" id="spinner"></div>
                         </button>
@@ -229,98 +229,111 @@ $pageTitle = 'Importación Avanzada';
     </div>
 
     <script>
-    function handleFileSelect(input, areaId, nameId) {
-        const file = input.files[0];
-        const area = document.getElementById(areaId);
-        const nameDisplay = document.getElementById(nameId);
-        const card = area.parentElement;
+        function handleFileSelect(input, areaId, nameId) {
+            const file = input.files[0];
+            const area = document.getElementById(areaId);
+            const nameDisplay = document.getElementById(nameId);
+            const card = area.parentElement;
 
-        if (file) {
-            card.classList.add('active');
-            area.style.opacity = '0.3';
-            nameDisplay.textContent = '✓ ' + file.name + ' (' + (file.size/1024/1024).toFixed(2) + ' MB)';
-            nameDisplay.classList.remove('hidden');
-        }
-        validateFiles();
-    }
-
-    function validateFiles() {
-        const sqlInput = document.querySelector('input[name="sql_file"]');
-        const zipInput = document.querySelector('input[name="zip_file"]');
-        const btn = document.getElementById('processBtn');
-        
-        if (sqlInput.files.length > 0 && zipInput.files.length > 0) {
-            btn.disabled = false;
-            btn.style.opacity = '1';
-            btn.style.filter = 'none';
-        } else {
-            btn.disabled = true;
-            btn.style.opacity = '0.7';
-            btn.style.filter = 'grayscale(1)';
-        }
-    }
-
-    async function resetDatabase() {
-        if(!confirm('⚠️ ¿ESTÁS SEGURO?\n\nEsto borrará TODOS los documentos y códigos de la base de datos actual.')) return;
-        
-        try {
-            const formData = new FormData();
-            formData.append('action', 'reset');
-            
-            log('Limpiando base de datos...', 'info');
-            
-            const response = await fetch('process.php', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            if (result.logs) result.logs.forEach(l => log(l.msg, l.type));
-            
-        } catch(e) {
-            log('Error al limpiar: ' + e.message, 'error');
-        }
-    }
-
-    async function submitForm() {
-        const form = document.getElementById('importForm');
-        const btn = document.getElementById('processBtn');
-        const spinner = document.getElementById('spinner');
-        
-        btn.disabled = true;
-        spinner.classList.remove('hidden');
-        
-        const formData = new FormData(form);
-
-        try {
-            log('Iniciando carga de archivos...', 'info');
-            
-            const response = await fetch('process.php', {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await response.json();
-            
-            if (result.logs) {
-                result.logs.forEach(l => log(l.msg, l.type));
+            if (file) {
+                card.classList.add('active');
+                area.style.opacity = '0.3';
+                nameDisplay.textContent = '✓ ' + file.name + ' (' + (file.size / 1024 / 1024).toFixed(2) + ' MB)';
+                nameDisplay.classList.remove('hidden');
             }
-            
-            if (result.success) {
-                log('Importación completada con éxito.', 'success');
-                setTimeout(() => window.location.reload(), 4000);
-            } else {
-                log('Error fatal: ' + (result.error || 'Desconocido'), 'error');
+            validateFiles();
+        }
+
+        function validateFiles() {
+            const sqlInput = document.querySelector('input[name="sql_file"]');
+            const zipInput = document.querySelector('input[name="zip_file"]');
+            const btn = document.getElementById('processBtn');
+
+            if (sqlInput.files.length > 0 && zipInput.files.length > 0) {
                 btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.filter = 'none';
+            } else {
+                btn.disabled = true;
+                btn.style.opacity = '0.7';
+                btn.style.filter = 'grayscale(1)';
             }
-            
-        } catch (err) {
-            log('Error de conexión: ' + err.message, 'error');
-            btn.disabled = false;
-        } finally {
-            spinner.classList.add('hidden');
         }
-    }
+
+        // Attach event listeners safely after DOM load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initial state
+            validateFiles();
+
+            // Attach click handler via code, not HTML attribute
+            document.getElementById('processBtn').addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('Button clicked via listener');
+                submitForm();
+            });
+        });
+
+        async function resetDatabase() {
+            if (!confirm('⚠️ ¿ESTÁS SEGURO?\n\nEsto borrará TODOS los documentos y códigos de la base de datos actual.')) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('action', 'reset');
+
+                log('Limpiando base de datos...', 'info');
+
+                const response = await fetch('process.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                if (result.logs) result.logs.forEach(l => log(l.msg, l.type));
+
+            } catch (e) {
+                log('Error al limpiar: ' + e.message, 'error');
+            }
+        }
+
+        async function submitForm() {
+            const form = document.getElementById('importForm');
+            const btn = document.getElementById('processBtn');
+            const spinner = document.getElementById('spinner');
+
+            btn.disabled = true;
+            spinner.classList.remove('hidden');
+
+            const formData = new FormData(form);
+
+            try {
+                log('Iniciando carga de archivos...', 'info');
+
+                const response = await fetch('process.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.logs) {
+                    result.logs.forEach(l => log(l.msg, l.type));
+                }
+
+                if (result.success) {
+                    log('Importación completada con éxito.', 'success');
+                    setTimeout(() => window.location.reload(), 4000);
+                } else {
+                    log('Error fatal: ' + (result.error || 'Desconocido'), 'error');
+                    btn.disabled = false;
+                }
+
+            } catch (err) {
+                log('Error de conexión: ' + err.message, 'error');
+                btn.disabled = false;
+            } finally {
+                spinner.classList.add('hidden');
+            }
+        }
     </script>
 </body>
 
