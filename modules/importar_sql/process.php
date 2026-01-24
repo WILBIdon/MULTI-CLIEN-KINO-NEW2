@@ -57,6 +57,24 @@ try {
         }
     }
 
+    if (isset($_POST['action']) && $_POST['action'] === 'debug_info') {
+        $path = client_db_path($clientCode);
+        $exists = file_exists($path) ? 'SI' : 'NO';
+        $realPath = realpath($path);
+
+        $docCount = $db->query("SELECT COUNT(*) FROM documentos")->fetchColumn();
+
+        $info = "--- DIAGNÓSTICO ---\n";
+        $info .= "Cliente: " . $clientCode . "\n";
+        $info .= "DB Path Config: " . $path . "\n";
+        $info .= "DB Existe: " . $exists . "\n";
+        $info .= "DB RealPath: " . $realPath . "\n";
+        $info .= "Docs en DB: " . $docCount . "\n";
+
+        echo json_encode(['success' => true, 'logs' => [['msg' => $info, 'type' => 'info']]]);
+        exit;
+    }
+
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         throw new Exception('Método inválido.');
     }

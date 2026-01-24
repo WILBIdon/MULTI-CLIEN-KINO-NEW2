@@ -211,6 +211,12 @@ $pageTitle = 'Importación Avanzada';
                             onclick="resetDatabase()">
                             🗑️ Limpiar Todo
                         </button>
+
+                        <button type="button" class="btn-process"
+                            style="background: var(--bg-tertiary); width: auto; color: var(--text-primary);"
+                            onclick="showDebugInfo()">
+                            🔍 Diagnóstico
+                        </button>
                     </div>
                 </form>
 
@@ -295,6 +301,18 @@ $pageTitle = 'Importación Avanzada';
                 }
             } catch (e) {
                 log('Error al limpiar: ' + e.message, 'error');
+            }
+        }
+
+        async function showDebugInfo() {
+            try {
+                const formData = new FormData();
+                formData.append('action', 'debug_info');
+                const response = await fetch('process.php', { method: 'POST', body: formData });
+                const result = await response.json();
+                if (result.logs) result.logs.forEach(l => log(l.msg, l.type));
+            } catch (e) {
+                log('Error debug: ' + e.message, 'error');
             }
         }
 
