@@ -290,6 +290,9 @@ $pageTitle = 'Importación Avanzada';
                 const result = await response.json();
                 if (result.logs) result.logs.forEach(l => log(l.msg, l.type));
 
+                if (result.success) {
+                    setTimeout(() => window.location.reload(), 2000);
+                }
             } catch (e) {
                 log('Error al limpiar: ' + e.message, 'error');
             }

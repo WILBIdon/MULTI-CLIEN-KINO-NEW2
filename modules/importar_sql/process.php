@@ -36,15 +36,16 @@ try {
         try {
             $db->exec("SET FOREIGN_KEY_CHECKS = 0");
             $db->beginTransaction();
-            $db->exec("DELETE FROM vinculos"); // Explicit delete just in case
-            $db->exec("DELETE FROM codigos");
-            $db->exec("DELETE FROM documentos");
+            $countVinculos = $db->exec("DELETE FROM vinculos");
+            $countCodigos = $db->exec("DELETE FROM codigos");
+            $countDocumentos = $db->exec("DELETE FROM documentos");
             // Also reset auto_increment if possible with TRUNCATE, but DELETE is safer for per-client DBs sometimes.
             // Let's stick to DELETE for now but with explicit FK disable.
             $db->commit();
             $db->exec("SET FOREIGN_KEY_CHECKS = 1");
 
-            echo json_encode(['success' => true, 'logs' => [['msg' => '⚠️ BASE DE DATOS LIMPIADA TOTALMENTE (Doc + Cod + Vinc).', 'type' => 'success']]]);
+            $msg = "⚠️ LIMPIEZA COMPLETA: Documentos ($countDocumentos), Códigos ($countCodigos), Vínculos ($countVinculos).";
+            echo json_encode(['success' => true, 'logs' => [['msg' => $msg, 'type' => 'success']]]);
             exit;
         } catch (Exception $e) {
             if ($db->inTransaction()) {
