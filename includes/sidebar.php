@@ -128,6 +128,9 @@ $currentModule = $currentModule ?? '';
                 <a href="<?= $baseUrl ?? '' ?>modules/trazabilidad/validar.php" class="nav-subitem">
                     ✅ Validar
                 </a>
+                <a href="<?= $baseUrl ?? '' ?>modules/importar_sql/" class="nav-subitem">
+                    🚀 Importación Av.
+                </a>
             </div>
         </div>
 
