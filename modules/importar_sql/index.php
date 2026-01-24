@@ -201,10 +201,16 @@ $pageTitle = 'Importación Avanzada';
                         </div>
                     </div>
 
-                    <button type="submit" class="btn-process" id="processBtn">
-                        <span class="btn-text">INICIAR IMPORTACIÓN E INTELIGENCIA</span>
-                        <div class="loading-spinner hidden" id="spinner"></div>
-                    </button>
+                    <div class="flex gap-4" style="display: flex; gap: 1rem;">
+                        <button type="button" class="btn-process" id="processBtn" onclick="submitForm()">
+                            <span class="btn-text">INICIAR IMPORTACIÓN</span>
+                            <div class="loading-spinner hidden" id="spinner"></div>
+                        </button>
+                        
+                        <button type="button" class="btn-process" style="background: var(--accent-danger); width: auto;" onclick="resetDatabase()">
+                            🗑️ Limpiar Todo
+                        </button>
+                    </div>
                 </form>
 
                 <div class="console-output" id="consoleLog">
@@ -236,62 +242,67 @@ $pageTitle = 'Importación Avanzada';
             }
         }
 
-        document.getElementById('importForm').addEventListener('submit', async function (e) {
-            e.preventDefault();
+    async function resetDatabase() {
+        if(!confirm('⚠️ ¿ESTÁS SEGURO?\n\nEsto borrará TODOS los documentos y códigos de la base de datos actual.')) return;
+        
+        try {
+            const formData = new FormData();
+            formData.append('action', 'reset');
+            
+            log('Limpiando base de datos...', 'info');
+            
+            const response = await fetch('process.php', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            if (result.logs) result.logs.forEach(l => log(l.msg, l.type));
+            
+        } catch(e) {
+            log('Error al limpiar: ' + e.message, 'error');
+        }
+    }
 
-            const btn = document.getElementById('processBtn');
-            const spinner = document.getElementById('spinner');
-            const consoleLog = document.getElementById('consoleLog');
+    async function submitForm() {
+        const form = document.getElementById('importForm');
+        const btn = document.getElementById('processBtn');
+        const spinner = document.getElementById('spinner');
+        
+        btn.disabled = true;
+        spinner.classList.remove('hidden');
+        
+        const formData = new FormData(form);
 
-            btn.disabled = true;
-            spinner.classList.remove('hidden');
+        try {
+            log('Iniciando carga de archivos...', 'info');
+            
+            const response = await fetch('process.php', {
+                method: 'POST',
+                body: formData
+            });
 
-            const formData = new FormData(this);
-
-            function log(msg, type = 'info') {
-                const time = new Date().toLocaleTimeString();
-                const color = type === 'error' ? '#ef4444' : (type === 'success' ? '#10b981' : '#3b82f6');
-                const line = `
-                <div class="console-line">
-                    <span class="console-time">[${time}]</span>
-                    <span style="color: ${color}">${msg}</span>
-                </div>
-            `;
-                consoleLog.innerHTML += line;
-                consoleLog.scrollTop = consoleLog.scrollHeight;
+            const result = await response.json();
+            
+            if (result.logs) {
+                result.logs.forEach(l => log(l.msg, l.type));
             }
-
-            try {
-                log('Iniciando carga de archivos...', 'info');
-
-                const response = await fetch('process.php', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                // Stream response processing (simulated for now, or just handle JSON)
-                // For now, assume it returns JSON at the end
-                const result = await response.json();
-
-                if (result.logs) {
-                    result.logs.forEach(l => log(l.msg, l.type));
-                }
-
-                if (result.success) {
-                    log('Importación completada con éxito.', 'success');
-                    setTimeout(() => window.location.reload(), 3000);
-                } else {
-                    log('Error fatal: ' + (result.error || 'Desconocido'), 'error');
-                    btn.disabled = false;
-                }
-
-            } catch (err) {
-                log('Error de conexión: ' + err.message, 'error');
+            
+            if (result.success) {
+                log('Importación completada con éxito.', 'success');
+                setTimeout(() => window.location.reload(), 4000);
+            } else {
+                log('Error fatal: ' + (result.error || 'Desconocido'), 'error');
                 btn.disabled = false;
-            } finally {
-                spinner.classList.add('hidden');
             }
-        });
+            
+        } catch (err) {
+            log('Error de conexión: ' + err.message, 'error');
+            btn.disabled = false;
+        } finally {
+            spinner.classList.add('hidden');
+        }
+    }
     </script>
 </body>
 

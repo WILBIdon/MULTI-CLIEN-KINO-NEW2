@@ -31,6 +31,23 @@ try {
     $clientCode = $_SESSION['client_code'];
     $db = open_client_db($clientCode);
 
+    // 0. Reset Logic
+    if (isset($_POST['action']) && $_POST['action'] === 'reset') {
+        try {
+            $db->beginTransaction();
+            $db->exec("DELETE FROM codigos");
+            $db->exec("DELETE FROM documentos");
+            // Optional: db->exec("DELETE FROM vinculos");
+            $db->commit();
+            echo json_encode(['success' => true, 'logs' => [['msg' => 'Base de datos limpiada correctamente. Listo para importar.', 'type' => 'success']]]);
+            exit;
+        } catch (Exception $e) {
+            $db->rollBack();
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+            exit;
+        }
+    }
+
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         throw new Exception('Método inválido.');
     }
