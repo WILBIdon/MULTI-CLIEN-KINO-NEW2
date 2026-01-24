@@ -351,12 +351,21 @@ try {
                 $tokens = preg_split('/[\s_\-.]+/', $basename);
                 // Filtramos tokens muy cortos para evitar falsos positivos con palabras comunes (ej: "de", "la")
                 $tokens = array_filter($tokens, function ($t) {
-                    return strlen($t) > 2; });
+                    return strlen($t) > 2;
+                });
                 $tokens = array_unique($tokens);
 
                 foreach ($tokens as $token) {
                     $token = trim($token);
-                    if (empty($token))
+
+                    // FILTRO DE SEGURIDAD PARA EVITAR FALSOS POSITIVOS
+                    // 1. Longitud mínima: 4 caracteres (evita "2025", "OCT", "123")
+                    if (strlen($token) < 4)
+                        continue;
+
+                    // 2. Debe contener al menos un número (evita palabras genericas como "JUEGO", "TAILOR", "SANSE")
+                    // Si tus codigos son SOLO letras (ej: "AB-CD"), quita esta linea. Pero para este caso parece seguro.
+                    if (!preg_match('/[0-9]/', $token))
                         continue;
 
                     // A) ¿Es un numero de documento?
