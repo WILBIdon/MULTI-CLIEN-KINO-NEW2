@@ -32,8 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $filename = basename($file['name']);
             $ext = pathinfo($filename, PATHINFO_EXTENSION);
-            // Generar nombre único para evitar colisiones
-            $targetName = uniqid('mf_', true) . '.' . $ext;
+            // Generar nombre estandarizado: {timestamp}_{nombre_limpio}.{ext}
+            $cleanName = preg_replace('/[^a-zA-Z0-9._-]/', '_', pathinfo($filename, PATHINFO_FILENAME));
+            $targetName = time() . '_' . $cleanName . '.' . $ext;
             $targetPath = $uploadDir . '/' . $targetName;
 
             // Mover el archivo subido
@@ -70,36 +71,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ?>
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Subir Manifiesto</title>
     <link rel="stylesheet" href="../../assets/css/styles.css">
 </head>
+
 <body>
-<div class="container">
-    <h1>Subir Manifiesto</h1>
-    <p>
-        <a href="../trazabilidad/dashboard.php">🏠 Tablero</a> |
-        <a href="list.php">← Volver al listado</a>
-    </p>
-    <?php if ($ok): ?>
-        <div class="ok-box"><?= htmlspecialchars($ok) ?></div>
-    <?php endif; ?>
-    <?php if ($error): ?>
-        <div class="error-box"><?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
-    <form method="post" enctype="multipart/form-data">
-        <label>Número de Manifiesto</label>
-        <input type="text" name="numero" required>
-        <label>Fecha</label>
-        <input type="date" name="fecha" required>
-        <label>Proveedor</label>
-        <input type="text" name="proveedor" required>
-        <label>Archivo PDF</label>
-        <input type="file" name="file" accept="application/pdf" required>
-        <button type="submit">Subir</button>
-    </form>
-</div>
+    <div class="container">
+        <h1>Subir Manifiesto</h1>
+        <p>
+            <a href="../trazabilidad/dashboard.php">🏠 Tablero</a> |
+            <a href="list.php">← Volver al listado</a>
+        </p>
+        <?php if ($ok): ?>
+            <div class="ok-box"><?= htmlspecialchars($ok) ?></div>
+        <?php endif; ?>
+        <?php if ($error): ?>
+            <div class="error-box"><?= htmlspecialchars($error) ?></div>
+        <?php endif; ?>
+        <form method="post" enctype="multipart/form-data">
+            <label>Número de Manifiesto</label>
+            <input type="text" name="numero" required>
+            <label>Fecha</label>
+            <input type="date" name="fecha" required>
+            <label>Proveedor</label>
+            <input type="text" name="proveedor" required>
+            <label>Archivo PDF</label>
+            <input type="file" name="file" accept="application/pdf" required>
+            <button type="submit">Subir</button>
+        </form>
+    </div>
 </body>
+
 </html>

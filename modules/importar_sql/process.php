@@ -298,15 +298,17 @@ try {
             // Buscamos en la DB: documentos WHERE numero = basename(filename)
             $basename = pathinfo($filename, PATHINFO_FILENAME); // Sin extension
 
-            // Extraer
-            $targetPath = $uploadDir . basename($filename);
+            // Extraer con renombrado estándar {timestamp}_{index}_{nombre}
+            $cleanName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $basename);
+            $newName = time() . '_' . $i . '_' . $cleanName;
+            $targetPath = $uploadDir . $newName;
             copy("zip://" . $zipFile['tmp_name'] . "#" . $filename, $targetPath);
 
             // Vincular
             // UPDATE documentos SET ruta_archivo = ? WHERE numero = ? (Robust matching)
             // Intentamos coincidencia exacta y luego case-insensitive/trim
 
-            $relativePath = 'sql_import/' . basename($filename);
+            $relativePath = 'sql_import/' . $newName;
 
             // 1. Intento directo y robusto
             // Estrategia: Buscar si el numero en DB es un prefijo del nombre del archivo.
@@ -363,7 +365,8 @@ try {
 
                 // Filtramos tokens muy cortos
                 $tokens = array_filter($tokens, function ($t) {
-                    return strlen($t) >= 4; }); // >= 4 permite años "2025" o codigos cortos "1611"
+                    return strlen($t) >= 4;
+                }); // >= 4 permite años "2025" o codigos cortos "1611"
 
                 foreach ($tokens as $token) {
                     $token = trim($token);

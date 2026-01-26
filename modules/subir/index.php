@@ -46,7 +46,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
         // Mover archivo
         $ext = pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION);
-        $targetName = uniqid($tipo . '_', true) . '.' . $ext;
+        // Usar formato compatibilidad BD: {timestamp}_{nombre_limpio}.{ext}
+        $cleanName = preg_replace('/[^a-zA-Z0-9._-]/', '_', pathinfo($_FILES['file']['name'], PATHINFO_FILENAME));
+        $targetName = time() . '_' . $cleanName . '.' . $ext;
         $targetPath = $uploadDir . '/' . $targetName;
         move_uploaded_file($_FILES['file']['tmp_name'], $targetPath);
 
