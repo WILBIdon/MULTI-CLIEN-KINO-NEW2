@@ -18,8 +18,10 @@ if (!isset($_GET['client'])) {
     $clientCode = $_SESSION['client_code'] ?? null;
 
     if (!$clientCode) {
-        // Listar clientes disponibles
-        $clients = array_diff(scandir(CLIENTS_DIR), ['.', '..']);
+        // Listar clientes disponibles (filtrando basura)
+        $ignored = ['.', '..', 'lost+found', 'logs'];
+        $clients = array_diff(scandir(CLIENTS_DIR), $ignored);
+
         echo "<p>Por favor selecciona el cliente a reparar:</p><ul>";
         foreach ($clients as $c) {
             echo "<li><a href='?client=$c'>Reparar Cliente: $c</a></li>";
