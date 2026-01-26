@@ -133,13 +133,25 @@ try {
         throw new Exception('Método inválido.');
     }
 
-    // 1. Validar Archivos
+    // 1. Validar Archivos y Errores de Subida
     if (!isset($_FILES['sql_file']) || !isset($_FILES['zip_file'])) {
+        // Verificar si excede post_max_size ($_FILES vacío)
+        if (empty($_FILES) && empty($_POST) && isset($_SERVER['CONTENT_LENGTH']) && $_SERVER['CONTENT_LENGTH'] > 0) {
+            throw new Exception('El archivo excede el límite de POST_MAX_SIZE (' . ini_get('post_max_size') . '). INTENTA SUBIR ARCHIVOS MÁS PEQUEÑOS.');
+        }
         throw new Exception('Faltan archivos SQL o ZIP.');
     }
 
     $sqlFile = $_FILES['sql_file'];
     $zipFile = $_FILES['zip_file'];
+
+    // Verificar errores de subida individuales
+    if ($sqlFile['error'] !== UPLOAD_ERR_OK) {
+        throw new Exception('Error al subir SQL: Código ' . $sqlFile['error']);
+    }
+    if ($zipFile['error'] !== UPLOAD_ERR_OK) {
+        throw new Exception('Error al subir ZIP: Código ' . $zipFile['error']);
+    }
 
     if (pathinfo($sqlFile['name'], PATHINFO_EXTENSION) !== 'sql') {
         throw new Exception('El archivo 1 debe ser .sql');
@@ -287,6 +299,7 @@ try {
             mkdir($uploadDir, 0777, true);
 
         $updatedDocs = 0;
+        $unlinkedFiles = [];
 
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $filename = $zip->getNameIndex($i);
@@ -408,11 +421,27 @@ try {
             }
 
             if (!$linked) {
-                logMsg("⚠️ No encontrado en DB (Busqué tokens en: $basename)", "warning");
+                // logMsg("⚠️ No encontrado en DB (Busqué tokens en: $basename)", "warning");
+                $unlinkedFiles[] = $basename; // Guardamos nombre original para reporte
             }
         }
         $zip->close();
-        logMsg("Se vincularon $updatedDocs documentos PDF exitosamente.", "success");
+
+        if ($updatedDocs > 0) {
+            logMsg("✅ Se vincularon $updatedDocs documentos PDF exitosamente.", "success");
+        }
+
+        if (!empty($unlinkedFiles)) {
+            $count = count($unlinkedFiles);
+            logMsg("⚠️ $count Archivos NO se pudieron enlazar (permanecen en la carpeta):", "warning");
+            // Mostrar primeros 10 para no saturar
+            foreach (array_slice($unlinkedFiles, 0, 10) as $f) {
+                logMsg(" - $f", "warning");
+            }
+            if ($count > 10) {
+                logMsg(" ... y " . ($count - 10) . " más.", "warning");
+            }
+        }
 
     } else {
         throw new Exception("No se pudo abrir el ZIP.");

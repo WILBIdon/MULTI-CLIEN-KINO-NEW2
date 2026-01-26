@@ -368,7 +368,9 @@ $pageTitle = 'Importación Avanzada';
                     log('Importación completada con éxito.', 'success');
                     setTimeout(() => window.location.reload(), 4000);
                 } else {
-                    log('Error fatal: ' + (result.error || 'Desconocido'), 'error');
+                    console.error('Debug Result:', result); // Para ver en consola del navegador
+                    log('Error fatal: ' + (result.error || 'Desconocido (Ver consola)'), 'error');
+                    if (!result.error) log('Raw response: ' + JSON.stringify(result), 'error');
                     btn.disabled = false;
                 }
 
