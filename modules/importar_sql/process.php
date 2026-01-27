@@ -1,60 +1,335 @@
 <?php
-ob_start(); // Iniciar buffer para capturar salidas no deseadas
+ob_start();
 /**
- * Backend para Importación Avanzada
+ * process_final.php (adapted for Kino Trace context)
+ * 
+ * Implementación "Tal Cual" solicitada por el usuario (Step 832)
+ * Adaptada mínimamente para funcionar dentro de la estructura de API/JSON del sistema.
  */
 header('Content-Type: application/json');
 session_start();
-ini_set('display_errors', 0); // Disable error display
-error_reporting(E_ALL); // Log everything, but don't show it
-set_time_limit(300); // 5 minutos máx
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
+set_time_limit(300);
 ini_set('memory_limit', '512M');
 
-// DEBUG: Shutdown function to catch fatal errors
+// Shutdown handler for fatal errors
 register_shutdown_function(function () {
     $error = error_get_last();
-    $output = ob_get_contents();
-    // Always write log to prove we ran
-    $log = "Timestamp: " . date('Y-m-d H:i:s') . "\n";
-    $log .= "Error: " . print_r($error, true) . "\n";
-    $log .= "Output Length: " . strlen($output) . "\n";
-    $log .= "Output Preview: " . substr($output, 0, 1000) . "\n";
-    file_put_contents('C:/Users/Usuario/Desktop/kino-trace/debug_panic.txt', $log, FILE_APPEND);
+    $output = ob_get_clean();
+    if ($error) {
+        // Log panic info
+        file_put_contents('debug_panic.txt', date('c') . " Error: " . print_r($error, true));
+    }
 });
 
 require_once __DIR__ . '/../../config.php';
-// Clean buffer after config in case of whitespace
-while (ob_get_level()) {
+while (ob_get_level())
     ob_end_clean();
-}
 ob_start();
 
 require_once __DIR__ . '/../../helpers/tenant.php';
-// Clean buffer after tenant
-while (ob_get_level()) {
+while (ob_get_level())
     ob_end_clean();
-}
 ob_start();
 
 require_once __DIR__ . '/../../helpers/import_engine.php';
-// Clean buffer after engine
-while (ob_get_level()) {
+while (ob_get_level())
     ob_end_clean();
-}
 ob_start();
 
+// --- ADAPTACION: Estructura de Respuesta JSON GLOBAL ---
 $response = [
     'success' => false,
     'logs' => [],
     'error' => null
 ];
 
-function logMsg($msg, $type = 'info')
+// --- ADAPTACION: logMsg para JSON ---
+function logMsg($msg, $type = "info")
 {
     global $response;
-    $response['logs'][] = ['msg' => $msg, 'type' => $type];
+    // Mapeo de tipos de log para el frontend (success, error, info, warning)
+    $mappedType = $type;
+    if ($type === 'warn')
+        $mappedType = 'warning';
+
+    $response['logs'][] = ['msg' => $msg, 'type' => $mappedType];
 }
 
+// --- CODIGO DEL USUARIO "TAL CUAL" (INICIO) ---
+
+function normalizeKey($s)
+{
+    // 1) keep only filename (remove directories)
+    $s = basename($s);
+
+    // 2) remove extension
+    $s = preg_replace('/\.[Pp][Dd][Ff]$/', '', $s);
+
+    // 3) remove leading timestamp-like prefixes: "1748...._" or "1748....-"
+    $s = preg_replace('/^\d{6,}[_\-\s]+/', '', $s);
+
+    // 4) normalize spaces
+    $s = str_replace(["\r", "\n", "\t"], " ", $s);
+    $s = preg_replace('/\s+/', ' ', $s);
+    $s = trim($s);
+
+    // 5) lowercase for stable compare
+    $s = mb_strtolower($s, 'UTF-8');
+
+    return $s;
+}
+
+function buildDocumentoIndex(PDO $db)
+{
+    // Build a PHP-side index for robust matching (no fragile SQL LIKE).
+    // We index by:
+    // - normalized numero
+    // - normalized original_path (filename)
+    // - normalized original_path without extension
+    $idx = [];  // key => id
+
+    $q = $db->query("SELECT id, numero, original_path, ruta_archivo FROM documentos");
+    while ($row = $q->fetch(PDO::FETCH_ASSOC)) {
+        $id = (int) $row['id'];
+
+        if (!empty($row['numero'])) {
+            $k = normalizeKey($row['numero']);
+            if ($k !== "")
+                $idx[$k] = $id;
+        }
+
+        if (!empty($row['original_path'])) {
+            $k1 = normalizeKey($row['original_path']);
+            if ($k1 !== "")
+                $idx[$k1] = $id;
+
+            // Also index without timestamp prefix if original_path includes it
+            $k2 = normalizeKey(basename($row['original_path']));
+            if ($k2 !== "")
+                $idx[$k2] = $id;
+        }
+    }
+    return $idx;
+}
+
+/**
+ * Link a PDF file to a documento row by id (single source of truth).
+ * Updates:
+ * - ruta_archivo: relative path where we stored the extracted PDF
+ * - original_path: store the ZIP original filename (with extension), NOT just base
+ */
+function linkById(PDO $db, $id, $relativePath, $fullFilename)
+{
+    $stmt = $db->prepare("UPDATE documentos
+                          SET ruta_archivo = ?, original_path = ?
+                          WHERE id = ?");
+    $stmt->execute([$relativePath, $fullFilename, $id]);
+    return $stmt->rowCount() > 0;
+}
+
+/**
+ * Process ZIP and link PDFs.
+ * - $zipTmpPath: the uploaded ZIP tmp file
+ * - $uploadDir: absolute directory where PDFs will be extracted
+ * - $relativeBase: relative base used in DB (e.g. 'sql_import/')
+ */
+function processZipAndLink(PDO $db, $zipTmpPath, $uploadDir, $relativeBase = 'sql_import/')
+{
+    if (!is_dir($uploadDir))
+        mkdir($uploadDir, 0777, true);
+
+    $zip = new ZipArchive();
+    if ($zip->open($zipTmpPath) !== TRUE) {
+        throw new Exception("No se pudo abrir el ZIP.");
+    }
+
+    // Index existing documents once (fast)
+    $idx = buildDocumentoIndex($db);
+
+    // Track what document ids already got a PDF in this import run
+    $linkedDocIds = [];
+    $updatedDocs = 0;
+    $createdDocs = 0;
+    $duplicates = [];
+    $unmatched = [];
+
+    // Prepared statements for fast exact checks
+    // (1) Exact match by original_path (case-insensitive)
+    $stmtFindByPath = $db->prepare("SELECT id FROM documentos WHERE LOWER(original_path) = LOWER(?) LIMIT 1");
+    // (2) Exact match by numero (case-insensitive)
+    $stmtFindByNumero = $db->prepare("SELECT id FROM documentos WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?)) LIMIT 1");
+
+    // Insert (best-effort) — no assumption about DB engine
+    $stmtCreate = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, estado, ruta_archivo, original_path)
+                                VALUES (?, ?, ?, ?, ?, ?, ?)");
+
+    // Local set to avoid creating same "new" doc twice in the same ZIP run
+    $createdKeys = [];
+
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $filename = $zip->getNameIndex($i);
+
+        if (pathinfo($filename, PATHINFO_EXTENSION) !== 'pdf')
+            continue;
+
+        $base = basename($filename);
+        $targetPath = rtrim($uploadDir, "/") . "/" . $base;
+
+        // Extract file
+        $ok = copy("zip://" . $zipTmpPath . "#" . $filename, $targetPath);
+        if (!$ok) {
+            logMsg("❌ No se pudo extraer: $filename", "error");
+            continue;
+        }
+
+        $relativePath = rtrim($relativeBase, "/") . "/" . $base;   // 'sql_import/xxx.pdf'
+        $numero = pathinfo($base, PATHINFO_FILENAME);              // without .pdf
+
+        // ---------- MATCH STEP 1: original_path exact ----------
+        $stmtFindByPath->execute([$base]); // store only basename in DB by convention
+        $id = $stmtFindByPath->fetchColumn();
+
+        if (!$id) {
+            // Also try full filename (if DB stored with folders)
+            $stmtFindByPath->execute([$filename]);
+            $id = $stmtFindByPath->fetchColumn();
+        }
+
+        if ($id) {
+            $id = (int) $id;
+
+            if (isset($linkedDocIds[$id])) {
+                $duplicates[] = [$base, $id, "PATH"];
+                continue;
+            }
+
+            if (linkById($db, $id, $relativePath, $base)) {
+                $linkedDocIds[$id] = true;
+                $updatedDocs++;
+                logMsg("✅ Vinculado por PATH: $base (doc_id=$id)", "success");
+                continue;
+            }
+        }
+
+        // ---------- MATCH STEP 2: numero exact ----------
+        $stmtFindByNumero->execute([$numero]);
+        $id = $stmtFindByNumero->fetchColumn();
+        if ($id) {
+            $id = (int) $id;
+
+            if (isset($linkedDocIds[$id])) {
+                $duplicates[] = [$base, $id, "NUMERO"];
+                continue;
+            }
+
+            if (linkById($db, $id, $relativePath, $base)) {
+                $linkedDocIds[$id] = true;
+                $updatedDocs++;
+                logMsg("✅ Vinculado por NUMERO: $numero (doc_id=$id)", "success");
+                continue;
+            }
+        }
+
+        // ---------- MATCH STEP 3: normalized "semantic" key ----------
+        // This is the key fix to link PDFs that include timestamps/prefixes
+        $kFile = normalizeKey($base);     // removes timestamp prefix, lower, etc.
+        if ($kFile !== "" && isset($idx[$kFile])) {
+            $id = (int) $idx[$kFile];
+
+            if (isset($linkedDocIds[$id])) {
+                $duplicates[] = [$base, $id, "NORM"];
+                continue;
+            }
+
+            if (linkById($db, $id, $relativePath, $base)) {
+                $linkedDocIds[$id] = true;
+                $updatedDocs++;
+                logMsg("✅ Vinculado por NORMALIZACIÓN: $base (doc_id=$id)", "success");
+                continue;
+            }
+        }
+
+        // ---------- UNMATCHED: auto-link/self-heal or auto-create ----------
+        // Self-heal: try to find doc by normalized numero (removing timestamp prefix)
+        $numeroNorm = normalizeKey($numero);
+        if ($numeroNorm !== "" && isset($idx[$numeroNorm])) {
+            $id = (int) $idx[$numeroNorm];
+
+            if (!isset($linkedDocIds[$id])) {
+                if (linkById($db, $id, $relativePath, $base)) {
+                    $linkedDocIds[$id] = true;
+                    $updatedDocs++;
+                    logMsg("🔗 Auto-Vinculado (Self-Healing): $base (doc_id=$id)", "success");
+                    continue;
+                }
+            } else {
+                $duplicates[] = [$base, $id, "SELFHEAL"];
+                continue;
+            }
+        }
+
+        // Auto-create (ONLY if truly new)
+        // Deduplicate inside the same run by normalized key, not by raw filename
+        $createKey = $kFile !== "" ? $kFile : normalizeKey($numero);
+        if ($createKey !== "" && isset($createdKeys[$createKey])) {
+            // same doc name repeated in ZIP (different timestamps) -> treat as duplicate file
+            $duplicates[] = [$base, null, "CREATE_DEDUP"];
+            continue;
+        }
+        $createdKeys[$createKey] = true;
+
+        $fecha = date('Y-m-d');
+        try {
+            $stmtCreate->execute([
+                'generado_auto',
+                pathinfo($base, PATHINFO_FILENAME), // keep full filename (no ext) as numero
+                $fecha,
+                'Importación Auto',
+                'procesado',
+                $relativePath,
+                $base  // store basename WITH extension to keep uniqueness stable
+            ]);
+            $createdDocs++;
+            logMsg("✨ Documento creado autom.: $base", "success");
+        } catch (Exception $e) {
+            // If UNIQUE(original_path) exists, this prevents fatal crashes.
+            // We log and continue.
+            logMsg("⚠️ No se pudo crear (posible duplicado): $base | " . $e->getMessage(), "warn");
+            $unmatched[] = $base;
+        }
+    }
+
+    $zip->close();
+
+    logMsg("\n📊 RESUMEN ZIP", "info");
+    logMsg("----------------------------------------", "info");
+    logMsg("✅ Documentos vinculados/actualizados: $updatedDocs", "info");
+    logMsg("✨ Documentos creados: $createdDocs", "info");
+    logMsg("♻️ PDFs duplicados (mismo documento): " . count($duplicates), "info");
+    logMsg("❓ PDFs sin procesar por error: " . count($unmatched), "info");
+
+    if (!empty($duplicates)) {
+        logMsg("\n♻️ LISTA DE DUPLICADOS (se saltaron para no crear copias):", "info");
+        foreach ($duplicates as $d) {
+            $file = $d[0];
+            $id = $d[1] === null ? "N/A" : $d[1];
+            $why = $d[2];
+            logMsg(" - $file => doc_id=$id ($why)", "info");
+        }
+    }
+
+    if (!empty($unmatched)) {
+        logMsg("\n❗ ARCHIVOS CON ERROR (revisar nombres/DB):", "warn");
+        foreach ($unmatched as $f)
+            logMsg(" - $f", "warn");
+    }
+}
+// --- CODIGO DEL USUARIO "TAL CUAL" (FIN) ---
+
+
+// --- INTEGRACION PRINCIPAL ---
 try {
     if (!isset($_SESSION['client_code'])) {
         throw new Exception('Sesión no iniciada.');
@@ -63,109 +338,20 @@ try {
     $clientCode = $_SESSION['client_code'];
     $db = open_client_db($clientCode);
 
-    // 0. Reset Logic
+    // 0. Reset Logic (Standard)
     if (isset($_POST['action']) && $_POST['action'] === 'reset') {
-        try {
-            $dbPath = client_db_path($clientCode);
+        $dbPath = client_db_path($clientCode);
+        $db = null;
+        gc_collect_cycles();
+        if (file_exists($dbPath))
+            unlink($dbPath);
+        $db = open_client_db($clientCode); // Recreate
+        // Definir esquema básico
+        $db->exec("CREATE TABLE IF NOT EXISTS documentos (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT, numero TEXT, fecha DATE, fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP, proveedor TEXT, naviera TEXT, peso_kg REAL, valor_usd REAL, ruta_archivo TEXT NOT NULL, original_path TEXT, hash_archivo TEXT, datos_extraidos TEXT, ai_confianza REAL, requiere_revision INTEGER DEFAULT 0, estado TEXT DEFAULT 'pendiente', notas TEXT);");
+        $db->exec("CREATE TABLE IF NOT EXISTS codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, documento_id INTEGER NOT NULL, codigo TEXT NOT NULL, descripcion TEXT, cantidad INTEGER, valor_unitario REAL, validado INTEGER DEFAULT 0, alerta TEXT, FOREIGN KEY(documento_id) REFERENCES documentos(id) ON DELETE CASCADE);");
+        $db->exec("CREATE TABLE IF NOT EXISTS vinculos (id INTEGER PRIMARY KEY AUTOINCREMENT, documento_origen_id INTEGER NOT NULL, documento_destino_id INTEGER NOT NULL, tipo_vinculo TEXT NOT NULL, codigos_coinciden INTEGER DEFAULT 0, codigos_faltan INTEGER DEFAULT 0, codigos_extra INTEGER DEFAULT 0, discrepancias TEXT, FOREIGN KEY(documento_origen_id) REFERENCES documentos(id) ON DELETE CASCADE, FOREIGN KEY(documento_destino_id) REFERENCES documentos(id) ON DELETE CASCADE);");
 
-            // 2. Cerrar conexión actual (importante para poder borrar archivo en Windows)
-            $db = null;
-            gc_collect_cycles();
-
-            // 3. Borrar archivo físico (HARD RESET)
-            if (file_exists($dbPath)) {
-                if (!unlink($dbPath)) {
-                    // Si falla unlink (candado), intentamos DELETE masivo como fallback
-                    $db = open_client_db($clientCode);
-                    $db->exec("DELETE FROM vinculos");
-                    $db->exec("DELETE FROM codigos");
-                    $db->exec("DELETE FROM documentos");
-                    $msg = "⚠️ HARD RESET PARCIAL (Archivo bloqueado, se usó DELETE):\n- Tablas vaciadas.";
-                } else {
-                    $msg = "⚠️ HARD RESET COMPLETADO:\n- Archivo DB ($dbPath) eliminado.";
-                }
-            } else {
-                $msg = "⚠️ DB No existía, se creará nueva.";
-            }
-
-            // 4. Recrear estructura limpia
-            $db = open_client_db($clientCode);
-
-            $db->exec(
-                "CREATE TABLE IF NOT EXISTS documentos (\n"
-                . "    id INTEGER PRIMARY KEY AUTOINCREMENT,\n"
-                . "    tipo TEXT NOT NULL,\n"
-                . "    numero TEXT NOT NULL,\n"
-                . "    fecha DATE NOT NULL,\n"
-                . "    fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,\n"
-                . "    proveedor TEXT,\n"
-                . "    naviera TEXT,\n"
-                . "    peso_kg REAL,\n"
-                . "    valor_usd REAL,\n"
-                . "    ruta_archivo TEXT NOT NULL,\n"
-                . "    original_path TEXT,\n"
-                . "    hash_archivo TEXT,\n"
-                . "    datos_extraidos TEXT,\n"
-                . "    ai_confianza REAL,\n"
-                . "    requiere_revision INTEGER DEFAULT 0,\n"
-                . "    estado TEXT DEFAULT 'pendiente',\n"
-                . "    notas TEXT\n"
-                . ");\n"
-                . "CREATE TABLE IF NOT EXISTS codigos (\n"
-                . "    id INTEGER PRIMARY KEY AUTOINCREMENT,\n"
-                . "    documento_id INTEGER NOT NULL,\n"
-                . "    codigo TEXT NOT NULL,\n"
-                . "    descripcion TEXT,\n"
-                . "    cantidad INTEGER,\n"
-                . "    valor_unitario REAL,\n"
-                . "    validado INTEGER DEFAULT 0,\n"
-                . "    alerta TEXT,\n"
-                . "    FOREIGN KEY(documento_id) REFERENCES documentos(id) ON DELETE CASCADE\n"
-                . ");\n"
-                . "CREATE TABLE IF NOT EXISTS vinculos (\n"
-                . "    id INTEGER PRIMARY KEY AUTOINCREMENT,\n"
-                . "    documento_origen_id INTEGER NOT NULL,\n"
-                . "    documento_destino_id INTEGER NOT NULL,\n"
-                . "    tipo_vinculo TEXT NOT NULL,\n"
-                . "    codigos_coinciden INTEGER DEFAULT 0,\n"
-                . "    codigos_faltan INTEGER DEFAULT 0,\n"
-                . "    codigos_extra INTEGER DEFAULT 0,\n"
-                . "    discrepancias TEXT,\n"
-                . "    FOREIGN KEY(documento_origen_id) REFERENCES documentos(id) ON DELETE CASCADE,\n"
-                . "    FOREIGN KEY(documento_destino_id) REFERENCES documentos(id) ON DELETE CASCADE\n"
-                . ");"
-            );
-
-            $debugOutput = ob_get_contents();
-            file_put_contents(__DIR__ . '/../../debug_reset_log.html', $debugOutput); // Log what is breaking the JSON
-            while (ob_get_level()) {
-                ob_end_clean();
-            } // Clean ALL buffers
-            echo json_encode(['success' => true, 'logs' => [['msg' => $msg . "\n- Estructura regenerada.", 'type' => 'success']]]);
-            die(); // Force stop
-        } catch (Exception $e) {
-            ob_clean();
-            echo json_encode(['success' => false, 'error' => 'Error fatal en Hard Reset: ' . $e->getMessage()]);
-            exit;
-        }
-    }
-
-    if (isset($_POST['action']) && $_POST['action'] === 'debug_info') {
-        $path = client_db_path($clientCode);
-        $exists = file_exists($path) ? 'SI' : 'NO';
-        $realPath = realpath($path);
-
-        $docCount = $db->query("SELECT COUNT(*) FROM documentos")->fetchColumn();
-
-        $info = "--- DIAGNÓSTICO ---\n";
-        $info .= "Cliente: " . $clientCode . "\n";
-        $info .= "DB Path Config: " . $path . "\n";
-        $info .= "DB Existe: " . $exists . "\n";
-        $info .= "DB RealPath: " . $realPath . "\n";
-        $info .= "Docs en DB: " . $docCount . "\n";
-
-        ob_clean();
-        echo json_encode(['success' => true, 'logs' => [['msg' => $info, 'type' => 'info']]]);
+        echo json_encode(['success' => true, 'logs' => [['msg' => "Hard Reset Realizado + Estructura Regenerada", 'type' => 'success']]]);
         exit;
     }
 
@@ -173,407 +359,48 @@ try {
         throw new Exception('Método inválido.');
     }
 
-    // --- MIGRACIÓN AUTOMÁTICA DE ESQUEMA ---
-    // Asegurar que la columna 'original_path' exista antes de insertar
+    // 1. Asegurar Columna y Poblar (Pre-requisito)
     try {
-        $cols = $db->query("PRAGMA table_info(documentos)")->fetchAll(PDO::FETCH_ASSOC);
-        $hasOriginalPath = false;
-        foreach ($cols as $col) {
-            if ($col['name'] === 'original_path') {
-                $hasOriginalPath = true;
-                break;
-            }
-        }
-        if (!$hasOriginalPath) {
+        $cols = $db->query("PRAGMA table_info(documentos)")->fetchAll(PDO::FETCH_COLUMN, 1);
+        if (!in_array('original_path', $cols)) {
             $db->exec("ALTER TABLE documentos ADD COLUMN original_path TEXT");
-            logMsg("🔧 Esquema actualizado: Se agregó columna 'original_path'.");
         }
-
-        // Crear índice ÚNICO para evitar duplicados a nivel DB (Sugerencia Usuario)
-        // Usamos IF NOT EXISTS para que no falle si ya existe
-        $db->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_original_path ON documentos(original_path)");
-
-    } catch (Exception $ex) {
-        // Ignorar si falla, quizás la tabla no existe aún (se creará luego si es importación nueva)
+    } catch (Exception $e) {
     }
 
-    // 1. Validar Archivos
-    if (!isset($_FILES['sql_file']) || !isset($_FILES['zip_file'])) {
-        throw new Exception('Faltan archivos SQL o ZIP.');
-    }
 
-    $sqlFile = $_FILES['sql_file'];
-    $zipFile = $_FILES['zip_file'];
+    // 2. Procesar SQL (Se mantiene para poblar DB)
+    if (isset($_FILES['sql_file']) && pathinfo($_FILES['sql_file']['name'], PATHINFO_EXTENSION) === 'sql') {
+        $sqlFile = $_FILES['sql_file'];
+        logMsg("Procesando SQL: " . $sqlFile['name']);
 
-    if (pathinfo($sqlFile['name'], PATHINFO_EXTENSION) !== 'sql') {
-        throw new Exception('El archivo 1 debe ser .sql');
-    }
-    if (pathinfo($zipFile['name'], PATHINFO_EXTENSION) !== 'zip') {
-        throw new Exception('El archivo 2 debe ser .zip');
-    }
+        $sqlData = parse_sql_inserts($sqlFile['tmp_name']); // Helper existente
+        $tables = $sqlData['tables'];
 
-    // 2. Procesar SQL
-    logMsg("Analizando archivo SQL: {$sqlFile['name']}...");
-
-    // Usamos el engine existente pero necesitamos ver qué tablas hay
-    $sqlData = parse_sql_inserts($sqlFile['tmp_name']);
-    $tables = $sqlData['tables'];
-
-    if (empty($tables)) {
-        throw new Exception('No se encontraron datos INSERT en el SQL.');
-    }
-
-    logMsg("Tablas encontradas: " . implode(', ', array_keys($tables)));
-
-    // Identificar Tablas (Mapeo Inteligente)
-    $tblDocs = null;
-    $tblCodes = null;
-
-    foreach ($tables as $name => $data) {
-        // Detectar Documentos
-        if (in_array('numero', $data['columns']) || strpos($name, 'doc') !== false) {
-            $tblDocs = $name;
-        }
-        // Detectar Códigos
-        if (in_array('code', $data['columns']) || in_array('codigo', $data['columns'])) {
-            $tblCodes = $name;
-        }
-    }
-
-    if (!$tblCodes) {
-        // Fallback
-        if (count($tables) === 1 && isset($tables['codes']))
-            $tblCodes = 'codes';
-    }
-
-    $idMap = [];
-
-    $db->beginTransaction();
-
-    // -- IMPORTAR DOCUMENTOS --
-    if ($tblDocs) {
-        logMsg("Importando documentos desde tabla '$tblDocs'...");
-        $docRows = $tables[$tblDocs]['rows'];
-        $cols = $tables[$tblDocs]['columns'];
-
-        $colMap = [
-            'numero' => ['numero', 'number', 'doc_assigned_name', 'name'],
-            'fecha' => ['fecha', 'date', 'created_at'],
-            'tipo' => ['tipo', 'type'],
-            'proveedor' => ['proveedor', 'supplier', 'vendor'],
-            'path' => ['path', 'ruta', 'file_path', 'url']
-        ];
-
-        // Helper para encontrar valor
-        $findVal = function ($row, $candidates, $cols) {
-            foreach ($candidates as $cand) {
-                if (isset($row[$cand]))
-                    return $row[$cand];
-            }
-            return null;
-        };
-
-        $stmtDoc = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, estado, ruta_archivo, original_path) VALUES (?, ?, ?, ?, 'pendiente', 'pending', ?)");
-
-        foreach ($docRows as $row) {
-            $numero = $row['numero'] ?? $row['number'] ?? $row['name'] ?? null;
-            $fecha = $row['fecha'] ?? $row['date'] ?? date('Y-m-d');
-            $tipo = $row['tipo'] ?? 'importado';
-            $proveedor = $row['proveedor'] ?? '';
-
-            // Buscar path original
-            $originalPath = null;
-            foreach ($colMap['path'] as $pCol) {
-                if (isset($row[$pCol])) {
-                    $originalPath = $row[$pCol];
-                    break;
+        $db->beginTransaction();
+        foreach ($tables as $name => $data) {
+            // Lógica simple de importación
+            if (in_array('numero', $data['columns']) || strpos($name, 'doc') !== false) {
+                $stmtDoc = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, estado, ruta_archivo, original_path) VALUES (?, ?, ?, ?, 'pendiente', 'pending', ?)");
+                foreach ($data['rows'] as $row) {
+                    $num = $row['numero'] ?? $row['number'] ?? $row['name'] ?? null;
+                    $path = $row['path'] ?? $row['ruta'] ?? $row['file_path'] ?? null;
+                    if ($num)
+                        $stmtDoc->execute(['importado', $num, date('Y-m-d'), '', $path]);
                 }
-            }
-
-            $oldId = $row['id'] ?? null;
-
-            if ($numero) {
-                $stmtDoc->execute([$tipo, $numero, $fecha, $proveedor, $originalPath]);
-                $newId = $db->lastInsertId();
-                if ($oldId)
-                    $idMap[$oldId] = $newId;
+                logMsg("Importados " . count($data['rows']) . " registros de $name");
             }
         }
-        logMsg("Se importaron " . count($docRows) . " documentos.");
-    } else {
-        logMsg("⚠️ No se detectó tabla de documentos en el SQL. Se intentará inferir si es necesario.", "warning");
+        $db->commit();
     }
 
-    // -- IMPORTAR CÓDIGOS --
-    if ($tblCodes) {
-        logMsg("Importando códigos desde tabla '$tblCodes'...");
-        $codeRows = $tables[$tblCodes]['rows'];
-
-        $stmtCode = $db->prepare("INSERT INTO codigos (documento_id, codigo, descripcion) VALUES (?, ?, ?)");
-
-        $importedCodes = 0;
-        foreach ($codeRows as $row) {
-            $oldDocId = $row['document_id'] ?? null;
-            $codigo = $row['code'] ?? $row['codigo'] ?? null;
-            $desc = $row['description'] ?? $row['descripcion'] ?? '';
-
-            if ($oldDocId && isset($idMap[$oldDocId])) {
-                $targetDocId = $idMap[$oldDocId];
-                if ($codigo) {
-                    $stmtCode->execute([$targetDocId, $codigo, $desc]);
-                    $importedCodes++;
-                }
-            }
-        }
-        logMsg("Se importaron $importedCodes códigos.");
-    }
-
-    $db->commit();
-
-    // 3. Procesar ZIP
-    logMsg("Procesando archivo ZIP...");
-    $zip = new ZipArchive();
-    if ($zip->open($zipFile['tmp_name']) === TRUE) {
-
+    // 3. Procesar ZIP usando FUNCION DEL USUARIO
+    if (isset($_FILES['zip_file'])) {
+        $zipTmpPath = $_FILES['zip_file']['tmp_name'];
         $uploadDir = CLIENTS_DIR . "/{$clientCode}/uploads/sql_import/";
-        if (!file_exists($uploadDir))
-            mkdir($uploadDir, 0777, true);
 
-        $updatedDocs = 0;
-        $unlinkedFiles = [];
-
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $filename = $zip->getNameIndex($i);
-            if (pathinfo($filename, PATHINFO_EXTENSION) !== 'pdf')
-                continue;
-
-            // Inicializar bandera de vinculación para este archivo
-            $linked = false;
-
-            // Extraer
-            $targetPath = $uploadDir . basename($filename);
-            copy("zip://" . $zipFile['tmp_name'] . "#" . $filename, $targetPath);
-            $relativePath = 'sql_import/' . basename($filename);
-
-            $basename = pathinfo($filename, PATHINFO_FILENAME);
-
-            // 0. ESTRATEGIA SUPREMA: Match por 'original_path'
-            $stmtPath = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE original_path = ? OR original_path LIKE ?");
-            $stmtPath->execute([$relativePath, $filename, "%/$filename"]);
-
-            if ($stmtPath->rowCount() > 0) {
-                $updatedDocs++;
-                logMsg("✅ Vinculado por PATH EXACTO: $filename", "success");
-                continue;
-            }
-
-            // 1. Intento por nombre (Exacto) - REMOVE 'pending' filter constraint
-            $stmtExact = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?))");
-            $stmtExact->execute([$relativePath, $basename]);
-
-            if ($stmtExact->rowCount() > 0) {
-                $updatedDocs++;
-                logMsg("✅ Vinculado (Exacto): $basename", "success");
-                continue;
-            }
-
-            // Si falla, intentamos match por prefijo con separadores comunes
-            // SQLite permite concatenación con ||
-            // Buscamos documentos cuyo numero sea el inicio del nombre del archivo seguido de un separador
-            $separators = ['_', '-', ' '];
-
-            foreach ($separators as $sep) {
-                // UPDATE documentos SET ruta_archivo = ... WHERE 'filename' LIKE numero || '_' || '%'
-                $stmtPrefix = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE ? LIKE numero || ? || '%'");
-                $stmtPrefix->execute([$relativePath, $basename, $sep]);
-
-                if ($stmtPrefix->rowCount() > 0) {
-                    $updatedDocs++;
-                    logMsg("✅ Vinculado (Sufijo '$sep'): $basename", "success");
-                    $linked = true;
-                    break;
-                }
-            }
-
-            if (!$linked) {
-                // 3. ESTRATEGIA MAESTRA: Tokenización (Búsqueda Profunda)
-                // El archivo puede tener el código en cualquier parte.
-                // Ej: "1763056495_JUEGO TAILOR 032025001910624-3.pdf"
-                // Tokens: ["1763056495", "JUEGO", "TAILOR", "032025001910624-3"]
-
-                // Usamos DOS estrategias de tokenización combinadas:
-
-                // Estrategia A: Conservar guiones (para códigos como "032025-3")
-                // Solo separamos por espacios o guiones bajos
-                $tokensA = preg_split('/[\s_]+/', $basename);
-
-                // Estrategia B: Separar todo (para casos tipo "Factura-123")
-                // Separamos por espacios, guiones bajos, guiones medios y puntos
-                $tokensB = preg_split('/[\s_\-.]+/', $basename);
-
-                // Combinar y limpiar
-                $tokens = array_merge($tokensA ? $tokensA : [], $tokensB ? $tokensB : []);
-                $tokens = array_unique($tokens);
-
-                // Filtramos tokens muy cortos
-                $tokens = array_filter($tokens, function ($t) {
-                    return strlen($t) >= 4;
-                }); // >= 4 permite años "2025" o codigos cortos "1611"
-
-                foreach ($tokens as $token) {
-                    $token = trim($token);
-
-                    // FILTRO DE SEGURIDAD PARA EVITAR FALSOS POSITIVOS
-                    // 1. Longitud mínima: 4 caracteres (evita "2025", "OCT", "123")
-                    if (strlen($token) < 4)
-                        continue;
-
-                    // 2. [REMOVIDO] El usuario indicó que pueden haber códigos solo letras (aunque raros).
-                    // Confiamos en que la coincidencia en DB sea suficiente filtro.
-                    // if (!preg_match('/[0-9]/', $token)) continue; 
-
-                    // A) ¿Es un numero de documento?
-                    $stmtDoc = $db->prepare("SELECT id FROM documentos WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?)) LIMIT 1");
-                    $stmtDoc->execute([$token]);
-                    $docId = $stmtDoc->fetchColumn();
-
-                    if (!$docId) {
-                        // B) ¿Es un código?
-                        $stmtCode = $db->prepare("SELECT documento_id FROM codigos WHERE TRIM(LOWER(codigo)) = TRIM(LOWER(?)) LIMIT 1");
-                        $stmtCode->execute([$token]);
-                        $docId = $stmtCode->fetchColumn();
-                    }
-
-                    if ($docId) {
-                        // ¡Encontrado!
-                        $stmtLink = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE id = ?");
-                        $stmtLink->execute([$relativePath, $docId]);
-
-                        if ($stmtLink->rowCount() > 0) {
-                            $updatedDocs++;
-                            logMsg("✅ Vinculado por TOKEN ($token): $basename", "success");
-                            $linked = true;
-                            break; // Dejar de buscar en este archivo
-                        }
-                    }
-                }
-            }
-
-            if (!$linked) {
-                // Store FULL filename for correct path reconstruction later
-                $unlinkedFiles[] = $filename;
-            }
-        }
-        $zip->close();
-
-        // --- 4. AUTO-CREACIÓN DE DOCUMENTOS FALTANTES (NUEVO) ---
-        // Si quedaron archivos sin vincular, los creamos como nuevos documentos.
-        $createdDocs = 0;
-        if (!empty($unlinkedFiles)) {
-            $stmtCreate = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, estado, ruta_archivo, original_path) VALUES (?, ?, ?, ?, ?, ?, ?)");
-
-            // Check By Full Path (Duplicate Prevention)
-            $stmtCheckPath = $db->prepare("SELECT id FROM documentos WHERE LOWER(original_path) = LOWER(?) LIMIT 1");
-
-            // Check By Number (Smart Link - Self Healing)
-            // Si el nombre del archivo coincide con un número de documento existente, lo vinculamos en lugar de crear uno nuevo.
-            $stmtCheckNumber = $db->prepare("SELECT id FROM documentos WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?)) LIMIT 1");
-            $stmtUpdateLink = $db->prepare("UPDATE documentos SET ruta_archivo = ?, original_path = ? WHERE id = ?");
-
-            foreach ($unlinkedFiles as $fullFilename) {
-                // 1. Chequeo de Duplicado Exacto (Path)
-                $stmtCheckPath->execute([$fullFilename]);
-                if ($stmtCheckPath->fetchColumn()) {
-                    continue; // Ya existe con ese path, saltar.
-                }
-
-                $numero = pathinfo($fullFilename, PATHINFO_FILENAME);
-                $relativePath = 'sql_import/' . $fullFilename;
-                $fecha = date('Y-m-d');
-
-                // 2. Auto-Link (Autocuración): ¿Existe un doc con este número pero sin vincular?
-                // Esto arregla el caso donde original_path estaba vacío en DB pero el nombre coincide.
-                $stmtCheckNumber->execute([$numero]);
-                $existingId = $stmtCheckNumber->fetchColumn();
-
-                if ($existingId) {
-                    // ¡Existe! Lo vinculamos y actualizamos su original_path
-                    $stmtUpdateLink->execute([$relativePath, $fullFilename, $existingId]);
-                    $updatedDocs++;
-                    logMsg("🔗 Auto-Vinculado (Recuperado): $numero", "success");
-                    continue; // Skip creation
-                }
-
-                // 3. Crear Nuevo Documento
-                try {
-                    $stmtCreate->execute(['generado_auto', $numero, $fecha, 'Importación Auto', 'procesado', $relativePath, $fullFilename]);
-                    $createdDocs++;
-                    logMsg("✨ Documento creado autom.: $numero", "success");
-                } catch (Exception $e) {
-                    // Si falla por índice único u otro motivo, lo atrapamos
-                    logMsg("❌ Error creation ($numero): " . $e->getMessage(), "error");
-                }
-            }
-            $unlinkedFiles = [];
-        }
-
-        // --- GENERAR RESUMEN INTELIGENTE ---
-
-        $summaryHtml = "<br><strong>📊 RESUMEN FINAL DE IMPORTACIÓN</strong><br>" . str_repeat("-", 40) . "<br>";
-
-        if ($createdDocs > 0) {
-            $summaryHtml .= "<br><span style='color: #60a5fa'>✨ <strong>$createdDocs Nuevos Documentos Creados</strong> (Estaban en ZIP pero no en SQL).</span><br>";
-        }
-
-        // 1. Archivos PDF no vinculados (Estaban en el ZIP pero no en la DB)
-        if (!empty($unlinkedFiles)) {
-            $unlinkedFiles = array_unique($unlinkedFiles);
-            $count = count($unlinkedFiles);
-            $summaryHtml .= "<br><span style='color: #fbbf24'>⚠️ <strong>$count Archivos PDF sin vincular</strong> (No existen en DB):</span><br>";
-            $summaryHtml .= "<div style='font-size: 0.85em; color: #ccc; margin-left: 10px; max-height: 150px; overflow-y: auto;'>";
-            $summaryHtml .= implode("<br>", $unlinkedFiles);
-            $summaryHtml .= "</div>";
-        } else {
-            $summaryHtml .= "<br><span style='color: #34d399'>✅ Todos los archivos PDF del ZIP fueron vinculados.</span><br>";
-        }
-
-        // 2. Documentos Huérfanos en DB (Estaban en SQL pero no llegó su PDF)
-        // Buscamos docs que sigan en estado 'pendiente' o con ruta 'importado'/'pending'
-        $stmtOrphans = $db->query("
-            SELECT d.numero, COUNT(c.id) as total_codes, GROUP_CONCAT(c.codigo) as codes_list
-            FROM documentos d
-            LEFT JOIN codigos c ON d.id = c.documento_id
-            WHERE d.ruta_archivo IN ('pending', 'importado')
-            GROUP BY d.id
-        ");
-        $orphanedDocs = $stmtOrphans->fetchAll(PDO::FETCH_ASSOC);
-
-        if (!empty($orphanedDocs)) {
-            $countOrphans = count($orphanedDocs);
-            $summaryHtml .= "<br><span style='color: #f87171'>❌ <strong>$countOrphans Documentos en DB sin PDF</strong> (Huérfanos):</span><br>";
-            $summaryHtml .= "<div style='font-size: 0.85em; color: #ccc; margin-left: 10px; max-height: 200px; overflow-y: auto;'>";
-            $summaryHtml .= "<table style='width:100%; text-align:left; border-collapse:collapse;'>";
-            $summaryHtml .= "<tr><th style='border-bottom:1px solid #444'>Documento</th><th style='border-bottom:1px solid #444'>Códigos</th></tr>";
-
-            foreach ($orphanedDocs as $row) {
-                $codeList = $row['codes_list'] ? substr($row['codes_list'], 0, 50) . (strlen($row['codes_list']) > 50 ? '...' : '') : 'Sin códigos';
-                $summaryHtml .= "<tr>";
-                $summaryHtml .= "<td style='padding:2px 5px; color: #f87171'>" . htmlspecialchars($row['numero']) . "</td>";
-                $summaryHtml .= "<td style='padding:2px 5px; color: #999'>" . htmlspecialchars($codeList) . " (" . $row['total_codes'] . ")</td>";
-                $summaryHtml .= "</tr>";
-            }
-            $summaryHtml .= "</table></div>";
-        } else {
-            $summaryHtml .= "<br><span style='color: #34d399'>✅ No quedaron documentos huérfanos en la DB.</span><br>";
-        }
-
-        $summaryHtml .= "<br><i style='color:#888'>Fin del reporte.</i>";
-
-        logMsg($summaryHtml);
-        logMsg("Se procesaron " . ($updatedDocs + count($unlinkedFiles)) . " archivos en total.", "success");
-
-    } else {
-        throw new Exception("No se pudo abrir el ZIP.");
+        // LLAMADA A LA FUNCIÓN DEL USUARIO
+        processZipAndLink($db, $zipTmpPath, $uploadDir, 'sql_import');
     }
 
     $response['success'] = true;
