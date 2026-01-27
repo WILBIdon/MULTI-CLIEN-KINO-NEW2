@@ -429,8 +429,17 @@ try {
         $createdDocs = 0;
         if (!empty($unlinkedFiles)) {
             $stmtCreate = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, estado, ruta_archivo, original_path) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            // Prepare check statement
+            $stmtCheck = $db->prepare("SELECT id FROM documentos WHERE original_path = ? LIMIT 1");
 
             foreach ($unlinkedFiles as $fileBaseName) {
+                // Check if already exists (Prevent Duplicates)
+                $stmtCheck->execute([$fileBaseName]);
+                if ($stmtCheck->fetchColumn()) {
+                    // Already exists, skip creation
+                    continue;
+                }
+
                 // Derivar datos básicos del nombre del archivo
                 // Ejemplo: "Factura-123.pdf" -> Numero: "Factura-123"
                 $numero = pathinfo($fileBaseName, PATHINFO_FILENAME);
