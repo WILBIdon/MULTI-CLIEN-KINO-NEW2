@@ -354,6 +354,7 @@ try {
         ob_clean(); // Ensure no previous output
         header('Content-Type: application/json');
         echo json_encode(['success' => true, 'logs' => [['msg' => "Hard Reset Realizado + Estructura Regenerada", 'type' => 'success']]]);
+        ob_end_flush();
         exit;
     }
 
@@ -556,3 +557,4 @@ try {
 
 ob_clean();
 echo json_encode($response);
+ob_end_flush();
