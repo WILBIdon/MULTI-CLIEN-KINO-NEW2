@@ -107,9 +107,9 @@ try {
                 . ");"
             );
 
-            ob_clean();
+            while (ob_get_level()) { ob_end_clean(); } // Clean ALL buffers
             echo json_encode(['success' => true, 'logs' => [['msg' => $msg . "\n- Estructura regenerada.", 'type' => 'success']]]);
-            exit;
+            die(); // Force stop
         } catch (Exception $e) {
             ob_clean();
             echo json_encode(['success' => false, 'error' => 'Error fatal en Hard Reset: ' . $e->getMessage()]);
