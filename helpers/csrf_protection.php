@@ -81,8 +81,10 @@ class CsrfProtection
             ?? null;
 
         if (!self::validate($token)) {
-            header('HTTP/1.1 403 Forbidden');
-            header('Content-Type: application/json');
+            if (!headers_sent()) {
+                header('HTTP/1.1 403 Forbidden');
+                header('Content-Type: application/json');
+            }
 
             echo json_encode([
                 'error' => 'CSRF token inválido o faltante',
@@ -94,6 +96,10 @@ class CsrfProtection
                 'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown',
                 'endpoint' => $_SERVER['REQUEST_URI'] ?? 'Unknown'
             ]);
+
+            if (defined('PHPUNIT_RUNNING')) {
+                throw new \RuntimeException('CSRF_INVALID');
+            }
 
             exit;
         }

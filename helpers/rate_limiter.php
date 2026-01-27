@@ -109,18 +109,22 @@ class RateLimiter
     {
         $result = self::check();
 
-        // Agregar headers de rate limiting
-        header('X-RateLimit-Limit: ' . $result['limit']);
-        header('X-RateLimit-Remaining: ' . $result['remaining']);
+        if (!headers_sent()) {
+            // Agregar headers de rate limiting
+            header('X-RateLimit-Limit: ' . $result['limit']);
+            header('X-RateLimit-Remaining: ' . $result['remaining']);
 
-        if (isset($result['reset_time'])) {
-            header('X-RateLimit-Reset: ' . $result['reset_time']);
+            if (isset($result['reset_time'])) {
+                header('X-RateLimit-Reset: ' . $result['reset_time']);
+            }
         }
 
         if (!$result['allowed']) {
-            header('HTTP/1.1 429 Too Many Requests');
-            header('Retry-After: ' . $result['retry_after']);
-            header('Content-Type: application/json');
+            if (!headers_sent()) {
+                header('HTTP/1.1 429 Too Many Requests');
+                header('Retry-After: ' . $result['retry_after']);
+                header('Content-Type: application/json');
+            }
 
             echo json_encode([
                 'error' => $result['message'],
@@ -131,6 +135,10 @@ class RateLimiter
                 'ip' => self::getClientIp(),
                 'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown'
             ]);
+
+            if (defined('PHPUNIT_RUNNING')) {
+                throw new \RuntimeException('RATE_LIMIT_EXCEEDED');
+            }
 
             exit;
         }

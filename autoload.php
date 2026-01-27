@@ -11,14 +11,28 @@
 
 // Registrar función de autoload
 spl_autoload_register(function ($class) {
-    // Convertir nombre de clase a ruta de archivo
-    $classFile = __DIR__ . '/helpers/' . $class . '.php';
+    // PSR-4 Basic Implementation for Kino\ namespace
+    $prefix = 'Kino\\';
+    $base_dir = __DIR__ . '/src/';
 
-    if (file_exists($classFile)) {
-        require_once $classFile;
-        return true;
+    $len = strlen($prefix);
+    if (strncmp($prefix, $class, $len) !== 0) {
+        // Fallback to helpers for legacy
+        $classFile = __DIR__ . '/helpers/' . $class . '.php';
+        if (file_exists($classFile)) {
+            require_once $classFile;
+            return true;
+        }
+        return false;
     }
 
+    $relative_class = substr($class, $len);
+    $file = $base_dir . str_replace('\\', '/', $relative_class) . '.php';
+
+    if (file_exists($file)) {
+        require $file;
+        return true;
+    }
     return false;
 });
 

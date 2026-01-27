@@ -51,5 +51,3 @@ try {
     // Si la conexión falla, detener la ejecución con un mensaje claro
     die('❌ Error conectando a la base central: ' . $e->getMessage());
 }
-
-?>

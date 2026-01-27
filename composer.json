@@ -1,0 +1,14 @@
+{
+    "name": "kino/trace",
+    "description": "Kino Trace Application",
+    "type": "project",
+    "require": {
+        "php": "7.4"
+    },
+    "authors": [
+        {
+            "name": "Kino",
+            "email": "info@kino.com"
+        }
+    ]
+}
