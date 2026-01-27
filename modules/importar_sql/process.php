@@ -344,13 +344,15 @@ try {
         $db = null;
         gc_collect_cycles();
         if (file_exists($dbPath))
-            unlink($dbPath);
+            @unlink($dbPath); // Suppress warning if file blocked
         $db = open_client_db($clientCode); // Recreate
         // Definir esquema básico
         $db->exec("CREATE TABLE IF NOT EXISTS documentos (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT, numero TEXT, fecha DATE, fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP, proveedor TEXT, naviera TEXT, peso_kg REAL, valor_usd REAL, ruta_archivo TEXT NOT NULL, original_path TEXT, hash_archivo TEXT, datos_extraidos TEXT, ai_confianza REAL, requiere_revision INTEGER DEFAULT 0, estado TEXT DEFAULT 'pendiente', notas TEXT);");
         $db->exec("CREATE TABLE IF NOT EXISTS codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, documento_id INTEGER NOT NULL, codigo TEXT NOT NULL, descripcion TEXT, cantidad INTEGER, valor_unitario REAL, validado INTEGER DEFAULT 0, alerta TEXT, FOREIGN KEY(documento_id) REFERENCES documentos(id) ON DELETE CASCADE);");
         $db->exec("CREATE TABLE IF NOT EXISTS vinculos (id INTEGER PRIMARY KEY AUTOINCREMENT, documento_origen_id INTEGER NOT NULL, documento_destino_id INTEGER NOT NULL, tipo_vinculo TEXT NOT NULL, codigos_coinciden INTEGER DEFAULT 0, codigos_faltan INTEGER DEFAULT 0, codigos_extra INTEGER DEFAULT 0, discrepancias TEXT, FOREIGN KEY(documento_origen_id) REFERENCES documentos(id) ON DELETE CASCADE, FOREIGN KEY(documento_destino_id) REFERENCES documentos(id) ON DELETE CASCADE);");
 
+        ob_clean(); // Ensure no previous output
+        header('Content-Type: application/json');
         echo json_encode(['success' => true, 'logs' => [['msg' => "Hard Reset Realizado + Estructura Regenerada", 'type' => 'success']]]);
         exit;
     }
