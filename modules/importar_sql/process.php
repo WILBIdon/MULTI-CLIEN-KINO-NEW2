@@ -138,6 +138,25 @@ try {
         throw new Exception('Método inválido.');
     }
 
+    // --- MIGRACIÓN AUTOMÁTICA DE ESQUEMA ---
+    // Asegurar que la columna 'original_path' exista antes de insertar
+    try {
+        $cols = $db->query("PRAGMA table_info(documentos)")->fetchAll(PDO::FETCH_ASSOC);
+        $hasOriginalPath = false;
+        foreach ($cols as $col) {
+            if ($col['name'] === 'original_path') {
+                $hasOriginalPath = true;
+                break;
+            }
+        }
+        if (!$hasOriginalPath) {
+            $db->exec("ALTER TABLE documentos ADD COLUMN original_path TEXT");
+            logMsg("🔧 Esquema actualizado: Se agregó columna 'original_path'.");
+        }
+    } catch (Exception $ex) {
+        // Ignorar si falla, quizás la tabla no existe aún (se creará luego si es importación nueva)
+    }
+
     // 1. Validar Archivos
     if (!isset($_FILES['sql_file']) || !isset($_FILES['zip_file'])) {
         throw new Exception('Faltan archivos SQL o ZIP.');
