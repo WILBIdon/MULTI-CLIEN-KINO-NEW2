@@ -14,15 +14,25 @@ ini_set('memory_limit', '512M');
 register_shutdown_function(function() {
     $error = error_get_last();
     $output = ob_get_contents();
-    if ($error || $output) {
-        $log = "Error: " . print_r($error, true) . "\nOutput: " . $output;
-        file_put_contents(__DIR__ . '/debug_fatal_log.txt', $log);
-    }
+    // Always write log to prove we ran
+    $log = "Timestamp: " . date('Y-m-d H:i:s') . "\n";
+    $log .= "Error: " . print_r($error, true) . "\n";
+    $log .= "Output Length: " . strlen($output) . "\n";
+    $log .= "Output Preview: " . substr($output, 0, 1000) . "\n";
+    file_put_contents('C:/Users/Usuario/Desktop/kino-trace/debug_panic.txt', $log, FILE_APPEND);
 });
 
 require_once __DIR__ . '/../../config.php';
+// Clean buffer after config in case of whitespace
+while (ob_get_level()) { ob_end_clean(); } ob_start();
+
 require_once __DIR__ . '/../../helpers/tenant.php';
+// Clean buffer after tenant
+while (ob_get_level()) { ob_end_clean(); } ob_start();
+
 require_once __DIR__ . '/../../helpers/import_engine.php';
+// Clean buffer after engine
+while (ob_get_level()) { ob_end_clean(); } ob_start();
 
 $response = [
     'success' => false,
