@@ -217,25 +217,60 @@ if ($action === 'import') {
 
         // Process rows
         $stats = ['matched' => 0, 'not_found' => 0, 'codes_added' => 0];
+        $insertedThisRun = []; // CACHÉ: key = nombre_pdf (normalizado) => docId
+
         $stmtInsertCode = $db->prepare('INSERT OR IGNORE INTO codigos (documento_id, codigo) VALUES (?, ?)');
 
         foreach ($data as $index => $row) {
             $fileName = $row[$nameColumn] ?? '';
             $code = $codeColumn ? ($row[$codeColumn] ?? '') : '';
 
-            $doc = findDocumentByName($db, $fileName);
+            if (empty($fileName))
+                continue;
 
-            if ($doc) {
-                $stats['matched']++;
+            $pdfKey = strtolower(trim($fileName));
+            $docId = null;
+            $doc = null;
 
-                if (!empty($code)) {
-                    $stmtInsertCode->execute([$doc['id'], $code]);
-                    $stats['codes_added']++;
+            // 1. Revisar Caché (Mismo proceso)
+            if (isset($insertedThisRun[$pdfKey])) {
+                $docId = $insertedThisRun[$pdfKey];
+                $stats['matched']++; // Contamos como match porque ya lo procesamos
+            }
+            // 2. Buscar en BD
+            else {
+                $doc = findDocumentByName($db, $fileName);
+                if ($doc) {
+                    $docId = $doc['id'];
+                    $stats['matched']++;
+                } else {
+                    $stats['not_found']++;
+                    if ($index < 5) { // Log first 5 not found
+                        addLog("⚠ No encontrado en BD: {$fileName}", 'warning');
+                    }
+                    continue; // En excel_import NO creamos documentos, solo enlazamos
                 }
-            } else {
-                $stats['not_found']++;
-                if ($index < 5) { // Log first 5 not found
-                    addLog("⚠ No encontrado: {$fileName}", 'warning');
+
+                // Guardar en caché
+                if ($docId) {
+                    $insertedThisRun[$pdfKey] = $docId;
+                }
+            }
+
+            if ($docId) {
+                if (!empty($code)) {
+                    // Soportar múltiples códigos en una celda separados por comas
+                    $subCodes = explode(',', $code);
+                    foreach ($subCodes as $c) {
+                        $c = trim($c);
+                        if (empty($c))
+                            continue;
+
+                        $stmtInsertCode->execute([$docId, $c]);
+                        if ($stmtInsertCode->rowCount() > 0) {
+                            $stats['codes_added']++;
+                        }
+                    }
                 }
             }
         }
