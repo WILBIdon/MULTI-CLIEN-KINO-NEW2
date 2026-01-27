@@ -384,6 +384,8 @@ try {
 
         // Mapa de IDs: [OLD_ID => NEW_ID]
         $idMap = [];
+        // Mapa de Números: [NORMALIZED_NUMERO => NEW_ID] (Nuevo Fallback)
+        $numeroMap = [];
 
         // 1. IMPORTAR DOCUMENTOS
         // Buscamos la tabla con varios nombres posibles
@@ -404,11 +406,11 @@ try {
             // --- DIAGNOSTICO: Loguear columnas encontradas en el primer row ---
             if (!empty($data['rows'])) {
                 $firstRowKeys = array_keys($data['rows'][0]);
-                logMsg("🔎 Columnas encontradas en tabla documentos (RAW): " . implode(", ", $firstRowKeys), "info");
+                logMsg("🔎 Columnas documentos (RAW): " . implode(", ", $firstRowKeys), "info");
             }
 
             foreach ($data['rows'] as $row) {
-                // Normalizar keys del row a minúsculas para búsqueda insensible
+                // Normalizar keys del row a minúsculas
                 $rowLower = array_change_key_case($row, CASE_LOWER);
 
                 // --- MAPEO ROBUSTO DE ID ---
@@ -424,7 +426,6 @@ try {
                 $valor = $rowLower['valor_usd'] ?? 0;
 
                 // --- MAPEO AGRESIVO DE ORIGINAL PATH ---
-                // Verifica todas las combinaciones posibles donde podría estar la ruta antigua
                 $origPath = null;
                 $possiblePathKeys = ['original_path', 'ruta_archivo', 'ruta', 'path', 'file_path', 'file', 'archivo', 'filename', 'nombre_archivo', 'url', 'uri', 'src'];
 
@@ -435,7 +436,6 @@ try {
                     }
                 }
 
-                // La ruta_archivo final en DB la reiniciamos a 'pending' para que el ZIP la llene
                 $ruta = 'pending';
                 $estado = $rowLower['estado'] ?? 'pendiente';
 
@@ -446,14 +446,20 @@ try {
                     if ($oldId) {
                         $idMap[$oldId] = $newId;
                     }
+                    // Guardar mapa por numero tambien (normalizado)
+                    $normNum = normalizeKey($numero);
+                    if ($normNum !== "") {
+                        $numeroMap[$normNum] = $newId;
+                    }
+
                 } catch (Exception $e) {
                     logMsg("Error importando doc '$numero': " . $e->getMessage(), "warning");
                 }
             }
-            logMsg("Documentos importados. Mapeados " . count($idMap) . " IDs.", "success");
+            logMsg("Documentos importados. Mapeados " . count($idMap) . " IDs y " . count($numeroMap) . " Números.", "success");
         }
 
-        // 2. IMPORTAR CÓDIGOS (Usando mapa de IDs y Mapeo Flexible)
+        // 2. IMPORTAR CÓDIGOS
         if (isset($tables['codigos'])) {
             $data = $tables['codigos'];
             $stmtCode = $db->prepare("INSERT INTO codigos (documento_id, codigo, descripcion, cantidad, valor_unitario, validado, alerta) 
@@ -461,20 +467,18 @@ try {
 
             $codesCount = 0;
 
-            // --- DIAGNOSTICO: Loguead columnas ---
+            // --- DIAGNOSTICO ---
             if (!empty($data['rows'])) {
                 $firstCodeKeys = array_keys($data['rows'][0]);
-                logMsg("🔎 Columnas encontradas en tabla codigos (RAW): " . implode(", ", $firstCodeKeys), "info");
+                logMsg("🔎 Columnas codigos (RAW): " . implode(", ", $firstCodeKeys), "info");
             }
 
             foreach ($data['rows'] as $row) {
-                // Normalizar
                 $rowLower = array_change_key_case($row, CASE_LOWER);
 
-                // --- MAPEO ROBUSTO DE FOREIGN KEY ---
+                // --- ESTRATEGIA 1: ID ---
                 $oldDocId = null;
                 $possibleFkKeys = ['documento_id', 'document_id', 'doc_id', 'id_documento', 'id_doc', 'ref_id', 'parent_id', 'documento', 'doc'];
-
                 foreach ($possibleFkKeys as $fkKey) {
                     if (isset($rowLower[$fkKey])) {
                         $oldDocId = $rowLower[$fkKey];
@@ -482,12 +486,33 @@ try {
                     }
                 }
 
-                // Solo insertar si tenemos el padre mapeado
+                $finalDocId = null;
+
+                // Intento 1: Por ID exacto
                 if ($oldDocId && isset($idMap[$oldDocId])) {
-                    $newDocId = $idMap[$oldDocId];
+                    $finalDocId = $idMap[$oldDocId];
+                }
+
+                // Intento 2: Por Número de Documento (Fallback)
+                if (!$finalDocId) {
+                    $possibleNumKeys = ['documento_numero', 'numero_documento', 'numero', 'doc_number', 'parent_number'];
+                    foreach ($possibleNumKeys as $numKey) {
+                        if (!empty($rowLower[$numKey])) {
+                            $rawNum = $rowLower[$numKey];
+                            $normRaw = normalizeKey($rawNum);
+                            if (isset($numeroMap[$normRaw])) {
+                                $finalDocId = $numeroMap[$normRaw];
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Solo insertar si encontramos padre
+                if ($finalDocId) {
                     try {
                         $stmtCode->execute([
-                            $newDocId,
+                            $finalDocId,
                             $rowLower['codigo'] ?? $rowLower['code'] ?? 'UNKNOWN',
                             $rowLower['descripcion'] ?? $rowLower['description'] ?? $rowLower['desc'] ?? '',
                             $rowLower['cantidad'] ?? $rowLower['quantity'] ?? $rowLower['qty'] ?? 0,
