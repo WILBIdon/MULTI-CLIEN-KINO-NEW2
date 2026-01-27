@@ -38,3 +38,20 @@ Windows (PowerShell/CMD) no tiene el comando `grep` instalado por defecto.
 2.  Usar Git Bash si está instalado.
 3.  (Recomendado para el Agente) Usar las herramientas internas `grep_search`.
 
+---
+
+## 3. Error: "Los códigos aparecen como 0" tras importación SQL
+
+**Síntoma:**
+Después de importar un archivo SQL, los documentos aparecen en la lista, pero la columna "Códigos" muestra `0`, aunque el archivo SQL original contenía datos en la tabla `codigos`.
+
+**Causa:**
+El script de importación simple no mantenía la relación entre las tablas. Al insertar documentos, la base de datos genera nuevos `ID`. Si no se actualiza el `documento_id` en las tablas hijas (`codigos`, `vinculos`) con estos nuevos IDs, los registros quedan huérfanos o no se importan.
+
+**Solución:**
+Se implementó un sistema de mapeo de IDs (`$idMap`) en `process.php`.
+1.  Al insertar un documento, se guarda su `ID original` (del SQL) y su `Nuevo ID` (autoincremental).
+2.  Al insertar códigos y vínculos, se busca el `ID original` en el mapa y se reemplaza por el `Nuevo ID`.
+
+**Prevención:**
+Cualquier script de migración o importación debe manejar explícitamente las claves foráneas (Foreign Keys) cuando los IDs primarios cambian.

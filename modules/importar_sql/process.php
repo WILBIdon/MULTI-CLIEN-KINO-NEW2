@@ -380,19 +380,113 @@ try {
         $tables = $sqlData['tables'];
 
         $db->beginTransaction();
-        foreach ($tables as $name => $data) {
-            // Lógica simple de importación
-            if (in_array('numero', $data['columns']) || strpos($name, 'doc') !== false) {
-                $stmtDoc = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, estado, ruta_archivo, original_path) VALUES (?, ?, ?, ?, 'pendiente', 'pending', ?)");
-                foreach ($data['rows'] as $row) {
-                    $num = $row['numero'] ?? $row['number'] ?? $row['name'] ?? null;
-                    $path = $row['path'] ?? $row['ruta'] ?? $row['file_path'] ?? null;
-                    if ($num)
-                        $stmtDoc->execute(['importado', $num, date('Y-m-d'), '', $path]);
+
+        // Mapa de IDs: [OLD_ID => NEW_ID]
+        $idMap = [];
+
+        // 1. IMPORTAR DOCUMENTOS
+        // Buscamos la tabla con varios nombres posibles
+        $docTableName = null;
+        if (isset($tables['documentos']))
+            $docTableName = 'documentos';
+        elseif (isset($tables['documents']))
+            $docTableName = 'documents';
+
+        if ($docTableName) {
+            $data = $tables[$docTableName];
+            // Preparar statement genérico
+            $stmtDoc = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, naviera, peso_kg, valor_usd, ruta_archivo, original_path, estado) 
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
+            logMsg("Importando documentos desde '$docTableName'...", "info");
+
+            foreach ($data['rows'] as $row) {
+                // Mapear columnas (flexible)
+                $oldId = $row['id'] ?? null;
+                $tipo = $row['tipo'] ?? 'importado';
+                $numero = $row['numero'] ?? $row['number'] ?? $row['name'] ?? 'S/N';
+                $fecha = $row['fecha'] ?? date('Y-m-d');
+                $proveedor = $row['proveedor'] ?? '';
+                $naviera = $row['naviera'] ?? '';
+                $peso = $row['peso_kg'] ?? 0;
+                $valor = $row['valor_usd'] ?? 0;
+                $ruta = $row['ruta_archivo'] ?? $row['path'] ?? 'pending';
+                $origPath = $row['original_path'] ?? null;
+                $estado = $row['estado'] ?? 'pendiente';
+
+                try {
+                    $stmtDoc->execute([$tipo, $numero, $fecha, $proveedor, $naviera, $peso, $valor, $ruta, $origPath, $estado]);
+                    $newId = $db->lastInsertId();
+
+                    if ($oldId) {
+                        $idMap[$oldId] = $newId;
+                    }
+                } catch (Exception $e) {
+                    logMsg("Error importando doc '$numero': " . $e->getMessage(), "warning");
                 }
-                logMsg("Importados " . count($data['rows']) . " registros de $name");
             }
+            logMsg("Documentos importados. Mapeados " . count($idMap) . " IDs.", "success");
         }
+
+        // 2. IMPORTAR CÓDIGOS (Usando mapa de IDs)
+        if (isset($tables['codigos'])) {
+            $data = $tables['codigos'];
+            $stmtCode = $db->prepare("INSERT INTO codigos (documento_id, codigo, descripcion, cantidad, valor_unitario, validado, alerta) 
+                                      VALUES (?, ?, ?, ?, ?, ?, ?)");
+
+            $codesCount = 0;
+            foreach ($data['rows'] as $row) {
+                $oldDocId = $row['documento_id'] ?? null;
+
+                // Solo insertar si tenemos el padre mapeado
+                if ($oldDocId && isset($idMap[$oldDocId])) {
+                    $newDocId = $idMap[$oldDocId];
+                    try {
+                        $stmtCode->execute([
+                            $newDocId,
+                            $row['codigo'] ?? 'UNKNOWN',
+                            $row['descripcion'] ?? '',
+                            $row['cantidad'] ?? 0,
+                            $row['valor_unitario'] ?? 0,
+                            $row['validado'] ?? 0,
+                            $row['alerta'] ?? null
+                        ]);
+                        $codesCount++;
+                    } catch (Exception $e) {
+                    }
+                }
+            }
+            logMsg("Códigos importados: $codesCount", "success");
+        }
+
+        // 3. IMPORTAR VÍNCULOS (Usando mapa de IDs)
+        if (isset($tables['vinculos'])) {
+            $data = $tables['vinculos'];
+            $stmtLink = $db->prepare("INSERT INTO vinculos (documento_origen_id, documento_destino_id, tipo_vinculo, codigos_coinciden, discrepancias) 
+                                      VALUES (?, ?, ?, ?, ?)");
+
+            $linksCount = 0;
+            foreach ($data['rows'] as $row) {
+                $oldOriginId = $row['documento_origen_id'] ?? null;
+                $oldDestId = $row['documento_destino_id'] ?? null;
+
+                if ($oldOriginId && isset($idMap[$oldOriginId]) && $oldDestId && isset($idMap[$oldDestId])) {
+                    try {
+                        $stmtLink->execute([
+                            $idMap[$oldOriginId],
+                            $idMap[$oldDestId],
+                            $row['tipo_vinculo'] ?? 'manual',
+                            $row['codigos_coinciden'] ?? 0,
+                            $row['discrepancias'] ?? null
+                        ]);
+                        $linksCount++;
+                    } catch (Exception $e) {
+                    }
+                }
+            }
+            logMsg("Vínculos restaurados: $linksCount", "success");
+        }
+
         $db->commit();
     }
 
