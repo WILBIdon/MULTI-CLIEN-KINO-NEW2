@@ -424,9 +424,38 @@ try {
         }
         $zip->close();
 
+        // --- 4. AUTO-CREACIÓN DE DOCUMENTOS FALTANTES (NUEVO) ---
+        // Si quedaron archivos sin vincular, los creamos como nuevos documentos.
+        $createdDocs = 0;
+        if (!empty($unlinkedFiles)) {
+            $stmtCreate = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, estado, ruta_archivo, original_path) VALUES (?, ?, ?, ?, ?, ?, ?)");
+
+            foreach ($unlinkedFiles as $fileBaseName) {
+                // Derivar datos básicos del nombre del archivo
+                // Ejemplo: "Factura-123.pdf" -> Numero: "Factura-123"
+                $numero = pathinfo($fileBaseName, PATHINFO_FILENAME);
+                $fecha = date('Y-m-d');
+                $relativePath = 'sql_import/' . $fileBaseName;
+
+                try {
+                    $stmtCreate->execute(['generado_auto', $numero, $fecha, 'Importación Auto', 'procesado', $relativePath, $fileBaseName]);
+                    $createdDocs++;
+                    logMsg("✨ Documento creado autom.: $numero", "success");
+                } catch (Exception $e) {
+                    logMsg("❌ Error al crear documento auto ($numero): " . $e->getMessage(), "error");
+                }
+            }
+            // Limpiamos la lista de 'unlinked' porque ya fueron tratados (ahora son 'created')
+            $unlinkedFiles = [];
+        }
+
         // --- GENERAR RESUMEN INTELIGENTE ---
 
         $summaryHtml = "<br><strong>📊 RESUMEN FINAL DE IMPORTACIÓN</strong><br>" . str_repeat("-", 40) . "<br>";
+
+        if ($createdDocs > 0) {
+            $summaryHtml .= "<br><span style='color: #60a5fa'>✨ <strong>$createdDocs Nuevos Documentos Creados</strong> (Estaban en ZIP pero no en SQL).</span><br>";
+        }
 
         // 1. Archivos PDF no vinculados (Estaban en el ZIP pero no en la DB)
         if (!empty($unlinkedFiles)) {
