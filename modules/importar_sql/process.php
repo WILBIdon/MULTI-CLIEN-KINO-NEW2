@@ -466,6 +466,11 @@ try {
                             $codeList = preg_split('/[;,|]/', $rawCodes);
                         }
 
+                        // DIAGNOSTICO: Loguear qué encontramos
+                        if (count($codeList) > 0) {
+                            logMsg("🛠️ Extrayendo " . count($codeList) . " códigos para doc '$numero' (Raw len: " . strlen($rawCodes) . ")", "info");
+                        }
+
                         // Preparar insert de códigos (si no se preparó antes)
                         if (!isset($stmtCode)) {
                             $stmtCode = $db->prepare("INSERT INTO codigos (documento_id, codigo, descripcion, cantidad, valor_unitario, validado, alerta) 
