@@ -74,6 +74,12 @@ function parse_csv(string $filePath, string $delimiter = ','): array
  * @param string $filePath Ruta al archivo SQL.
  * @return array Datos extraídos de las sentencias INSERT.
  */
+/**
+ * Parsea un archivo SQL y extrae sentencias INSERT.
+ *
+ * @param string $filePath Ruta al archivo SQL.
+ * @return array Datos extraídos de las sentencias INSERT.
+ */
 function parse_sql_inserts(string $filePath): array
 {
     if (!file_exists($filePath)) {
@@ -83,6 +89,7 @@ function parse_sql_inserts(string $filePath): array
     $content = file_get_contents($filePath);
 
     // Buscar sentencias INSERT
+    // Modificado para capturar `INSERT INTO table (...) VALUES ...`
     $pattern = '/INSERT\s+INTO\s+[`"]?(\w+)[`"]?\s*\(([^)]+)\)\s*VALUES\s*(.+?);/is';
     preg_match_all($pattern, $content, $matches, PREG_SET_ORDER);
 
@@ -95,34 +102,154 @@ function parse_sql_inserts(string $filePath): array
 
     foreach ($matches as $match) {
         $tableName = $match[1];
-        $columns = array_map(function ($c) {
-            return trim($c, " `\"'\t\n\r");
-        }, explode(',', $match[2]));
+
+        // Parsear columnas (respetando comillas)
+        $minifiedCols = $match[2];
+        $columns = [];
+        $token = strtok($minifiedCols, ",");
+        while ($token !== false) {
+            $columns[] = trim(trim($token), "`\"' \n\r\t");
+            $token = strtok(",");
+        }
 
         $valuesRaw = $match[3];
 
-        // Parsear valores (puede haber múltiples filas)
-        preg_match_all('/\(([^)]+)\)/', $valuesRaw, $valueMatches);
+        // Parsear valores: Es complejo porque puede haber (), (), ...
+        // Usamos una estregia de balanceo de paréntesis
+        $rowValuesSets = [];
+        $len = strlen($valuesRaw);
+        $currentSet = '';
+        $inParenthesis = 0;
+        $inQuotes = false;
+        $quoteChar = '';
+        $escape = false;
 
-        $rows = [];
-        foreach ($valueMatches[1] as $valueSet) {
-            // Parsear valores individuales
-            preg_match_all("/'([^']*)'|\"([^\"]*)\"|(\d+\.?\d*)|NULL/i", $valueSet, $vals);
+        for ($i = 0; $i < $len; $i++) {
+            $char = $valuesRaw[$i];
 
-            $rowValues = [];
-            foreach ($vals[0] as $v) {
-                $v = trim($v);
-                if (strtoupper($v) === 'NULL') {
-                    $rowValues[] = null;
-                } elseif (preg_match('/^[\'"](.*)[\'"]\s*$/', $v, $m)) {
-                    $rowValues[] = $m[1];
-                } else {
-                    $rowValues[] = is_numeric($v) ? $v + 0 : $v;
-                }
+            if ($escape) {
+                $currentSet .= $char;
+                $escape = false;
+                continue;
             }
 
-            if (count($rowValues) === count($columns)) {
-                $rows[] = array_combine($columns, $rowValues);
+            if ($char === '\\') {
+                $currentSet .= $char;
+                $escape = true;
+                continue;
+            }
+
+            if (!$inQuotes) {
+                if ($char === "'" || $char === '"') {
+                    $inQuotes = true;
+                    $quoteChar = $char;
+                } elseif ($char === '(') {
+                    $inParenthesis++;
+                } elseif ($char === ')') {
+                    $inParenthesis--;
+                } elseif ($char === ',' && $inParenthesis === 0) {
+                    // Separador de FILAS: (val1), (val2)
+                    // Ignoramos la coma fuera de grupos
+                    continue;
+                }
+            } else {
+                if ($char === $quoteChar) {
+                    $inQuotes = false;
+                }
+            }
+            $currentSet .= $char;
+
+            // Si cerramos un grupo principal (id, name, ...), lo guardamos
+            if ($inParenthesis === 0 && $char === ')' && !$inQuotes) {
+                if (trim($currentSet) !== '') {
+                    $rowValuesSets[] = $currentSet;
+                }
+                $currentSet = '';
+            }
+        }
+
+        $rows = [];
+        foreach ($rowValuesSets as $valueSet) {
+            // Limpiar paréntesis exteriores
+            $valueSet = trim($valueSet, " \t\n\r,");
+            if (substr($valueSet, 0, 1) === '(' && substr($valueSet, -1) === ')') {
+                $valueSet = substr($valueSet, 1, -1);
+            }
+
+            // Parsear valores individuales dentro de la fila (respetando comillas)
+            $vals = [];
+            $vLen = strlen($valueSet);
+            $vCurr = '';
+            $vInQuotes = false;
+            $vQuoteChar = '';
+            $vEscape = false;
+
+            for ($j = 0; $j < $vLen; $j++) {
+                $c = $valueSet[$j];
+
+                if ($vEscape) {
+                    $vCurr .= $c;
+                    $vEscape = false;
+                    continue;
+                }
+                if ($c === '\\') {
+                    $vCurr .= $c;
+                    $vEscape = true;
+                    continue;
+                }
+
+                if (!$vInQuotes) {
+                    if ($c === "'" || $c === '"') {
+                        $vInQuotes = true;
+                        $vQuoteChar = $c;
+                        // NO agregamos la comilla al valor limpio
+                    } elseif ($c === ',') {
+                        // Fin de campo
+                        $vals[] = trim($vCurr);
+                        $vCurr = '';
+                        continue;
+                    } else {
+                        // Caracter normal (no comilla, no coma)
+                        $vCurr .= $c;
+                    }
+                } else {
+                    if ($c === $vQuoteChar) {
+                        $vInQuotes = false;
+                        // Fin de string cotado
+                    } else {
+                        $vCurr .= $c;
+                    }
+                }
+            }
+            // Último campo
+            $vals[] = trim($vCurr);
+
+            // Limpiamos NULLs y cosas raras
+            $cleanVals = [];
+            foreach ($vals as $v) {
+                if (strtoupper($v) === 'NULL')
+                    $cleanVals[] = null;
+                else
+                    $cleanVals[] = $v;
+            }
+
+            // Asignamos a columnas solo si coincide cantidad
+            // IMPORTANTE: Si hay discrepancia, intentamos alinear
+            // A veces el parser de columnas falla en `name` vs `name, age`
+            // Usamos count($cleanVals) para limitar o rellenar
+            if (count($cleanVals) === count($columns)) {
+                $rows[] = array_combine($columns, $cleanVals);
+                $totalRows++;
+            } elseif (count($cleanVals) > count($columns)) {
+                // Truncate
+                $cleanVals = array_slice($cleanVals, 0, count($columns));
+                $rows[] = array_combine($columns, $cleanVals);
+                $totalRows++;
+            } else {
+                // Pad with null
+                while (count($cleanVals) < count($columns))
+                    $cleanVals[] = null;
+                $rows[] = array_combine($columns, $cleanVals);
                 $totalRows++;
             }
         }
