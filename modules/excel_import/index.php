@@ -1,20 +1,15 @@
 <?php
 /**
- * Excel/CSV Import Module - KINO TRACE
+ * Importación Masiva CSV/Excel - KINO TRACE
  * 
- * Allows importing data from Excel (.xlsx) or CSV files to:
- * - Match file names with existing documents
- * - Add codes to matched documents
- * - Generate import reports
- * 
- * Supports CSV and basic XLSX parsing without external libraries.
+ * Interfaz modernizada para importar datos desde archivos CSV o Excel.
+ * Permite vincular códigos con documentos existentes.
  */
 
 session_start();
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../helpers/tenant.php';
 
-// Verify authentication
 if (!isset($_SESSION['client_code'])) {
     header('Location: ../../login.php');
     exit;
@@ -26,236 +21,7 @@ $db = open_client_db($clientCode);
 // For sidebar
 $currentModule = 'excel_import';
 $baseUrl = '../../';
-$pageTitle = 'Importar Excel';
-
-$results = [];
-$error = '';
-$success = '';
-$stats = ['matched' => 0, 'not_found' => 0, 'codes_added' => 0];
-
-/**
- * Parse CSV file
- */
-function parseCSV(string $filePath): array
-{
-    $rows = [];
-    if (($handle = fopen($filePath, 'r')) !== false) {
-        $headers = fgetcsv($handle, 0, ',');
-        if ($headers) {
-            // Normalize headers
-            $headers = array_map(function ($h) {
-                return strtolower(trim($h));
-            }, $headers);
-
-            while (($data = fgetcsv($handle, 0, ',')) !== false) {
-                if (count($data) >= count($headers)) {
-                    $rows[] = array_combine($headers, array_slice($data, 0, count($headers)));
-                }
-            }
-        }
-        fclose($handle);
-    }
-    return $rows;
-}
-
-/**
- * Parse XLSX file (basic XML parsing without external libraries)
- * Only works with simple XLSX files
- */
-function parseXLSX(string $filePath): array
-{
-    $rows = [];
-
-    $zip = new ZipArchive();
-    if ($zip->open($filePath) !== true) {
-        return $rows;
-    }
-
-    // Read shared strings
-    $sharedStrings = [];
-    $stringsXml = $zip->getFromName('xl/sharedStrings.xml');
-    if ($stringsXml) {
-        $xml = @simplexml_load_string($stringsXml);
-        if ($xml) {
-            foreach ($xml->si as $si) {
-                $sharedStrings[] = (string) $si->t;
-            }
-        }
-    }
-
-    // Read first sheet
-    $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
-    if ($sheetXml) {
-        $xml = @simplexml_load_string($sheetXml);
-        if ($xml && isset($xml->sheetData)) {
-            $allRows = [];
-            foreach ($xml->sheetData->row as $row) {
-                $rowData = [];
-                foreach ($row->c as $cell) {
-                    $value = '';
-                    $type = (string) $cell['t'];
-
-                    if ($type === 's') {
-                        // Shared string
-                        $index = (int) $cell->v;
-                        $value = $sharedStrings[$index] ?? '';
-                    } else {
-                        $value = (string) $cell->v;
-                    }
-
-                    $rowData[] = $value;
-                }
-                $allRows[] = $rowData;
-            }
-
-            if (!empty($allRows)) {
-                // First row as headers
-                $headers = array_map(function ($h) {
-                    return strtolower(trim($h));
-                }, $allRows[0]);
-
-                // Rest as data
-                for ($i = 1; $i < count($allRows); $i++) {
-                    if (count($allRows[$i]) >= count($headers)) {
-                        $rows[] = array_combine($headers, array_slice($allRows[$i], 0, count($headers)));
-                    }
-                }
-            }
-        }
-    }
-
-    $zip->close();
-    return $rows;
-}
-
-/**
- * Parse uploaded file (CSV or XLSX)
- */
-function parseUploadedFile(array $file): array
-{
-    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-
-    if ($ext === 'csv') {
-        return parseCSV($file['tmp_name']);
-    } elseif ($ext === 'xlsx') {
-        return parseXLSX($file['tmp_name']);
-    }
-
-    return [];
-}
-
-/**
- * Find document by name/number
- */
-function findDocumentByName(PDO $db, string $name): ?array
-{
-    $name = trim($name);
-    if (empty($name)) {
-        return null;
-    }
-
-    // Remove file extension if present
-    $nameClean = preg_replace('/\.(pdf|xlsx?|csv)$/i', '', $name);
-
-    // Try exact match first
-    $stmt = $db->prepare('SELECT * FROM documentos WHERE numero = ? OR numero LIKE ? LIMIT 1');
-    $stmt->execute([$name, '%' . $nameClean . '%']);
-    $doc = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if ($doc) {
-        return $doc;
-    }
-
-    // Try partial match
-    $stmt = $db->prepare('SELECT * FROM documentos WHERE numero LIKE ? OR ruta_archivo LIKE ? LIMIT 1');
-    $stmt->execute(['%' . $nameClean . '%', '%' . $nameClean . '%']);
-
-    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
-}
-
-// Process upload
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
-    $file = $_FILES['excel_file'];
-
-    if ($file['error'] !== UPLOAD_ERR_OK) {
-        $error = 'Error al subir el archivo';
-    } else {
-        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-
-        if (!in_array($ext, ['csv', 'xlsx'])) {
-            $error = 'Formato no soportado. Use archivos .csv o .xlsx';
-        } else {
-            $data = parseUploadedFile($file);
-
-            if (empty($data)) {
-                $error = 'No se pudo leer el archivo o está vacío';
-            } else {
-                // Get column names from first row
-                $columns = array_keys($data[0]);
-
-                // Find the file/document name column
-                $nameColumn = null;
-                $codeColumn = null;
-
-                foreach ($columns as $col) {
-                    $colLower = strtolower($col);
-                    if (in_array($colLower, ['archivo', 'nombre', 'documento', 'file', 'name', 'numero'])) {
-                        $nameColumn = $col;
-                    }
-                    if (in_array($colLower, ['codigo', 'code', 'código', 'codigos', 'codes'])) {
-                        $codeColumn = $col;
-                    }
-                }
-
-                if (!$nameColumn) {
-                    $error = 'No se encontró columna de nombre/archivo. Columnas detectadas: ' . implode(', ', $columns);
-                } else {
-                    // Process each row
-                    $stmtInsertCode = $db->prepare('INSERT OR IGNORE INTO codigos (documento_id, codigo) VALUES (?, ?)');
-
-                    foreach ($data as $row) {
-                        $fileName = $row[$nameColumn] ?? '';
-                        $code = $codeColumn ? ($row[$codeColumn] ?? '') : '';
-
-                        $doc = findDocumentByName($db, $fileName);
-
-                        $result = [
-                            'file_name' => $fileName,
-                            'code' => $code,
-                            'matched' => false,
-                            'doc_id' => null,
-                            'doc_numero' => null
-                        ];
-
-                        if ($doc) {
-                            $result['matched'] = true;
-                            $result['doc_id'] = $doc['id'];
-                            $result['doc_numero'] = $doc['numero'];
-                            $stats['matched']++;
-
-                            // Add code if present
-                            if (!empty($code)) {
-                                $stmtInsertCode->execute([$doc['id'], $code]);
-                                $stats['codes_added']++;
-                            }
-                        } else {
-                            $stats['not_found']++;
-                        }
-
-                        $results[] = $result;
-                    }
-
-                    if ($stats['matched'] > 0) {
-                        $success = "✅ Importación completada: {$stats['matched']} documentos encontrados";
-                        if ($stats['codes_added'] > 0) {
-                            $success .= ", {$stats['codes_added']} códigos agregados";
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+$pageTitle = 'Importación Masiva (CSV)';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -263,176 +29,167 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Importar Excel - KINO TRACE</title>
+    <title>Importación Masiva - KINO TRACE</title>
     <link rel="stylesheet" href="../../assets/css/styles.css">
     <style>
-        .import-hero {
-            text-align: center;
-            padding: 2.5rem 2rem;
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
-            border-radius: var(--radius-lg);
-            margin-bottom: 1.5rem;
+        .import-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
         }
 
-        .import-hero h1 {
-            margin-bottom: 0.5rem;
-        }
-
-        .import-hero p {
-            color: var(--text-secondary);
-            max-width: 500px;
-            margin: 0 auto;
-        }
-
-        .upload-zone {
+        .upload-card {
+            background: var(--bg-primary);
             border: 2px dashed var(--border-color);
             border-radius: var(--radius-lg);
             padding: 3rem 2rem;
             text-align: center;
-            background: var(--bg-secondary);
-            cursor: pointer;
             transition: all 0.3s ease;
-            margin-bottom: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
         }
 
-        .upload-zone:hover {
+        .upload-card:hover {
             border-color: var(--accent-primary);
             background: rgba(59, 130, 246, 0.05);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
         }
 
-        .upload-zone.dragover {
+        .upload-card.active {
             border-color: var(--accent-success);
-            background: rgba(16, 185, 129, 0.1);
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        .file-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
         }
 
         .upload-icon {
-            font-size: 3rem;
+            font-size: 4rem;
             margin-bottom: 1rem;
-        }
-
-        .upload-zone input[type="file"] {
-            display: none;
-        }
-
-        .stats-row {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .stat-item {
-            background: var(--bg-secondary);
-            padding: 1.25rem;
-            border-radius: var(--radius-md);
-            text-align: center;
-            border: 1px solid var(--border-color);
-        }
-
-        .stat-item .value {
-            font-size: 1.75rem;
-            font-weight: 700;
-        }
-
-        .stat-item .label {
-            font-size: 0.875rem;
             color: var(--text-muted);
+            transition: color 0.3s;
         }
 
-        .stat-item.success .value {
-            color: var(--accent-success);
-        }
-
-        .stat-item.warning .value {
-            color: var(--accent-warning);
-        }
-
-        .stat-item.info .value {
+        .upload-card:hover .upload-icon {
             color: var(--accent-primary);
         }
 
-        .results-card {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg);
+        .console-output {
+            background: #1e1e1e;
+            color: #10b981;
+            font-family: 'Fira Code', 'Courier New', monospace;
             padding: 1.5rem;
-        }
-
-        .results-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.875rem;
-        }
-
-        .results-table th,
-        .results-table td {
-            padding: 0.75rem;
-            text-align: left;
-            border-bottom: 1px solid var(--border-light);
-        }
-
-        .results-table th {
-            background: var(--bg-tertiary);
-            font-weight: 600;
-        }
-
-        .scroll-table {
-            max-height: 400px;
+            border-radius: var(--radius-md);
+            border: 1px solid #333;
+            height: 350px;
             overflow-y: auto;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin-top: 2rem;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
         }
 
-        .status-matched {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--accent-success);
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
+        .console-line {
+            margin-bottom: 0.35rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .console-time {
+            color: #666;
+            user-select: none;
+            min-width: 65px;
+        }
+
+        .btn-process {
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            color: white;
+            border: none;
+            padding: 1rem 3rem;
+            font-size: 1.1rem;
             font-weight: 600;
+            border-radius: 99px;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+            transition: all 0.3s;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
         }
 
-        .status-not-found {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--accent-danger);
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
+        .btn-process:hover:not(:disabled) {
+            transform: scale(1.02);
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.6);
         }
 
-        .format-info {
-            background: var(--bg-tertiary);
-            padding: 1rem;
-            border-radius: var(--radius-md);
+        .btn-process:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            filter: grayscale(1);
+        }
+
+        .loading-spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .file-info {
             margin-top: 1rem;
-        }
-
-        .format-info h4 {
-            margin-bottom: 0.5rem;
-        }
-
-        .format-info ul {
-            margin: 0;
-            padding-left: 1.25rem;
-            color: var(--text-secondary);
+            padding: 0.75rem;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 8px;
+            color: var(--accent-success);
+            font-family: monospace;
             font-size: 0.875rem;
         }
 
-        .alert {
-            padding: 1rem;
+        .stats-mini {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-secondary);
             border-radius: var(--radius-md);
-            margin-bottom: 1rem;
         }
 
-        .alert-success {
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid rgba(16, 185, 129, 0.2);
-            color: var(--accent-success);
+        .stat-mini {
+            text-align: center;
         }
 
-        .alert-error {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-            color: var(--accent-danger);
+        .stat-mini .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-primary);
+        }
+
+        .stat-mini .label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
         }
     </style>
 </head>
@@ -445,123 +202,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
             <?php include __DIR__ . '/../../includes/header.php'; ?>
 
             <div class="page-content">
-                <?php if ($error): ?>
-                    <div class="alert alert-error">⚠️
-                        <?= htmlspecialchars($error) ?>
+                <div class="card mb-6">
+                    <div class="card-header border-b border-gray-800 pb-4">
+                        <h2
+                            class="text-2xl font-bold bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent">
+                            📊 Importación Masiva desde CSV/Excel
+                        </h2>
+                        <p class="text-gray-400 mt-2">
+                            Suba un archivo CSV o Excel para vincular códigos con sus documentos existentes.
+                        </p>
                     </div>
-                <?php endif; ?>
+                </div>
 
-                <?php if ($success): ?>
-                    <div class="alert alert-success">
-                        <?= htmlspecialchars($success) ?>
+                <!-- Stats -->
+                <div class="stats-mini" id="statsBox" style="display: none;">
+                    <div class="stat-mini">
+                        <div class="value" id="statTotal">0</div>
+                        <div class="label">Total Documentos</div>
                     </div>
-                <?php endif; ?>
-
-                <?php if (empty($results)): ?>
-                    <div class="import-hero">
-                        <h1>📊 Importar desde Excel</h1>
-                        <p>Sube un archivo Excel (.xlsx) o CSV para cruzar datos con tus documentos existentes.</p>
+                    <div class="stat-mini">
+                        <div class="value" id="statCodes">0</div>
+                        <div class="label">Códigos en BD</div>
                     </div>
+                    <div class="stat-mini">
+                        <div class="value" id="statPending">0</div>
+                        <div class="label">Pendientes</div>
+                    </div>
+                </div>
 
-                    <form method="POST" enctype="multipart/form-data" id="uploadForm">
-                        <div class="upload-zone" id="uploadZone">
-                            <div class="upload-icon">📁</div>
-                            <p><strong>Arrastra tu archivo aquí</strong></p>
-                            <p style="color: var(--text-muted); font-size: 0.875rem;">o haz clic para seleccionar</p>
-                            <p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 0.5rem;">
-                                Formatos soportados: .xlsx, .csv
-                            </p>
-                            <input type="file" name="excel_file" id="fileInput" accept=".csv,.xlsx">
+                <form id="importForm" class="import-section">
+                    <div class="import-grid">
+                        <!-- CSV/Excel Upload -->
+                        <div class="upload-card" id="fileZone">
+                            <input type="file" name="excel_file" accept=".csv,.xlsx" class="file-input" required
+                                onchange="handleFileSelect(this)">
+                            <div id="fileArea">
+                                <div class="upload-icon">📊</div>
+                                <h3 class="text-lg font-semibold mb-2">Archivo CSV o Excel</h3>
+                                <p class="text-sm text-gray-500">Arrastre su archivo .csv o .xlsx aquí</p>
+                                <p class="text-xs text-gray-600 mt-3">
+                                    <strong>Formato esperado:</strong><br>
+                                    Primera fila: <code>archivo, codigo</code><br>
+                                    Datos: nombre del documento y código a vincular
+                                </p>
+                            </div>
+                            <div id="fileName" class="file-info" style="display: none;"></div>
                         </div>
+                    </div>
 
-                        <button type="submit" class="btn btn-primary" style="width: 100%;" id="submitBtn" disabled>
-                            📥 Procesar Archivo
+                    <div class="flex gap-4" style="display: flex; gap: 1rem;">
+                        <button type="button" class="btn-process" id="processBtn" disabled>
+                            <span class="btn-text">PROCESAR ARCHIVO</span>
+                            <div class="loading-spinner hidden" id="spinner"></div>
                         </button>
-                    </form>
 
-                    <div class="format-info">
-                        <h4>📋 Formato esperado del archivo</h4>
-                        <ul>
-                            <li>Primera fila debe contener los nombres de columnas</li>
-                            <li>Columna <strong>"archivo"</strong> o <strong>"nombre"</strong>: nombre del documento a
-                                buscar</li>
-                            <li>Columna <strong>"codigo"</strong> (opcional): código a agregar al documento encontrado</li>
-                            <li>Se buscarán coincidencias parciales por nombre</li>
-                        </ul>
+                        <button type="button" class="btn-process" style="background: var(--accent-danger); width: auto;"
+                            onclick="resetDatabase()">
+                            🗑️ Limpiar Todo
+                        </button>
+
+                        <button type="button" class="btn-process"
+                            style="background: var(--bg-tertiary); width: auto; color: var(--text-primary);"
+                            onclick="showStats()">
+                            📊 Estadísticas
+                        </button>
                     </div>
+                </form>
 
-                <?php else: ?>
-                    <h2 style="margin-bottom: 1rem;">📊 Resultados de la Importación</h2>
-
-                    <div class="stats-row">
-                        <div class="stat-item success">
-                            <div class="value">
-                                <?= $stats['matched'] ?>
-                            </div>
-                            <div class="label">Documentos Encontrados</div>
-                        </div>
-                        <div class="stat-item warning">
-                            <div class="value">
-                                <?= $stats['not_found'] ?>
-                            </div>
-                            <div class="label">No Encontrados</div>
-                        </div>
-                        <div class="stat-item info">
-                            <div class="value">
-                                <?= $stats['codes_added'] ?>
-                            </div>
-                            <div class="label">Códigos Agregados</div>
-                        </div>
+                <div class="console-output" id="consoleLog">
+                    <div class="console-line">
+                        <span class="console-time">[<?= date('H:i:s') ?>]</span>
+                        <span>Sistema listo. Esperando archivo CSV o Excel...</span>
                     </div>
-
-                    <div class="results-card">
-                        <h3 style="margin-bottom: 1rem;">📋 Detalle</h3>
-                        <div class="scroll-table">
-                            <table class="results-table">
-                                <thead>
-                                    <tr>
-                                        <th>Archivo/Nombre</th>
-                                        <th>Estado</th>
-                                        <th>Documento Encontrado</th>
-                                        <th>Código</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($results as $r): ?>
-                                        <tr>
-                                            <td>
-                                                <?= htmlspecialchars($r['file_name']) ?>
-                                            </td>
-                                            <td>
-                                                <?php if ($r['matched']): ?>
-                                                    <span class="status-matched">✓ Encontrado</span>
-                                                <?php else: ?>
-                                                    <span class="status-not-found">✗ No encontrado</span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <?php if ($r['doc_numero']): ?>
-                                                    <a href="../documento/view.php?id=<?= $r['doc_id'] ?>">
-                                                        <?= htmlspecialchars($r['doc_numero']) ?>
-                                                    </a>
-                                                <?php else: ?>
-                                                    <span style="color: var(--text-muted);">-</span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <?= htmlspecialchars($r['code'] ?: '-') ?>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div style="margin-top: 1rem;">
-                            <a href="index.php" class="btn btn-primary">📥 Nueva Importación</a>
-                        </div>
-                    </div>
-                <?php endif; ?>
+                </div>
             </div>
 
             <?php include __DIR__ . '/../../includes/footer.php'; ?>
@@ -569,44 +282,154 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
     </div>
 
     <script>
-        const uploadZone = document.getElementById('uploadZone');
-        const fileInput = document.getElementById('fileInput');
-        const submitBtn = document.getElementById('submitBtn');
-        const form = document.getElementById('uploadForm');
+        function handleFileSelect(input) {
+            const file = input.files[0];
+            const card = document.getElementById('fileZone');
+            const fileArea = document.getElementById('fileArea');
+            const fileNameDisplay = document.getElementById('fileName');
+            const btn = document.getElementById('processBtn');
 
-        if (uploadZone) {
-            uploadZone.addEventListener('click', () => fileInput.click());
+            if (file) {
+                card.classList.add('active');
+                fileArea.style.opacity = '0.3';
+                fileNameDisplay.textContent = '✓ ' + file.name + ' (' + (file.size / 1024).toFixed(2) + ' KB)';
+                fileNameDisplay.style.display = 'block';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.filter = 'none';
 
-            uploadZone.addEventListener('dragover', (e) => {
+                log('✓ Archivo seleccionado: ' + file.name, 'success');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('processBtn').addEventListener('click', (e) => {
                 e.preventDefault();
-                uploadZone.classList.add('dragover');
+                submitForm();
             });
 
-            uploadZone.addEventListener('dragleave', () => {
-                uploadZone.classList.remove('dragover');
-            });
+            // Load initial stats
+            showStats();
+        });
 
-            uploadZone.addEventListener('drop', (e) => {
-                e.preventDefault();
-                uploadZone.classList.remove('dragover');
-                if (e.dataTransfer.files.length > 0) {
-                    fileInput.files = e.dataTransfer.files;
-                    updateFileName();
+        function log(msg, type = 'info') {
+            const consoleLog = document.getElementById('consoleLog');
+            if (!consoleLog) return;
+
+            const line = document.createElement('div');
+            line.className = 'console-line';
+
+            const time = new Date().toLocaleTimeString('es-ES', { hour12: false });
+
+            let color = '#ccc';
+            if (type === 'info') color = '#60a5fa';
+            if (type === 'success') color = '#34d399';
+            if (type === 'error') color = '#f87171';
+            if (type === 'warning') color = '#fbbf24';
+
+            line.innerHTML = `
+                <span class="console-time">[${time}]</span>
+                <span style="color: ${color}">${msg}</span>
+            `;
+
+            consoleLog.appendChild(line);
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+
+        async function resetDatabase() {
+            if (!confirm('⚠️ ¿ESTÁS SEGURO?\n\nEsto borrará TODOS los documentos y códigos de la base de datos actual.')) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('action', 'reset');
+
+                log('🔄 Limpiando base de datos...', 'warning');
+
+                const response = await fetch('process.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                if (result.logs) result.logs.forEach(l => log(l.msg, l.type));
+
+                if (result.success) {
+                    log('✅ Base de datos limpiada correctamente', 'success');
+                    setTimeout(() => window.location.reload(), 2000);
                 }
-            });
+            } catch (e) {
+                log('❌ Error al limpiar: ' + e.message, 'error');
+            }
+        }
 
-            fileInput.addEventListener('change', updateFileName);
+        async function showStats() {
+            try {
+                const formData = new FormData();
+                formData.append('action', 'stats');
 
-            function updateFileName() {
-                if (fileInput.files.length > 0) {
-                    const fileName = fileInput.files[0].name;
-                    uploadZone.innerHTML = `
-                        <div class="upload-icon">📄</div>
-                        <p><strong>${fileName}</strong></p>
-                        <p style="color: var(--accent-success); font-size: 0.875rem;">Archivo listo para procesar</p>
-                    `;
-                    submitBtn.disabled = false;
+                const response = await fetch('process.php', { method: 'POST', body: formData });
+                const result = await response.json();
+
+                if (result.success) {
+                    document.getElementById('statsBox').style.display = 'grid';
+                    document.getElementById('statTotal').textContent = result.stats.total_docs || 0;
+                    document.getElementById('statCodes').textContent = result.stats.total_codes || 0;
+                    document.getElementById('statPending').textContent = result.stats.docs_without_codes || 0;
+
+                    log('📊 Estadísticas actualizadas', 'info');
                 }
+            } catch (e) {
+                log('Error obteniendo estadísticas: ' + e.message, 'error');
+            }
+        }
+
+        async function submitForm() {
+            const form = document.getElementById('importForm');
+            const btn = document.getElementById('processBtn');
+            const spinner = document.getElementById('spinner');
+
+            btn.disabled = true;
+            spinner.classList.remove('hidden');
+
+            const formData = new FormData(form);
+            formData.append('action', 'import');
+
+            try {
+                log('📤 Subiendo archivo...', 'info');
+
+                const response = await fetch('process.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.logs) {
+                    result.logs.forEach(l => log(l.msg, l.type));
+                }
+
+                if (result.success) {
+                    log('✅ Importación completada exitosamente', 'success');
+                    if (result.stats) {
+                        log(`📋 Resumen: ${result.stats.matched} encontrados, ${result.stats.codes_added} códigos agregados, ${result.stats.not_found} no encontrados`, 'info');
+                    }
+
+                    // Update stats
+                    showStats();
+
+                    btn.innerHTML = '<span class="btn-text">NUEVA IMPORTACIÓN</span>';
+                    btn.disabled = false;
+                    btn.onclick = function () { window.location.reload(); };
+                } else {
+                    log('❌ Error: ' + (result.error || 'Desconocido'), 'error');
+                    btn.disabled = false;
+                }
+
+            } catch (err) {
+                log('❌ Error de conexión: ' + err.message, 'error');
+                btn.disabled = false;
+            } finally {
+                spinner.classList.add('hidden');
             }
         }
     </script>
