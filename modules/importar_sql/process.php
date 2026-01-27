@@ -153,6 +153,11 @@ try {
             $db->exec("ALTER TABLE documentos ADD COLUMN original_path TEXT");
             logMsg("🔧 Esquema actualizado: Se agregó columna 'original_path'.");
         }
+
+        // Crear índice ÚNICO para evitar duplicados a nivel DB (Sugerencia Usuario)
+        // Usamos IF NOT EXISTS para que no falle si ya existe
+        $db->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_original_path ON documentos(original_path)");
+
     } catch (Exception $ex) {
         // Ignorar si falla, quizás la tabla no existe aún (se creará luego si es importación nueva)
     }
