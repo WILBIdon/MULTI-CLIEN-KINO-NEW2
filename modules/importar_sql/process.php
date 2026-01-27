@@ -71,6 +71,7 @@ try {
                 . "    peso_kg REAL,\n"
                 . "    valor_usd REAL,\n"
                 . "    ruta_archivo TEXT NOT NULL,\n"
+                . "    original_path TEXT,\n"
                 . "    hash_archivo TEXT,\n"
                 . "    datos_extraidos TEXT,\n"
                 . "    ai_confianza REAL,\n"
@@ -166,28 +167,23 @@ try {
     $tblCodes = null;
 
     foreach ($tables as $name => $data) {
-        // Detectar Documentos (busca columnas 'numero', 'fecha', 'proveedor' o nombre de tabla)
+        // Detectar Documentos
         if (in_array('numero', $data['columns']) || strpos($name, 'doc') !== false) {
             $tblDocs = $name;
         }
-        // Detectar Códigos (busca 'code', 'codigo', 'document_id')
+        // Detectar Códigos
         if (in_array('code', $data['columns']) || in_array('codigo', $data['columns'])) {
             $tblCodes = $name;
         }
     }
 
     if (!$tblCodes) {
-        // Fallback si solo hay una tabla y parece ser de codigos
+        // Fallback
         if (count($tables) === 1 && isset($tables['codes']))
             $tblCodes = 'codes';
     }
 
-    // Si no encontramos tabla de documentos explícita pero hay códigos con document_id, 
-    // asumimos que los documentos se deben crear o ya existen. 
-    // PERO el requerimiento dice: "subir SQL cree las tablas... enlace docs".
-    // Si el SQL SOLO tiene codigos, estamos en problemas, pero hagamos el mejor esfuerzo.
-
-    $idMap = []; // Map Old ID -> New ID
+    $idMap = [];
 
     $db->beginTransaction();
 
@@ -201,121 +197,78 @@ try {
             'numero' => ['numero', 'number', 'doc_assigned_name', 'name'],
             'fecha' => ['fecha', 'date', 'created_at'],
             'tipo' => ['tipo', 'type'],
-            'proveedor' => ['proveedor', 'supplier', 'vendor']
+            'proveedor' => ['proveedor', 'supplier', 'vendor'],
+            'path' => ['path', 'ruta', 'file_path', 'url']
         ];
 
         // Helper para encontrar valor
         $findVal = function ($row, $candidates, $cols) {
             foreach ($candidates as $cand) {
-                $idx = array_search($cand, $cols);
-                if ($idx !== false)
-                    return $row[$idx]; // Ojo: $row es assoc en import_engine? No, es assoc array_combine.
-                // Revisar import_engine: "$rows[] = array_combine($columns, $rowValues);" -> SI es assoc con keys = nombres de columna
-                if (isset($row[$cand]))
-                    return $row[$cand];
+                if (isset($row[$cand])) return $row[$cand];
             }
             return null;
         };
 
-        $stmtDoc = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, estado, ruta_archivo) VALUES (?, ?, ?, ?, 'pendiente', 'pending')");
+        $stmtDoc = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, estado, ruta_archivo, original_path) VALUES (?, ?, ?, ?, 'pendiente', 'pending', ?)");
 
         foreach ($docRows as $row) {
-            // Mapeo seguro
             $numero = $row['numero'] ?? $row['number'] ?? $row['name'] ?? null;
             $fecha = $row['fecha'] ?? $row['date'] ?? date('Y-m-d');
             $tipo = $row['tipo'] ?? 'importado';
             $proveedor = $row['proveedor'] ?? '';
+            
+            // Buscar path original
+            $originalPath = null;
+            foreach ($colMap['path'] as $pCol) {
+                if (isset($row[$pCol])) {
+                    $originalPath = $row[$pCol];
+                    break;
+                }
+            }
+
             $oldId = $row['id'] ?? null;
 
             if ($numero) {
-                // Verificar duplicados?? Mejor insertar nuevo siempre segun requerimiemto "cree las tablas"
-                $stmtDoc->execute([$tipo, $numero, $fecha, $proveedor]);
+                $stmtDoc->execute([$tipo, $numero, $fecha, $proveedor, $originalPath]);
                 $newId = $db->lastInsertId();
                 if ($oldId)
                     $idMap[$oldId] = $newId;
             }
         }
         logMsg("Se importaron " . count($docRows) . " documentos.");
-    } else {
-        logMsg("⚠️ No se detectó tabla de documentos en el SQL. Se intentará inferir si es necesario.", "warning");
-    }
-
-    // -- IMPORTAR CÓDIGOS --
-    if ($tblCodes) {
-        logMsg("Importando códigos desde tabla '$tblCodes'...");
-        $codeRows = $tables[$tblCodes]['rows'];
-
-        $stmtCode = $db->prepare("INSERT INTO codigos (documento_id, codigo, descripcion) VALUES (?, ?, ?)");
-
-        $importedCodes = 0;
-        foreach ($codeRows as $row) {
-            $oldDocId = $row['document_id'] ?? null;
-            $codigo = $row['code'] ?? $row['codigo'] ?? null;
-            $desc = $row['description'] ?? $row['descripcion'] ?? '';
-
-            // Si tenemos mapeo, lo usamos. Si no, ¿qué hacemos?
-            // Si el SQL tiene documentos Y codigos, usamos el mapa.
-            // Si solo tiene codigos, asumimos que los IDs son válidos (peligroso) O creamos documentos dummy?
-
-            if ($oldDocId && isset($idMap[$oldDocId])) {
-                $targetDocId = $idMap[$oldDocId];
-                if ($codigo) {
-                    $stmtCode->execute([$targetDocId, $codigo, $desc]);
-                    $importedCodes++;
-                }
-            } elseif ($oldDocId && !$tblDocs) {
-                // Caso raro: Solo tabla de codigos. ¿A qué documento pertenecen?
-                // El usuario dijo "un doc puede tener varios codigos... solo un nombre asignado".
-                // Quizás el SQL tiene IDs que coincidirán con algo? No podemos saberlo.
-                // Saltamos por seguridad o creamos documento huérfano?
-                // LOG:
-                // logMsg("Salto código $codigo por falta de documento padre (ID $oldDocId)", 'error');
-            }
-        }
-        logMsg("Se importaron $importedCodes códigos.");
-    }
-
-    $db->commit();
-
-    // 3. Procesar ZIP
-    logMsg("Procesando archivo ZIP...");
-    $zip = new ZipArchive();
-    if ($zip->open($zipFile['tmp_name']) === TRUE) {
-
-        $uploadDir = CLIENTS_DIR . "/{$clientCode}/uploads/sql_import/";
-        if (!file_exists($uploadDir))
-            mkdir($uploadDir, 0777, true);
-
-        $updatedDocs = 0;
-        $unlinkedFiles = [];
-
+// ... (Lines 233-288) ...
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $filename = $zip->getNameIndex($i);
             if (pathinfo($filename, PATHINFO_EXTENSION) !== 'pdf')
                 continue;
 
-            // Normalizar nombre para buscar
-            // El usuario dice "nombre de documento asignado".
-            // Buscamos en la DB: documentos WHERE numero = basename(filename)
-            $basename = pathinfo($filename, PATHINFO_FILENAME); // Sin extension
-
             // Extraer
             $targetPath = $uploadDir . basename($filename);
             copy("zip://" . $zipFile['tmp_name'] . "#" . $filename, $targetPath);
-
-            // Vincular
-            // UPDATE documentos SET ruta_archivo = ? WHERE numero = ? (Robust matching)
-            // Intentamos coincidencia exacta y luego case-insensitive/trim
-
             $relativePath = 'sql_import/' . basename($filename);
+            
+            $basename = pathinfo($filename, PATHINFO_FILENAME);
+            
+            // 0. ESTRATEGIA SUPREMA: Match por 'original_path'
+            // Si el archivo en el ZIP coincide con el 'path' que venía en el SQL
+            // Ejemplo SQL: path='uploads/factura.pdf', ZIP entry: 'uploads/factura.pdf' o just 'factura.pdf'
+            
+            $stmtPath = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE original_path = ? OR original_path LIKE ?");
+            // Intentamos match exacto O match de terminación (para directorios relativos)
+            $stmtPath->execute([$relativePath, $filename, "%/$filename"]);
 
-            // 1. Intento directo y robusto
-            // Estrategia: Buscar si el numero en DB es un prefijo del nombre del archivo.
-            // Ej: Archivo "12345_Factura.pdf" debería coincidir con Documento Numero "12345"
+            if ($stmtPath->rowCount() > 0) {
+                $updatedDocs++;
+                logMsg("✅ Vinculado por PATH EXACTO: $filename", "success");
+                continue;
+            }
 
-            // Primero intentamos match exacto (rápido)
-            $stmtExact = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?))");
-            $stmtExact->execute([$relativePath, $basename]); // Intento 1: basename completo
+            // 1. Intento por nombre (Exacto)
+            $stmtExact = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?)) AND ruta_archivo = 'pending'");
+            $stmtExact->execute([$relativePath, $basename]);
+
+            if ($stmtExact->rowCount() > 0) {
+// ... // Intento 1: basename completo
 
             if ($stmtExact->rowCount() > 0) {
                 $updatedDocs++;
