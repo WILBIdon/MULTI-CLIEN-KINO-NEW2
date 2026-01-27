@@ -10,6 +10,16 @@ error_reporting(E_ALL); // Log everything, but don't show it
 set_time_limit(300); // 5 minutos máx
 ini_set('memory_limit', '512M');
 
+// DEBUG: Shutdown function to catch fatal errors
+register_shutdown_function(function() {
+    $error = error_get_last();
+    $output = ob_get_contents();
+    if ($error || $output) {
+        $log = "Error: " . print_r($error, true) . "\nOutput: " . $output;
+        file_put_contents(__DIR__ . '/debug_fatal_log.txt', $log);
+    }
+});
+
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../helpers/tenant.php';
 require_once __DIR__ . '/../../helpers/import_engine.php';
