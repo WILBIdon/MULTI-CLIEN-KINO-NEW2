@@ -176,79 +176,27 @@ function parse_sql_inserts(string $filePath): array
                 $valueSet = substr($valueSet, 1, -1);
             }
 
-            // Parsear valores individuales dentro de la fila (respetando comillas)
-            $vals = [];
-            $vLen = strlen($valueSet);
-            $vCurr = '';
-            $vInQuotes = false;
-            $vQuoteChar = '';
-            $vEscape = false;
-
-            for ($j = 0; $j < $vLen; $j++) {
-                $c = $valueSet[$j];
-
-                if ($vEscape) {
-                    $vCurr .= $c;
-                    $vEscape = false;
-                    continue;
-                }
-                if ($c === '\\') {
-                    $vCurr .= $c;
-                    $vEscape = true;
-                    continue;
-                }
-
-                if (!$vInQuotes) {
-                    if ($c === "'" || $c === '"') {
-                        $vInQuotes = true;
-                        $vQuoteChar = $c;
-                        // NO agregamos la comilla al valor limpio
-                    } elseif ($c === ',') {
-                        // Fin de campo
-                        $vals[] = trim($vCurr);
-                        $vCurr = '';
-                        continue;
-                    } else {
-                        // Caracter normal (no comilla, no coma)
-                        $vCurr .= $c;
-                    }
-                } else {
-                    if ($c === $vQuoteChar) {
-                        $vInQuotes = false;
-                        // Fin de string cotado
-                    } else {
-                        $vCurr .= $c;
-                    }
-                }
-            }
-            // Último campo
-            $vals[] = trim($vCurr);
+            // USAR str_getcsv: Mucho más robusto para comillas y escapes estándar SQL
+            $vals = str_getcsv($valueSet, ',', "'", "\\");
 
             // Limpiamos NULLs y cosas raras
             $cleanVals = [];
             foreach ($vals as $v) {
-                if (strtoupper($v) === 'NULL')
+                if ($v === 'NULL')
                     $cleanVals[] = null;
                 else
                     $cleanVals[] = $v;
             }
 
             // Asignamos a columnas solo si coincide cantidad
-            // IMPORTANTE: Si hay discrepancia, intentamos alinear
-            // A veces el parser de columnas falla en `name` vs `name, age`
-            // Usamos count($cleanVals) para limitar o rellenar
-            if (count($cleanVals) === count($columns)) {
-                $rows[] = array_combine($columns, $cleanVals);
-                $totalRows++;
-            } elseif (count($cleanVals) > count($columns)) {
-                // Truncate
+            if (count($cleanVals) >= count($columns)) {
+                // Truncate (si sobran, ej. trailing comma vacía)
                 $cleanVals = array_slice($cleanVals, 0, count($columns));
                 $rows[] = array_combine($columns, $cleanVals);
                 $totalRows++;
-            } else {
-                // Pad with null
-                while (count($cleanVals) < count($columns))
-                    $cleanVals[] = null;
+            } elseif (count($cleanVals) < count($columns)) {
+                // Pad (si faltan)
+                $cleanVals = array_pad($cleanVals, count($columns), null);
                 $rows[] = array_combine($columns, $cleanVals);
                 $totalRows++;
             }
