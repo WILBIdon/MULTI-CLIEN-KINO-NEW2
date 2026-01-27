@@ -121,7 +121,8 @@ function parseXLSX(string $filePath): array
 }
 
 /**
- * Find document by name
+ * Find document by name - IMPROVED VERSION
+ * Priority: exact PDF filename -> exact numero -> partial matches
  */
 function findDocumentByName(PDO $db, string $name): ?array
 {
@@ -130,18 +131,37 @@ function findDocumentByName(PDO $db, string $name): ?array
         return null;
     }
 
-    $nameClean = preg_replace('/\.(pdf|xlsx?|csv)$/i', '', $name);
+    // ====== PRIORIDAD 1: Buscar por nombre exacto del archivo PDF ======
+    $stmt = $db->prepare('SELECT * FROM documentos WHERE ruta_archivo = ? OR original_path = ? LIMIT 1');
+    $stmt->execute([$name, $name]);
+    $doc = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    // Try exact match
-    $stmt = $db->prepare('SELECT * FROM documentos WHERE numero = ? OR numero LIKE ? LIMIT 1');
-    $stmt->execute([$name, '%' . $nameClean . '%']);
+    if ($doc) {
+        return $doc; // Match exacto por nombre de archivo
+    }
+
+    // ====== PRIORIDAD 2: Buscar en ruta_archivo (LIKE con % solo al final) ======
+    $stmt = $db->prepare('SELECT * FROM documentos WHERE ruta_archivo LIKE ? LIMIT 1');
+    $stmt->execute(['%/' . $name]); // Buscar al final de la ruta
     $doc = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($doc) {
         return $doc;
     }
 
-    // Try partial match
+    // ====== PRIORIDAD 3: Limpiar extensión y buscar ======
+    $nameClean = preg_replace('/\.(pdf|xlsx?|csv)$/i', '', $name);
+
+    // Try exact match on 'numero'
+    $stmt = $db->prepare('SELECT * FROM documentos WHERE numero = ? LIMIT 1');
+    $stmt->execute([$nameClean]);
+    $doc = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if ($doc) {
+        return $doc;
+    }
+
+    // ====== PRIORIDAD 4: Partial match (ÚLTIMO RECURSO) ======
     $stmt = $db->prepare('SELECT * FROM documentos WHERE numero LIKE ? OR ruta_archivo LIKE ? LIMIT 1');
     $stmt->execute(['%' . $nameClean . '%', '%' . $nameClean . '%']);
 

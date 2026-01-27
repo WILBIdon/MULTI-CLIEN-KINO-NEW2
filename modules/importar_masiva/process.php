@@ -57,13 +57,15 @@ try {
         $header = array_shift($csvData);
         // Normalize headers
         $header = array_map(function ($h) {
-            return strtolower(trim($h)); }, $header);
+            return strtolower(trim($h));
+        }, $header);
 
         // Identify columns
         $colMap = [
             'pdf' => array_search('nombre_pdf', $header),
             'doc' => array_search('nombre_doc', $header),
             'fecha' => array_search('fecha', $header),
+            'cantidad_codigos' => array_search('cantidad_codigos', $header),
             'codigos' => array_search('codigos', $header)
         ];
 
@@ -73,9 +75,13 @@ try {
         $db->beginTransaction();
         $importedDocs = 0;
         $importedCodes = 0;
+        $skippedDuplicates = 0;
+        $codesAddedToExisting = 0;
 
+        // Prepare statements
+        $stmtFindDoc = $db->prepare("SELECT id, numero, ruta_archivo FROM documentos WHERE ruta_archivo LIKE ? OR original_path = ? LIMIT 1");
         $stmtDoc = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, ruta_archivo, original_path, estado) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmtCode = $db->prepare("INSERT INTO codigos (documento_id, codigo, descripcion, cantidad, validado) VALUES (?, ?, ?, ?, ?)");
+        $stmtCode = $db->prepare("INSERT OR IGNORE INTO codigos (documento_id, codigo, descripcion, cantidad, validado) VALUES (?, ?, ?, ?, ?)");
 
         foreach ($csvData as $row) {
             if (count($row) < count($header))
@@ -85,38 +91,77 @@ try {
             $rawDoc = $row[$colMap['doc']] ?? 'S/N';
             $rawFecha = $row[$colMap['fecha']] ?? date('Y-m-d');
             $rawCodes = $row[$colMap['codigos']] ?? '';
+            $expectedCount = isset($colMap['cantidad_codigos']) && $colMap['cantidad_codigos'] !== false
+                ? (int) ($row[$colMap['cantidad_codigos']] ?? 0)
+                : 0;
 
             if (empty($rawPdf))
                 continue;
 
-            // Insert Document
-            // ruta_archivo = 'pending' (ZIP linker will update it)
-            // original_path = $rawPdf (This is the anchor for linking)
-            try {
-                $stmtDoc->execute(['importado_csv', $rawDoc, $rawFecha, 'Importacion Masiva', 'pending', $rawPdf, 'procesado']);
-                $docId = $db->lastInsertId();
-                $importedDocs++;
+            // ====== BUSCAR DOCUMENTO EXISTENTE POR NOMBRE PDF ======
+            // Intentar encontrar por ruta_archivo o original_path
+            $stmtFindDoc->execute(['%' . $rawPdf, $rawPdf]);
+            $existingDoc = $stmtFindDoc->fetch(PDO::FETCH_ASSOC);
 
-                // Parse Codes
-                // Expecting: "VAL1, VAL2, VAL3"
-                if (!empty($rawCodes)) {
-                    $codes = explode(',', $rawCodes);
-                    foreach ($codes as $c) {
-                        $c = trim($c);
-                        // Limpiar comillas extras si quedaron del CSV
-                        $c = trim($c, '"\'');
-                        if (strlen($c) > 1) {
+            $docId = null;
+
+            if ($existingDoc) {
+                // Documento ya existe - solo agregar códigos
+                $docId = $existingDoc['id'];
+                $skippedDuplicates++;
+                logMsg("📎 Documento existente encontrado: {$rawPdf} (ID: {$docId})", "info");
+            } else {
+                // Documento nuevo - crear
+                try {
+                    $stmtDoc->execute(['importado_csv', $rawDoc, $rawFecha, 'Importacion Masiva', 'pending', $rawPdf, 'procesado']);
+                    $docId = $db->lastInsertId();
+                    $importedDocs++;
+                    logMsg("✅ Nuevo documento creado: {$rawPdf} (ID: {$docId})", "success");
+                } catch (Exception $e) {
+                    logMsg("Error creando documento ($rawPdf): " . $e->getMessage(), "warning");
+                    continue;
+                }
+            }
+
+            // ====== AGREGAR CÓDIGOS (EVITAR DUPLICADOS) ======
+            if (!empty($rawCodes) && $docId) {
+                $codes = explode(',', $rawCodes);
+                $codesInserted = 0;
+
+                foreach ($codes as $c) {
+                    $c = trim($c);
+                    $c = trim($c, '"\''); // Limpiar comillas
+                    if (strlen($c) > 1) {
+                        try {
                             $stmtCode->execute([$docId, $c, 'Importado CSV', 1, 0]);
-                            $importedCodes++;
+                            if ($stmtCode->rowCount() > 0) {
+                                $importedCodes++;
+                                $codesInserted++;
+                                if ($existingDoc) {
+                                    $codesAddedToExisting++;
+                                }
+                            }
+                        } catch (Exception $e) {
+                            // Código duplicado - ignorar silenciosamente (INSERT OR IGNORE)
                         }
                     }
                 }
-            } catch (Exception $e) {
-                logMsg("Error linea CSV ($rawPdf): " . $e->getMessage(), "warning");
+
+                // Validar cantidad de códigos
+                if ($expectedCount > 0 && $codesInserted !== $expectedCount) {
+                    logMsg("⚠ Discrepancia de códigos en {$rawPdf}: esperados {$expectedCount}, insertados {$codesInserted}", "warning");
+                }
             }
         }
         $db->commit();
-        logMsg("✅ Datos importados: $importedDocs documentos, $importedCodes códigos.", "success");
+
+        logMsg("✅ Importación completada:", "success");
+        logMsg("   - Documentos nuevos: {$importedDocs}", "success");
+        logMsg("   - Documentos existentes (reutilizados): {$skippedDuplicates}", "info");
+        logMsg("   - Códigos totales insertados: {$importedCodes}", "success");
+        if ($codesAddedToExisting > 0) {
+            logMsg("   - Códigos agregados a docs existentes: {$codesAddedToExisting}", "info");
+        }
 
         // 2. Process ZIP
         $zipFile = $_FILES['zip_file']['tmp_name'];
