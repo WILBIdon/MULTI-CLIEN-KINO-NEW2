@@ -11,7 +11,7 @@ set_time_limit(300); // 5 minutos máx
 ini_set('memory_limit', '512M');
 
 // DEBUG: Shutdown function to catch fatal errors
-register_shutdown_function(function() {
+register_shutdown_function(function () {
     $error = error_get_last();
     $output = ob_get_contents();
     // Always write log to prove we ran
@@ -24,15 +24,24 @@ register_shutdown_function(function() {
 
 require_once __DIR__ . '/../../config.php';
 // Clean buffer after config in case of whitespace
-while (ob_get_level()) { ob_end_clean(); } ob_start();
+while (ob_get_level()) {
+    ob_end_clean();
+}
+ob_start();
 
 require_once __DIR__ . '/../../helpers/tenant.php';
 // Clean buffer after tenant
-while (ob_get_level()) { ob_end_clean(); } ob_start();
+while (ob_get_level()) {
+    ob_end_clean();
+}
+ob_start();
 
 require_once __DIR__ . '/../../helpers/import_engine.php';
 // Clean buffer after engine
-while (ob_get_level()) { ob_end_clean(); } ob_start();
+while (ob_get_level()) {
+    ob_end_clean();
+}
+ob_start();
 
 $response = [
     'success' => false,
@@ -129,7 +138,9 @@ try {
 
             $debugOutput = ob_get_contents();
             file_put_contents(__DIR__ . '/../../debug_reset_log.html', $debugOutput); // Log what is breaking the JSON
-            while (ob_get_level()) { ob_end_clean(); } // Clean ALL buffers
+            while (ob_get_level()) {
+                ob_end_clean();
+            } // Clean ALL buffers
             echo json_encode(['success' => true, 'logs' => [['msg' => $msg . "\n- Estructura regenerada.", 'type' => 'success']]]);
             die(); // Force stop
         } catch (Exception $e) {
@@ -445,6 +456,8 @@ try {
                     }
                 }
             }
+
+            if (!$linked) {
                 // Store FULL filename for correct path reconstruction later
                 $unlinkedFiles[] = $filename;
             }
@@ -472,7 +485,7 @@ try {
                 $numero = pathinfo($fullFilename, PATHINFO_FILENAME);
                 $fecha = date('Y-m-d');
                 $relativePath = 'sql_import/' . $fullFilename;
-                
+
                 try {
                     $stmtCreate->execute(['generado_auto', $numero, $fecha, 'Importación Auto', 'procesado', $relativePath, $fullFilename]);
                     $createdDocs++;
