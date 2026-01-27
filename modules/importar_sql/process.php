@@ -401,18 +401,26 @@ try {
             logMsg("Importando documentos desde '$docTableName'...", "info");
 
             foreach ($data['rows'] as $row) {
-                // Mapear columnas (flexible)
-                $oldId = $row['id'] ?? null;
-                $tipo = $row['tipo'] ?? 'importado';
-                $numero = $row['numero'] ?? $row['number'] ?? $row['name'] ?? 'S/N';
-                $fecha = $row['fecha'] ?? date('Y-m-d');
-                $proveedor = $row['proveedor'] ?? '';
-                $naviera = $row['naviera'] ?? '';
-                $peso = $row['peso_kg'] ?? 0;
-                $valor = $row['valor_usd'] ?? 0;
-                $ruta = $row['ruta_archivo'] ?? $row['path'] ?? 'pending';
-                $origPath = $row['original_path'] ?? null;
-                $estado = $row['estado'] ?? 'pendiente';
+                // Normalizar keys del row a minúsculas para búsqueda insensible
+                $rowLower = array_change_key_case($row, CASE_LOWER);
+
+                // Mapear columnas (flexible e insensible a mayúsculas)
+                $oldId = $rowLower['id'] ?? null;
+                $tipo = $rowLower['tipo'] ?? 'importado';
+                $numero = $rowLower['numero'] ?? $rowLower['number'] ?? $rowLower['name'] ?? 'S/N';
+                $fecha = $rowLower['fecha'] ?? date('Y-m-d');
+                $proveedor = $rowLower['proveedor'] ?? '';
+                $naviera = $rowLower['naviera'] ?? '';
+                $peso = $rowLower['peso_kg'] ?? 0;
+                $valor = $rowLower['valor_usd'] ?? 0;
+
+                // CRUCIAL: Recuperar la ruta original para que el ZIP pueda enlazar
+                // Si 'original_path' no existe, usamos 'ruta_archivo' o 'path'
+                $origPath = $rowLower['original_path'] ?? $rowLower['ruta_archivo'] ?? $rowLower['path'] ?? null;
+
+                // La ruta_archivo final en DB la reiniciamos a 'pending' para que el ZIP la llene
+                $ruta = 'pending';
+                $estado = $rowLower['estado'] ?? 'pendiente';
 
                 try {
                     $stmtDoc->execute([$tipo, $numero, $fecha, $proveedor, $naviera, $peso, $valor, $ruta, $origPath, $estado]);
