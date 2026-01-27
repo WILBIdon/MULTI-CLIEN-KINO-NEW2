@@ -126,10 +126,18 @@ require_once '../../includes/header.php';
 </div>
 
 <script>
+    // Helper for DOM elements
+    const $ = (selector) => document.querySelector(selector);
+    const $$ = (selector) => document.querySelectorAll(selector);
+
     // Custom File Input Label
-    $(".custom-file-input").on("change", function () {
-        var fileName = $(this).val().split("\\").pop();
-        $(this).siblings(".custom-file-label").addClass("selected").html(fileName);
+    $$(".custom-file-input").forEach(input => {
+        input.addEventListener("change", function () {
+            var fileName = this.value.split("\\").pop();
+            var label = this.nextElementSibling;
+            label.classList.add("selected");
+            label.innerHTML = fileName || 'Seleccionar archivo...';
+        });
     });
 
     const consoleDiv = document.getElementById('consoleOutput');
@@ -150,71 +158,104 @@ require_once '../../includes/header.php';
     }
 
     // Reset Action
-    $('#btnReset').click(function () {
+    document.getElementById('btnReset').addEventListener('click', async function () {
         if (!confirm('¿ESTÁS SEGURO? Esto borrará TODA la base de datos actual.')) return;
 
         log('Iniciando Reset...', 'warning');
-        $.post('process.php', { action: 'reset' }, function (resp) {
+
+        try {
+            const formData = new FormData();
+            formData.append('action', 'reset');
+
+            const response = await fetch('process.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            const resp = await response.json();
+
             if (resp.success) {
                 log('Base de datos reiniciada correctamente.', 'success');
             } else {
                 log('Error al reiniciar: ' + (resp.error || 'Desconocido'), 'error');
             }
-        }, 'json').fail(function () {
-            log('Error de red al intentar reiniciar.', 'error');
-        });
+        } catch (error) {
+            log('Error de red al intentar reiniciar: ' + error.message, 'error');
+        }
     });
 
     // Import Action
-    $('#uploadForm').submit(function (e) {
+    document.getElementById('uploadForm').addEventListener('submit', function (e) {
         e.preventDefault();
 
         const formData = new FormData(this);
         formData.append('action', 'import');
 
-        $('#progressBarContainer').removeClass('d-none');
-        $('#progressBar').css('width', '10%').text('Subiendo...');
-        $('#btnImport').prop('disabled', true);
+        const progressBarContainer = document.getElementById('progressBarContainer');
+        const progressBar = document.getElementById('progressBar');
+        const btnImport = document.getElementById('btnImport');
 
-        log('Iniciando subida de archivos...', 'info');
+        progressBarContainer.classList.remove('d-none');
+        progressBar.style.width = '10%';
+        progressBar.innerText = 'Subiendo...';
+        btnImport.disabled = true;
 
-        $.ajax({
-            url: 'process.php',
-            type: 'POST',
-            data: formData,
-            contentType: false,
-            processData: false,
-            xhr: function () {
-                var xhr = new window.XMLHttpRequest();
-                xhr.upload.addEventListener("progress", function (evt) {
-                    if (evt.lengthComputable) {
-                        var percentComplete = (evt.loaded / evt.total) * 100;
-                        $('#progressBar').css('width', percentComplete + '%').text(Math.round(percentComplete) + '%');
-                    }
-                }, false);
-                return xhr;
-            },
-            success: function (resp) {
-                $('#btnImport').prop('disabled', false);
-                if (resp.logs && Array.isArray(resp.logs)) {
-                    resp.logs.forEach(l => log(l.msg, l.type));
-                }
+        log('Iniciando subida de archivos... Espere por favor.', 'info');
 
-                if (resp.success) {
-                    $('#progressBar').css('width', '100%').addClass('bg-success').text('Completado');
-                    log('Proceso finalizado correctamente.', 'success');
-                } else {
-                    $('#progressBar').addClass('bg-danger').text('Error');
-                    log('Error fatal: ' + (resp.error || 'Desconocido'), 'error');
-                }
-            },
-            error: function (xhr, status, error) {
-                $('#btnImport').prop('disabled', false);
-                $('#progressBar').addClass('bg-danger').text('Fallo de Red');
-                log('Error de comunicación: ' + error, 'error');
-                console.error(xhr.responseText);
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'process.php', true);
+
+        // Progress event
+        xhr.upload.addEventListener("progress", function (evt) {
+            if (evt.lengthComputable) {
+                var percentComplete = (evt.loaded / evt.total) * 100;
+                progressBar.style.width = percentComplete + '%';
+                progressBar.innerText = Math.round(percentComplete) + '%';
             }
-        });
+        }, false);
+
+        // Completion event
+        xhr.onload = function () {
+            btnImport.disabled = false;
+
+            if (xhr.status === 200) {
+                try {
+                    const resp = JSON.parse(xhr.responseText);
+
+                    if (resp.logs && Array.isArray(resp.logs)) {
+                        resp.logs.forEach(l => log(l.msg, l.type));
+                    }
+
+                    if (resp.success) {
+                        progressBar.style.width = '100%';
+                        progressBar.classList.add('bg-success');
+                        progressBar.innerText = 'Completado';
+                        log('Proceso finalizado correctamente.', 'success');
+                    } else {
+                        progressBar.classList.add('bg-danger');
+                        progressBar.innerText = 'Error';
+                        log('Error en proceso: ' + (resp.error || 'Verifique logs'), 'error');
+                    }
+                } catch (e) {
+                    log('Error parseando respuesta del servidor: ' + xhr.responseText.substring(0, 100) + '...', 'error');
+                    console.error('Raw response:', xhr.responseText);
+                }
+            } else {
+                progressBar.classList.add('bg-danger');
+                progressBar.innerText = 'Fallo HTTP';
+                log('Error del servidor: ' + xhr.status + ' ' + xhr.statusText, 'error');
+            }
+        };
+
+        // Error event
+        xhr.onerror = function () {
+            btnImport.disabled = false;
+            progressBar.classList.add('bg-danger');
+            progressBar.innerText = 'Fallo Red';
+            log('Error de comunicación de red.', 'error');
+        };
+
+        xhr.send(formData);
     });
 </script>
 
