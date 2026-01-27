@@ -68,3 +68,48 @@ Al importar los datos SQL, si el script no rellena correctamente el campo `origi
 
 **Solución:**
 En `process.php`, se mejoró la lógica de importación para que busque el valor de `original_path` en múltiples columnas candidatas (`original_path`, `ruta_archivo`, `path`) de manera insensible a mayúsculas/minúsculas. Si encuentra alguna ruta, la guarda como `original_path` en la base de datos, permitiendo que el ZIP encuentre y vincule el archivo en lugar de crear un duplicado.
+
+---
+
+## 5. Error: "Códigos faltantes" (Importación Incrustada)
+
+**Síntoma:**
+La importación de documentos es exitosa, pero no aparecen códigos, incluso si la lógica de mapeo de IDs es correcta.
+
+**Causa:**
+Algunos archivos SQL (especialmente de versiones anteriores o exports específicos) no tienen una tabla `codigos` separada. En su lugar, tienen una columna llamada `codigos_extraidos` o `codigos` **dentro** de la tabla `documentos`, que contiene los códigos en formato JSON o texto separado por comas. El importador estándar solo buscaba la tabla `codigos` y la ignoraba.
+
+**Solución:**
+Se modificó `process.php` para inspeccionar cada fila importada de `documentos`. Si detecta una columna `codigos_extraidos`, parsea su contenido (JSON o CSV) e inserta automáticamente los registros correspondientes en la tabla `codigos`.
+
+---
+
+## 6. Error: "Unexpected end of JSON input" (Respuesta Cortada)
+
+**Síntoma:**
+Error rojo al limpiar base de datos: `Unexpected end of JSON input`.
+
+**Causa:**
+PHP cerraba la conexión antes de terminar de enviar el búfer de salida al navegador.
+
+**Solución:**
+Añadir `ob_end_flush()` explícitamente antes de `exit` en los bloques de respuesta JSON.
+```php
+ob_clean();
+echo json_encode($response);
+ob_end_flush(); // <-- CRÍTICO
+exit;
+```
+
+---
+
+## 7. Error: "Códigos faltantes" (Parser SQL roto por comas en JSON)
+
+**Síntoma:**
+La importación funciona, pero los campos que contienen JSON (como `codigos_extraidos`) llegan vacíos o cortados.
+
+**Causa:**
+El parser SQL original usaba `explode(',', ...)` para separar los valores de la fila. Si un valor (como un JSON) contenía una coma (ej: `{"a":1, "b":2}`), el parser lo partía erróneamente en dos columnas distintas, corrompiendo la fila.
+
+**Solución:**
+Se reescribió `parse_sql_inserts` en `helpers/import_engine.php` para usar un parser inteligente que respeta las comillas y paréntesis, ignorando las comas que están *dentro* de un valor.
