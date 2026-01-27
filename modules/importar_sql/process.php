@@ -107,6 +107,8 @@ try {
                 . ");"
             );
 
+            $debugOutput = ob_get_contents();
+            file_put_contents(__DIR__ . '/../../debug_reset_log.html', $debugOutput); // Log what is breaking the JSON
             while (ob_get_level()) { ob_end_clean(); } // Clean ALL buffers
             echo json_encode(['success' => true, 'logs' => [['msg' => $msg . "\n- Estructura regenerada.", 'type' => 'success']]]);
             die(); // Force stop
