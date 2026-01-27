@@ -347,6 +347,9 @@ try {
             if (pathinfo($filename, PATHINFO_EXTENSION) !== 'pdf')
                 continue;
 
+            // Inicializar bandera de vinculación para este archivo
+            $linked = false;
+
             // Extraer
             $targetPath = $uploadDir . basename($filename);
             copy("zip://" . $zipFile['tmp_name'] . "#" . $filename, $targetPath);
@@ -378,7 +381,6 @@ try {
             // SQLite permite concatenación con ||
             // Buscamos documentos cuyo numero sea el inicio del nombre del archivo seguido de un separador
             $separators = ['_', '-', ' '];
-            $linked = false;
 
             foreach ($separators as $sep) {
                 // UPDATE documentos SET ruta_archivo = ... WHERE 'filename' LIKE numero || '_' || '%'
@@ -469,32 +471,49 @@ try {
         $createdDocs = 0;
         if (!empty($unlinkedFiles)) {
             $stmtCreate = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, estado, ruta_archivo, original_path) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            // Prepare check statement (Case Insensitive for robustness)
-            $stmtCheck = $db->prepare("SELECT id FROM documentos WHERE LOWER(original_path) = LOWER(?) LIMIT 1");
+
+            // Check By Full Path (Duplicate Prevention)
+            $stmtCheckPath = $db->prepare("SELECT id FROM documentos WHERE LOWER(original_path) = LOWER(?) LIMIT 1");
+
+            // Check By Number (Smart Link - Self Healing)
+            // Si el nombre del archivo coincide con un número de documento existente, lo vinculamos en lugar de crear uno nuevo.
+            $stmtCheckNumber = $db->prepare("SELECT id FROM documentos WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?)) LIMIT 1");
+            $stmtUpdateLink = $db->prepare("UPDATE documentos SET ruta_archivo = ?, original_path = ? WHERE id = ?");
 
             foreach ($unlinkedFiles as $fullFilename) {
-                // Check if already exists (Prevent Duplicates)
-                $stmtCheck->execute([$fullFilename]);
-                if ($stmtCheck->fetchColumn()) {
-                    // Already exists, skip creation
-                    continue;
+                // 1. Chequeo de Duplicado Exacto (Path)
+                $stmtCheckPath->execute([$fullFilename]);
+                if ($stmtCheckPath->fetchColumn()) {
+                    continue; // Ya existe con ese path, saltar.
                 }
 
-                // Derivar datos básicos del nombre del archivo
-                // Ejemplo: "Factura-123.pdf" -> Numero: "Factura-123"
                 $numero = pathinfo($fullFilename, PATHINFO_FILENAME);
-                $fecha = date('Y-m-d');
                 $relativePath = 'sql_import/' . $fullFilename;
+                $fecha = date('Y-m-d');
 
+                // 2. Auto-Link (Autocuración): ¿Existe un doc con este número pero sin vincular?
+                // Esto arregla el caso donde original_path estaba vacío en DB pero el nombre coincide.
+                $stmtCheckNumber->execute([$numero]);
+                $existingId = $stmtCheckNumber->fetchColumn();
+
+                if ($existingId) {
+                    // ¡Existe! Lo vinculamos y actualizamos su original_path
+                    $stmtUpdateLink->execute([$relativePath, $fullFilename, $existingId]);
+                    $updatedDocs++;
+                    logMsg("🔗 Auto-Vinculado (Recuperado): $numero", "success");
+                    continue; // Skip creation
+                }
+
+                // 3. Crear Nuevo Documento
                 try {
                     $stmtCreate->execute(['generado_auto', $numero, $fecha, 'Importación Auto', 'procesado', $relativePath, $fullFilename]);
                     $createdDocs++;
                     logMsg("✨ Documento creado autom.: $numero", "success");
                 } catch (Exception $e) {
-                    logMsg("❌ Error al crear documento auto ($numero): " . $e->getMessage(), "error");
+                    // Si falla por índice único u otro motivo, lo atrapamos
+                    logMsg("❌ Error creation ($numero): " . $e->getMessage(), "error");
                 }
             }
-            // Limpiamos la lista de 'unlinked' porque ya fueron tratados (ahora son 'created')
             $unlinkedFiles = [];
         }
 
