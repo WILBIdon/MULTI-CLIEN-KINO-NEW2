@@ -5,6 +5,8 @@ ob_start(); // Iniciar buffer para capturar salidas no deseadas
  */
 header('Content-Type: application/json');
 session_start();
+ini_set('display_errors', 0); // Disable error display
+error_reporting(E_ALL); // Log everything, but don't show it
 set_time_limit(300); // 5 minutos máx
 ini_set('memory_limit', '512M');
 

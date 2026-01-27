@@ -194,7 +194,7 @@ function clone_client(
     // Verificar que el cliente origen exista
     $stmt = $centralDb->prepare('SELECT COUNT(*) FROM control_clientes WHERE codigo = ?');
     $stmt->execute([$sourceCode]);
-    $exists = (int)$stmt->fetchColumn() > 0;
+    $exists = (int) $stmt->fetchColumn() > 0;
     if (!$exists) {
         throw new Exception("El cliente origen no existe: $sourceCode");
     }
@@ -216,5 +216,3 @@ function clone_client(
     $updateStmt = $centralDb->prepare('UPDATE control_clientes SET titulo = ?, color_primario = ?, color_secundario = ? WHERE codigo = ?');
     $updateStmt->execute([$titulo, $colorP, $colorS, $newCode]);
 }
-
-?>
