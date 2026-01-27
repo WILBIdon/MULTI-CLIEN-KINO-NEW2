@@ -400,23 +400,39 @@ try {
 
             logMsg("Importando documentos desde '$docTableName'...", "info");
 
+            // --- DIAGNOSTICO: Loguear columnas encontradas en el primer row ---
+            if (!empty($data['rows'])) {
+                $firstRowKeys = array_keys($data['rows'][0]);
+                logMsg("🔎 Columnas encontradas en tabla documentos (RAW): " . implode(", ", $firstRowKeys), "info");
+            }
+
             foreach ($data['rows'] as $row) {
                 // Normalizar keys del row a minúsculas para búsqueda insensible
                 $rowLower = array_change_key_case($row, CASE_LOWER);
 
-                // Mapear columnas (flexible e insensible a mayúsculas)
-                $oldId = $rowLower['id'] ?? null;
+                // --- MAPEO ROBUSTO DE ID ---
+                $oldId = $rowLower['id'] ?? $rowLower['_id'] ?? $rowLower['uid'] ?? null;
+
+                // --- MAPEO DE COLUMNAS IMPLICITAS ---
                 $tipo = $rowLower['tipo'] ?? 'importado';
                 $numero = $rowLower['numero'] ?? $rowLower['number'] ?? $rowLower['name'] ?? 'S/N';
-                $fecha = $rowLower['fecha'] ?? date('Y-m-d');
-                $proveedor = $rowLower['proveedor'] ?? '';
+                $fecha = $rowLower['fecha'] ?? $rowLower['date'] ?? date('Y-m-d');
+                $proveedor = $rowLower['proveedor'] ?? $rowLower['provider'] ?? '';
                 $naviera = $rowLower['naviera'] ?? '';
                 $peso = $rowLower['peso_kg'] ?? 0;
                 $valor = $rowLower['valor_usd'] ?? 0;
 
-                // CRUCIAL: Recuperar la ruta original para que el ZIP pueda enlazar
-                // Si 'original_path' no existe, usamos 'ruta_archivo' o 'path'
-                $origPath = $rowLower['original_path'] ?? $rowLower['ruta_archivo'] ?? $rowLower['path'] ?? null;
+                // --- MAPEO AGRESIVO DE ORIGINAL PATH ---
+                // Verifica todas las combinaciones posibles donde podría estar la ruta antigua
+                $origPath = null;
+                $possiblePathKeys = ['original_path', 'ruta_archivo', 'ruta', 'path', 'file_path', 'file', 'archivo', 'filename', 'nombre_archivo', 'url', 'uri', 'src'];
+
+                foreach ($possiblePathKeys as $key) {
+                    if (!empty($rowLower[$key])) {
+                        $origPath = $rowLower[$key];
+                        break;
+                    }
+                }
 
                 // La ruta_archivo final en DB la reiniciamos a 'pending' para que el ZIP la llene
                 $ruta = 'pending';
@@ -436,15 +452,34 @@ try {
             logMsg("Documentos importados. Mapeados " . count($idMap) . " IDs.", "success");
         }
 
-        // 2. IMPORTAR CÓDIGOS (Usando mapa de IDs)
+        // 2. IMPORTAR CÓDIGOS (Usando mapa de IDs y Mapeo Flexible)
         if (isset($tables['codigos'])) {
             $data = $tables['codigos'];
             $stmtCode = $db->prepare("INSERT INTO codigos (documento_id, codigo, descripcion, cantidad, valor_unitario, validado, alerta) 
                                       VALUES (?, ?, ?, ?, ?, ?, ?)");
 
             $codesCount = 0;
+
+            // --- DIAGNOSTICO: Loguead columnas ---
+            if (!empty($data['rows'])) {
+                $firstCodeKeys = array_keys($data['rows'][0]);
+                logMsg("🔎 Columnas encontradas en tabla codigos (RAW): " . implode(", ", $firstCodeKeys), "info");
+            }
+
             foreach ($data['rows'] as $row) {
-                $oldDocId = $row['documento_id'] ?? null;
+                // Normalizar
+                $rowLower = array_change_key_case($row, CASE_LOWER);
+
+                // --- MAPEO ROBUSTO DE FOREIGN KEY ---
+                $oldDocId = null;
+                $possibleFkKeys = ['documento_id', 'document_id', 'doc_id', 'id_documento', 'id_doc', 'ref_id', 'parent_id', 'documento', 'doc'];
+
+                foreach ($possibleFkKeys as $fkKey) {
+                    if (isset($rowLower[$fkKey])) {
+                        $oldDocId = $rowLower[$fkKey];
+                        break;
+                    }
+                }
 
                 // Solo insertar si tenemos el padre mapeado
                 if ($oldDocId && isset($idMap[$oldDocId])) {
@@ -452,12 +487,12 @@ try {
                     try {
                         $stmtCode->execute([
                             $newDocId,
-                            $row['codigo'] ?? 'UNKNOWN',
-                            $row['descripcion'] ?? '',
-                            $row['cantidad'] ?? 0,
-                            $row['valor_unitario'] ?? 0,
-                            $row['validado'] ?? 0,
-                            $row['alerta'] ?? null
+                            $rowLower['codigo'] ?? $rowLower['code'] ?? 'UNKNOWN',
+                            $rowLower['descripcion'] ?? $rowLower['description'] ?? $rowLower['desc'] ?? '',
+                            $rowLower['cantidad'] ?? $rowLower['quantity'] ?? $rowLower['qty'] ?? 0,
+                            $rowLower['valor_unitario'] ?? $rowLower['valor'] ?? $rowLower['price'] ?? 0,
+                            $rowLower['validado'] ?? 0,
+                            $rowLower['alerta'] ?? null
                         ]);
                         $codesCount++;
                     } catch (Exception $e) {
@@ -467,7 +502,7 @@ try {
             logMsg("Códigos importados: $codesCount", "success");
         }
 
-        // 3. IMPORTAR VÍNCULOS (Usando mapa de IDs)
+        // 3. IMPORTAR VÍNCULOS (Usando mapa de IDs y Mapeo Flexible)
         if (isset($tables['vinculos'])) {
             $data = $tables['vinculos'];
             $stmtLink = $db->prepare("INSERT INTO vinculos (documento_origen_id, documento_destino_id, tipo_vinculo, codigos_coinciden, discrepancias) 
@@ -475,17 +510,20 @@ try {
 
             $linksCount = 0;
             foreach ($data['rows'] as $row) {
-                $oldOriginId = $row['documento_origen_id'] ?? null;
-                $oldDestId = $row['documento_destino_id'] ?? null;
+                $rowLower = array_change_key_case($row, CASE_LOWER);
+
+                // --- MAPEO ROBUSTO DE FKs VINCULOS ---
+                $oldOriginId = $rowLower['documento_origen_id'] ?? $rowLower['origen_id'] ?? $rowLower['source_id'] ?? null;
+                $oldDestId = $rowLower['documento_destino_id'] ?? $rowLower['destino_id'] ?? $rowLower['target_id'] ?? null;
 
                 if ($oldOriginId && isset($idMap[$oldOriginId]) && $oldDestId && isset($idMap[$oldDestId])) {
                     try {
                         $stmtLink->execute([
                             $idMap[$oldOriginId],
                             $idMap[$oldDestId],
-                            $row['tipo_vinculo'] ?? 'manual',
-                            $row['codigos_coinciden'] ?? 0,
-                            $row['discrepancias'] ?? null
+                            $rowLower['tipo_vinculo'] ?? 'manual',
+                            $rowLower['codigos_coinciden'] ?? 0,
+                            $rowLower['discrepancias'] ?? null
                         ]);
                         $linksCount++;
                     } catch (Exception $e) {
