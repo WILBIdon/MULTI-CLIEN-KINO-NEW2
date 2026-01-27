@@ -324,8 +324,8 @@ try {
                 continue;
             }
 
-            // 1. Intento por nombre (Exacto)
-            $stmtExact = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?)) AND ruta_archivo = 'pending'");
+            // 1. Intento por nombre (Exacto) - REMOVE 'pending' filter constraint
+            $stmtExact = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?))");
             $stmtExact->execute([$relativePath, $basename]);
 
             if ($stmtExact->rowCount() > 0) {
@@ -416,10 +416,8 @@ try {
                     }
                 }
             }
-
-            if (!$linked) {
-                // logMsg("⚠️ No encontrado en DB (Busqué tokens en: $basename)", "warning");
-                $unlinkedFiles[] = $basename;
+                // Store FULL filename for correct path reconstruction later
+                $unlinkedFiles[] = $filename;
             }
         }
         $zip->close();
@@ -429,12 +427,12 @@ try {
         $createdDocs = 0;
         if (!empty($unlinkedFiles)) {
             $stmtCreate = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, estado, ruta_archivo, original_path) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            // Prepare check statement
-            $stmtCheck = $db->prepare("SELECT id FROM documentos WHERE original_path = ? LIMIT 1");
+            // Prepare check statement (Case Insensitive for robustness)
+            $stmtCheck = $db->prepare("SELECT id FROM documentos WHERE LOWER(original_path) = LOWER(?) LIMIT 1");
 
-            foreach ($unlinkedFiles as $fileBaseName) {
+            foreach ($unlinkedFiles as $fullFilename) {
                 // Check if already exists (Prevent Duplicates)
-                $stmtCheck->execute([$fileBaseName]);
+                $stmtCheck->execute([$fullFilename]);
                 if ($stmtCheck->fetchColumn()) {
                     // Already exists, skip creation
                     continue;
@@ -442,12 +440,12 @@ try {
 
                 // Derivar datos básicos del nombre del archivo
                 // Ejemplo: "Factura-123.pdf" -> Numero: "Factura-123"
-                $numero = pathinfo($fileBaseName, PATHINFO_FILENAME);
+                $numero = pathinfo($fullFilename, PATHINFO_FILENAME);
                 $fecha = date('Y-m-d');
-                $relativePath = 'sql_import/' . $fileBaseName;
-
+                $relativePath = 'sql_import/' . $fullFilename;
+                
                 try {
-                    $stmtCreate->execute(['generado_auto', $numero, $fecha, 'Importación Auto', 'procesado', $relativePath, $fileBaseName]);
+                    $stmtCreate->execute(['generado_auto', $numero, $fecha, 'Importación Auto', 'procesado', $relativePath, $fullFilename]);
                     $createdDocs++;
                     logMsg("✨ Documento creado autom.: $numero", "success");
                 } catch (Exception $e) {
