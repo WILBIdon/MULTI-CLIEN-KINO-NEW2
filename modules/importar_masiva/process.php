@@ -78,6 +78,9 @@ try {
         $skippedDuplicates = 0;
         $codesAddedToExisting = 0;
 
+        // ====== CACHÉ EN MEMORIA para documentos creados en esta misma importación ======
+        $insertedThisRun = []; // key = nombre_pdf normalizado => docId
+
         // Prepare statements
         $stmtFindDoc = $db->prepare("SELECT id, numero, ruta_archivo FROM documentos WHERE ruta_archivo LIKE ? OR original_path = ? LIMIT 1");
         $stmtDoc = $db->prepare("INSERT INTO documentos (tipo, numero, fecha, proveedor, ruta_archivo, original_path, estado) VALUES (?, ?, ?, ?, ?, ?, ?)");
@@ -98,28 +101,36 @@ try {
             if (empty($rawPdf))
                 continue;
 
-            // ====== BUSCAR DOCUMENTO EXISTENTE POR NOMBRE PDF ======
-            // Intentar encontrar por ruta_archivo o original_path
-            $stmtFindDoc->execute(['%' . $rawPdf, $rawPdf]);
-            $existingDoc = $stmtFindDoc->fetch(PDO::FETCH_ASSOC);
+            // Normalizar clave para comparación
+            $pdfKey = strtolower(trim($rawPdf));
 
-            $docId = null;
-
-            if ($existingDoc) {
-                // Documento ya existe - solo agregar códigos
-                $docId = $existingDoc['id'];
+            // ====== VERIFICAR PRIMERO EN CACHÉ DE ESTA MISMA IMPORTACIÓN ======
+            if (isset($insertedThisRun[$pdfKey])) {
+                $docId = $insertedThisRun[$pdfKey];
                 $skippedDuplicates++;
-                logMsg("📎 Documento existente encontrado: {$rawPdf} (ID: {$docId})", "info");
+                // No log para evitar spam - solo agregar códigos
             } else {
-                // Documento nuevo - crear
-                try {
-                    $stmtDoc->execute(['importado_csv', $rawDoc, $rawFecha, 'Importacion Masiva', 'pending', $rawPdf, 'procesado']);
-                    $docId = $db->lastInsertId();
-                    $importedDocs++;
-                    logMsg("✅ Nuevo documento creado: {$rawPdf} (ID: {$docId})", "success");
-                } catch (Exception $e) {
-                    logMsg("Error creando documento ($rawPdf): " . $e->getMessage(), "warning");
-                    continue;
+                // ====== BUSCAR DOCUMENTO EXISTENTE EN BASE DE DATOS ======
+                $stmtFindDoc->execute(['%' . $rawPdf, $rawPdf]);
+                $existingDoc = $stmtFindDoc->fetch(PDO::FETCH_ASSOC);
+
+                if ($existingDoc) {
+                    $docId = $existingDoc['id'];
+                    $insertedThisRun[$pdfKey] = $docId; // Agregar a caché
+                    $skippedDuplicates++;
+                    logMsg("📎 Documento existente encontrado: {$rawPdf} (ID: {$docId})", "info");
+                } else {
+                    // Documento nuevo - crear
+                    try {
+                        $stmtDoc->execute(['importado_csv', $rawDoc, $rawFecha, 'Importacion Masiva', 'pending', $rawPdf, 'procesado']);
+                        $docId = $db->lastInsertId();
+                        $insertedThisRun[$pdfKey] = $docId; // ¡IMPORTANTE! Agregar a caché
+                        $importedDocs++;
+                        logMsg("✅ Nuevo documento creado: {$rawPdf} (ID: {$docId})", "success");
+                    } catch (Exception $e) {
+                        logMsg("Error creando documento ($rawPdf): " . $e->getMessage(), "warning");
+                        continue;
+                    }
                 }
             }
 
