@@ -55,3 +55,16 @@ Se implementó un sistema de mapeo de IDs (`$idMap`) en `process.php`.
 
 **Prevención:**
 Cualquier script de migración o importación debe manejar explícitamente las claves foráneas (Foreign Keys) cuando los IDs primarios cambian.
+
+---
+
+## 4. Error: "Documentos Duplicados (Generado Auto)" tras importación
+
+**Síntoma:**
+Después de importar SQL y ZIP simultáneamente, aparecen duplicados: uno "Importado" (sin archivo vinculado) y otro "Generado Auto" (con el archivo).
+
+**Causa:**
+Al importar los datos SQL, si el script no rellena correctamente el campo `original_path` (usando `ruta_archivo` o `path` como respaldo), el sistema de vinculación de PDF (ZIP) no puede encontrar el documento existente en la base de datos. Al no encontrarlo, crea uno nuevo marcado como "Generado Auto".
+
+**Solución:**
+En `process.php`, se mejoró la lógica de importación para que busque el valor de `original_path` en múltiples columnas candidatas (`original_path`, `ruta_archivo`, `path`) de manera insensible a mayúsculas/minúsculas. Si encuentra alguna ruta, la guarda como `original_path` en la base de datos, permitiendo que el ZIP encuentre y vincule el archivo en lugar de crear un duplicado.
