@@ -1,0 +1,2 @@
+Sync test - 2026-01-27 17:02
+This file verifies GitHub synchronization is working correctly.
