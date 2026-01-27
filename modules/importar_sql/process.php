@@ -1,4 +1,5 @@
 <?php
+ob_start(); // Iniciar buffer para capturar salidas no deseadas
 /**
  * Backend para Importación Avanzada
  */
@@ -104,9 +105,11 @@ try {
                 . ");"
             );
 
+            ob_clean();
             echo json_encode(['success' => true, 'logs' => [['msg' => $msg . "\n- Estructura regenerada.", 'type' => 'success']]]);
             exit;
         } catch (Exception $e) {
+            ob_clean();
             echo json_encode(['success' => false, 'error' => 'Error fatal en Hard Reset: ' . $e->getMessage()]);
             exit;
         }
@@ -126,6 +129,7 @@ try {
         $info .= "DB RealPath: " . $realPath . "\n";
         $info .= "Docs en DB: " . $docCount . "\n";
 
+        ob_clean();
         echo json_encode(['success' => true, 'logs' => [['msg' => $info, 'type' => 'info']]]);
         exit;
     }
@@ -204,7 +208,8 @@ try {
         // Helper para encontrar valor
         $findVal = function ($row, $candidates, $cols) {
             foreach ($candidates as $cand) {
-                if (isset($row[$cand])) return $row[$cand];
+                if (isset($row[$cand]))
+                    return $row[$cand];
             }
             return null;
         };
@@ -216,7 +221,7 @@ try {
             $fecha = $row['fecha'] ?? $row['date'] ?? date('Y-m-d');
             $tipo = $row['tipo'] ?? 'importado';
             $proveedor = $row['proveedor'] ?? '';
-            
+
             // Buscar path original
             $originalPath = null;
             foreach ($colMap['path'] as $pCol) {
@@ -236,7 +241,48 @@ try {
             }
         }
         logMsg("Se importaron " . count($docRows) . " documentos.");
-// ... (Lines 233-288) ...
+    } else {
+        logMsg("⚠️ No se detectó tabla de documentos en el SQL. Se intentará inferir si es necesario.", "warning");
+    }
+
+    // -- IMPORTAR CÓDIGOS --
+    if ($tblCodes) {
+        logMsg("Importando códigos desde tabla '$tblCodes'...");
+        $codeRows = $tables[$tblCodes]['rows'];
+
+        $stmtCode = $db->prepare("INSERT INTO codigos (documento_id, codigo, descripcion) VALUES (?, ?, ?)");
+
+        $importedCodes = 0;
+        foreach ($codeRows as $row) {
+            $oldDocId = $row['document_id'] ?? null;
+            $codigo = $row['code'] ?? $row['codigo'] ?? null;
+            $desc = $row['description'] ?? $row['descripcion'] ?? '';
+
+            if ($oldDocId && isset($idMap[$oldDocId])) {
+                $targetDocId = $idMap[$oldDocId];
+                if ($codigo) {
+                    $stmtCode->execute([$targetDocId, $codigo, $desc]);
+                    $importedCodes++;
+                }
+            }
+        }
+        logMsg("Se importaron $importedCodes códigos.");
+    }
+
+    $db->commit();
+
+    // 3. Procesar ZIP
+    logMsg("Procesando archivo ZIP...");
+    $zip = new ZipArchive();
+    if ($zip->open($zipFile['tmp_name']) === TRUE) {
+
+        $uploadDir = CLIENTS_DIR . "/{$clientCode}/uploads/sql_import/";
+        if (!file_exists($uploadDir))
+            mkdir($uploadDir, 0777, true);
+
+        $updatedDocs = 0;
+        $unlinkedFiles = [];
+
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $filename = $zip->getNameIndex($i);
             if (pathinfo($filename, PATHINFO_EXTENSION) !== 'pdf')
@@ -246,15 +292,11 @@ try {
             $targetPath = $uploadDir . basename($filename);
             copy("zip://" . $zipFile['tmp_name'] . "#" . $filename, $targetPath);
             $relativePath = 'sql_import/' . basename($filename);
-            
+
             $basename = pathinfo($filename, PATHINFO_FILENAME);
-            
+
             // 0. ESTRATEGIA SUPREMA: Match por 'original_path'
-            // Si el archivo en el ZIP coincide con el 'path' que venía en el SQL
-            // Ejemplo SQL: path='uploads/factura.pdf', ZIP entry: 'uploads/factura.pdf' o just 'factura.pdf'
-            
             $stmtPath = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE original_path = ? OR original_path LIKE ?");
-            // Intentamos match exacto O match de terminación (para directorios relativos)
             $stmtPath->execute([$relativePath, $filename, "%/$filename"]);
 
             if ($stmtPath->rowCount() > 0) {
@@ -266,9 +308,6 @@ try {
             // 1. Intento por nombre (Exacto)
             $stmtExact = $db->prepare("UPDATE documentos SET ruta_archivo = ? WHERE TRIM(LOWER(numero)) = TRIM(LOWER(?)) AND ruta_archivo = 'pending'");
             $stmtExact->execute([$relativePath, $basename]);
-
-            if ($stmtExact->rowCount() > 0) {
-// ... // Intento 1: basename completo
 
             if ($stmtExact->rowCount() > 0) {
                 $updatedDocs++;
@@ -430,4 +469,5 @@ try {
     logMsg($e->getMessage(), 'error');
 }
 
+ob_clean();
 echo json_encode($response);
