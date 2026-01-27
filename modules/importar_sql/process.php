@@ -452,6 +452,41 @@ try {
                         $numeroMap[$normNum] = $newId;
                     }
 
+                    // --- NUEVO: Extraer códigos de codigos_extraidos (IMPORTACION INCRUSTADA) ---
+                    $rawCodes = $rowLower['codigos_extraidos'] ?? $rowLower['codigos'] ?? null;
+                    if (!empty($rawCodes)) {
+                        $codeList = [];
+
+                        // 1. Intentar decode JSON
+                        $decoded = json_decode($rawCodes, true);
+                        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                            $codeList = $decoded;
+                        } else {
+                            // 2. Intentar separar por comas, pipes o espacios
+                            $codeList = preg_split('/[;,|]/', $rawCodes);
+                        }
+
+                        // Preparar insert de códigos (si no se preparó antes)
+                        if (!isset($stmtCode)) {
+                            $stmtCode = $db->prepare("INSERT INTO codigos (documento_id, codigo, descripcion, cantidad, valor_unitario, validado, alerta) 
+                                                       VALUES (?, ?, ?, 0, 0, 0, NULL)");
+                        }
+
+                        foreach ($codeList as $codeStr) {
+                            $codeStr = trim($codeStr);
+                            // Limpiar comillas extras si quedaron
+                            $codeStr = trim($codeStr, '"\'');
+
+                            if ($codeStr === '' || strlen($codeStr) < 2)
+                                continue; // Skip empty or very short junk
+
+                            try {
+                                $stmtCode->execute([$newId, $codeStr, 'Importado de Columna', 0, 0, 0, NULL]);
+                            } catch (Exception $e) { /* Ignore duplicates */
+                            }
+                        }
+                    }
+
                 } catch (Exception $e) {
                     logMsg("Error importando doc '$numero': " . $e->getMessage(), "warning");
                 }
