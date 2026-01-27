@@ -365,8 +365,11 @@ $pageTitle = 'Importación Avanzada';
                 }
 
                 if (result.success) {
-                    log('Importación completada con éxito.', 'success');
-                    setTimeout(() => window.location.reload(), 4000);
+                    log('Importación completada con éxito. Revise el resumen arriba.', 'success');
+                    // setTimeout(() => window.location.reload(), 4000); // Eliminado para persistir resultados
+                    btn.innerHTML = '<span class="btn-text">NUEVA IMPORTACIÓN</span>';
+                    btn.disabled = false;
+                    btn.onclick = function () { window.location.reload(); };
                 } else {
                     log('Error fatal: ' + (result.error || 'Desconocido'), 'error');
                     btn.disabled = false;

@@ -287,6 +287,7 @@ try {
             mkdir($uploadDir, 0777, true);
 
         $updatedDocs = 0;
+        $unlinkedFiles = [];
 
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $filename = $zip->getNameIndex($i);
@@ -363,7 +364,8 @@ try {
 
                 // Filtramos tokens muy cortos
                 $tokens = array_filter($tokens, function ($t) {
-                    return strlen($t) >= 4; }); // >= 4 permite años "2025" o codigos cortos "1611"
+                    return strlen($t) >= 4;
+                }); // >= 4 permite años "2025" o codigos cortos "1611"
 
                 foreach ($tokens as $token) {
                     $token = trim($token);
@@ -405,11 +407,62 @@ try {
             }
 
             if (!$linked) {
-                logMsg("⚠️ No encontrado en DB (Busqué tokens en: $basename)", "warning");
+                // logMsg("⚠️ No encontrado en DB (Busqué tokens en: $basename)", "warning");
+                $unlinkedFiles[] = $basename;
             }
         }
         $zip->close();
-        logMsg("Se vincularon $updatedDocs documentos PDF exitosamente.", "success");
+
+        // --- GENERAR RESUMEN INTELIGENTE ---
+
+        $summaryHtml = "<br><strong>📊 RESUMEN FINAL DE IMPORTACIÓN</strong><br>" . str_repeat("-", 40) . "<br>";
+
+        // 1. Archivos PDF no vinculados (Estaban en el ZIP pero no en la DB)
+        if (!empty($unlinkedFiles)) {
+            $unlinkedFiles = array_unique($unlinkedFiles);
+            $count = count($unlinkedFiles);
+            $summaryHtml .= "<br><span style='color: #fbbf24'>⚠️ <strong>$count Archivos PDF sin vincular</strong> (No existen en DB):</span><br>";
+            $summaryHtml .= "<div style='font-size: 0.85em; color: #ccc; margin-left: 10px; max-height: 150px; overflow-y: auto;'>";
+            $summaryHtml .= implode("<br>", $unlinkedFiles);
+            $summaryHtml .= "</div>";
+        } else {
+            $summaryHtml .= "<br><span style='color: #34d399'>✅ Todos los archivos PDF del ZIP fueron vinculados.</span><br>";
+        }
+
+        // 2. Documentos Huérfanos en DB (Estaban en SQL pero no llegó su PDF)
+        // Buscamos docs que sigan en estado 'pendiente' o con ruta 'importado'/'pending'
+        $stmtOrphans = $db->query("
+            SELECT d.numero, COUNT(c.id) as total_codes, GROUP_CONCAT(c.codigo) as codes_list
+            FROM documentos d
+            LEFT JOIN codigos c ON d.id = c.documento_id
+            WHERE d.ruta_archivo IN ('pending', 'importado')
+            GROUP BY d.id
+        ");
+        $orphanedDocs = $stmtOrphans->fetchAll(PDO::FETCH_ASSOC);
+
+        if (!empty($orphanedDocs)) {
+            $countOrphans = count($orphanedDocs);
+            $summaryHtml .= "<br><span style='color: #f87171'>❌ <strong>$countOrphans Documentos en DB sin PDF</strong> (Huérfanos):</span><br>";
+            $summaryHtml .= "<div style='font-size: 0.85em; color: #ccc; margin-left: 10px; max-height: 200px; overflow-y: auto;'>";
+            $summaryHtml .= "<table style='width:100%; text-align:left; border-collapse:collapse;'>";
+            $summaryHtml .= "<tr><th style='border-bottom:1px solid #444'>Documento</th><th style='border-bottom:1px solid #444'>Códigos</th></tr>";
+
+            foreach ($orphanedDocs as $row) {
+                $codeList = $row['codes_list'] ? substr($row['codes_list'], 0, 50) . (strlen($row['codes_list']) > 50 ? '...' : '') : 'Sin códigos';
+                $summaryHtml .= "<tr>";
+                $summaryHtml .= "<td style='padding:2px 5px; color: #f87171'>" . htmlspecialchars($row['numero']) . "</td>";
+                $summaryHtml .= "<td style='padding:2px 5px; color: #999'>" . htmlspecialchars($codeList) . " (" . $row['total_codes'] . ")</td>";
+                $summaryHtml .= "</tr>";
+            }
+            $summaryHtml .= "</table></div>";
+        } else {
+            $summaryHtml .= "<br><span style='color: #34d399'>✅ No quedaron documentos huérfanos en la DB.</span><br>";
+        }
+
+        $summaryHtml .= "<br><i style='color:#888'>Fin del reporte.</i>";
+
+        logMsg($summaryHtml);
+        logMsg("Se procesaron " . ($updatedDocs + count($unlinkedFiles)) . " archivos en total.", "success");
 
     } else {
         throw new Exception("No se pudo abrir el ZIP.");
