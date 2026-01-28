@@ -712,11 +712,8 @@ COD001
                     <td><span class="code-tag">${doc.codes.length}</span></td>
                     <td>
                         <div class="flex gap-2">
-                            <button type="button" class="btn btn-secondary btn-icon" title="Ver Códigos" onclick="toggleTableCodes(event, ${doc.id})">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
+                            <button type="button" id="btn-codes-${doc.id}" class="btn btn-secondary btn-sm" title="Ver Códigos" onclick="toggleTableCodes(event, ${doc.id})">
+                                Ver Códigos
                             </button>
                             <button type="button" class="btn btn-secondary btn-icon" title="Editar" onclick="editDocumentFromConsultar(${index})">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1117,10 +1114,22 @@ COD001
         function toggleTableCodes(e, docId) {
             if (e) e.preventDefault();
             const row = document.getElementById(`codes-row-${docId}`);
+            const btn = document.getElementById(`btn-codes-${docId}`);
+
             if (row.classList.contains('hidden')) {
                 row.classList.remove('hidden');
+                if (btn) {
+                    btn.textContent = 'Ocultar Códigos';
+                    btn.style.backgroundColor = '#d1d5db';
+                    btn.style.color = '#1f2937';
+                }
             } else {
                 row.classList.add('hidden');
+                if (btn) {
+                    btn.textContent = 'Ver Códigos';
+                    btn.style.backgroundColor = '';
+                    btn.style.color = '';
+                }
             }
         }
 

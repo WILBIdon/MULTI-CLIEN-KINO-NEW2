@@ -522,12 +522,16 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                     <td><span class="code-tag">${doc.codes.length}</span></td>
                     <td>
                         <div class="flex gap-2">
-                            <a href="modules/resaltar/viewer.php?doc=${doc.id}" class="btn btn-secondary btn-icon" title="Ver documento">
+                            <button type="button" id="btn-codes-${doc.id}" class="btn btn-secondary btn-sm" title="Ver Códigos" onclick="toggleTableCodes(event, ${doc.id})">
+                                Ver Códigos
+                            </button>
+                            ${doc.ruta_archivo ? `
+                            <a href="modules/resaltar/viewer.php?doc=${doc.id}" class="btn btn-primary btn-icon" title="Ver Documento" target="_blank">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                            </a>
+                            </a>` : ''}
+
                             <button class="btn btn-secondary btn-icon" title="Editar" onclick="editDoc(${doc.id})">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -538,6 +542,16 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                             </button>
+                        </div>
+                    </td>
+                </tr>
+                <tr id="codes-row-${doc.id}" class="hidden" style="background-color: var(--bg-tertiary);">
+                    <td colspan="6">
+                         <div style="padding: 1rem;">
+                            <strong>Códigos vinculados:</strong>
+                            <div class="codes-list" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;">
+                                ${doc.codes.map(c => `<span class="code-tag">${c}</span>`).join('')}
+                            </div>
                         </div>
                     </td>
                 </tr>
@@ -918,6 +932,24 @@ Se extraerán solo los códigos de la izquierda."></textarea>
         }
 
 
+
+        function toggleTableCodes(e, docId) {
+            if (e) e.preventDefault();
+            const row = document.getElementById(`codes-row-${docId}`);
+            const btn = document.getElementById(`btn-codes-${docId}`);
+
+            if (row.classList.contains('hidden')) {
+                row.classList.remove('hidden');
+                btn.textContent = 'Ocultar Códigos';
+                btn.style.backgroundColor = '#d1d5db'; // Un gris más oscuro para indicar activo
+                btn.style.color = '#1f2937';
+            } else {
+                row.classList.add('hidden');
+                btn.textContent = 'Ver Códigos';
+                btn.style.backgroundColor = ''; 
+                btn.style.color = '';
+            }
+        }
 
         // ============ Delete Document ============
         async function confirmDelete(docId, docNumero) {
