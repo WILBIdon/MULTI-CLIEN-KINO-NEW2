@@ -993,10 +993,9 @@ COD001
                         </div>
                     `;
                 }).join('');
-            }).join('');
-        } catch (error) {
-            alert('Error: ' + error.message);
-        }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
         }
 
         document.addEventListener('click', (e) => {
