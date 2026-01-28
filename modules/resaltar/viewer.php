@@ -46,12 +46,42 @@ $rutaArchivo = $document['ruta_archivo'];
 
 // Build the PDF path - try multiple possible locations
 $pdfPath = null;
-$possiblePaths = [
-    $uploadsDir . $rutaArchivo,
-    $uploadsDir . $document['tipo'] . '/' . $rutaArchivo,
-    $uploadsDir . $document['tipo'] . '/' . basename($rutaArchivo),
-];
+// Build the PDF path - try multiple possible locations
+$pdfPath = null;
+$filename = basename($rutaArchivo);
 
+// Define folder variants (singular and plural)
+$type = strtolower($document['tipo']);
+$folders = [$type]; // Singular (e.g., "manifiesto")
+
+// Add common plurals
+$folders[] = $type . 's';   // "manifiestos", "facturas"
+$folders[] = $type . 'es';  // "declaraciones"
+
+// Deduplicate
+$folders = array_unique($folders);
+
+$possiblePaths = [];
+
+// 1. Try exact path stored in DB (relative to uploads root)
+$possiblePaths[] = $uploadsDir . $rutaArchivo;
+
+// 2. Try in subfolders (using both full path and basename to be safe)
+foreach ($folders as $folder) {
+    if (!empty($folder)) {
+        // Try with just filename (most likely for sorted files)
+        $possiblePaths[] = $uploadsDir . $folder . '/' . $filename;
+        // Try with original relative path (in case it had some structure)
+        if ($rutaArchivo !== $filename) {
+            $possiblePaths[] = $uploadsDir . $folder . '/' . $rutaArchivo;
+        }
+    }
+}
+
+// 3. Try in root uploads (just filename)
+$possiblePaths[] = $uploadsDir . $filename;
+
+// Check which one exists
 foreach ($possiblePaths as $path) {
     if (file_exists($path)) {
         $pdfPath = $path;

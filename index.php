@@ -714,12 +714,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
 
             let html = '';
             for (const doc of result.results) {
-                let pdfUrl = '';
-                if (doc.ruta_archivo) {
-                    pdfUrl = doc.ruta_archivo.includes('/')
-                        ? `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`
-                        : `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
-                }
+                const pdfUrl = doc.ruta_archivo ? `modules/resaltar/download.php?doc=${doc.id}` : '';
 
                 html += `
                     <div class="result-card">

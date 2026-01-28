@@ -720,6 +720,15 @@ COD001
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                 </svg>
                             </button>
+                            ${doc.ruta_archivo ? `
+                            <a href="../resaltar/viewer.php?doc=${doc.id}" class="btn btn-primary btn-icon" title="Ver Documento" target="_blank">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                            </a>
+                            <a href="../resaltar/download.php?doc=${doc.id}" class="btn btn-secondary btn-icon" title="Original" target="_blank">
+                                📄
+                            </a>` : ''}
                             <button type="button" class="btn btn-secondary btn-icon" title="Eliminar" onclick="deleteDoc(${doc.id})">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -733,7 +742,7 @@ COD001
                         <div style="max-width: 100%;">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
                                 <strong>Códigos asociados (${doc.codes.length}):</strong>
-                                <a href="../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}" target="_blank" class="text-blue-600 hover:underline text-sm">
+                                <a href="../resaltar/download.php?doc=${doc.id}" target="_blank" class="text-blue-600 hover:underline text-sm">
                                     📄 Ver PDF Original
                                 </a>
                             </div>
@@ -838,12 +847,7 @@ COD001
 
             let html = '';
             for (const doc of result.results) {
-                let pdfUrl = '';
-                if (doc.ruta_archivo) {
-                    pdfUrl = doc.ruta_archivo.includes('/')
-                        ? `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`
-                        : `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
-                }
+                const pdfUrl = doc.ruta_archivo ? `../resaltar/download.php?doc=${doc.id}` : '';
 
                 html += `
                     <div class="result-card">
@@ -996,15 +1000,8 @@ COD001
                 window.currentSingleParams = result.documents;
 
                 document.getElementById('singleCodeList').innerHTML = result.documents.map((doc, index) => {
-                    // Construir ruta del PDF correctamente
-                    let pdfUrl = '';
-                    if (doc.ruta_archivo) {
-                        if (doc.ruta_archivo.includes('/')) {
-                            pdfUrl = `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`;
-                        } else {
-                            pdfUrl = `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
-                        }
-                    }
+                    // Construir ruta del PDF usando el redirector robusto
+                    const pdfUrl = doc.ruta_archivo ? `../resaltar/download.php?doc=${doc.id}` : '';
 
                     return `
                         <div class="result-card">

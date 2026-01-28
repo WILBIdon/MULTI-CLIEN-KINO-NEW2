@@ -123,13 +123,7 @@ $pageTitle = 'Documentos Recientes';
 
                     const tbody = document.getElementById('recientesBody');
                     data.forEach(doc => {
-                        // Construir ruta PDF
-                        let pdfUrl = '';
-                        if (doc.ruta_archivo) {
-                            let ruta = doc.ruta_archivo;
-                            if (!ruta.includes('/')) ruta = doc.tipo + '/' + ruta;
-                            pdfUrl = `../../clients/${clientCode}/uploads/${ruta}`;
-                        }
+                        const pdfUrl = doc.ruta_archivo ? `../../modules/resaltar/download.php?doc=${doc.id}` : '';
 
                         const tr = document.createElement('tr');
                         tr.innerHTML = `

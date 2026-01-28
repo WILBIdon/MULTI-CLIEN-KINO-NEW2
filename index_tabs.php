@@ -491,15 +491,7 @@ COD001
             let html = '';
             for (const doc of result.documents) {
                 // Construir ruta del PDF correctamente
-                let pdfUrl = '';
-                if (doc.ruta_archivo) {
-                    // Si la ruta ya incluye el tipo (ej: documento/archivo.pdf)
-                    if (doc.ruta_archivo.includes('/')) {
-                        pdfUrl = `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`;
-                    } else {
-                        pdfUrl = `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
-                    }
-                }
+                const pdfUrl = doc.ruta_archivo ? `modules/resaltar/download.php?doc=${doc.id}` : '';
 
                 // Get the first matched code for highlighting
                 const firstCode = (doc.matched_codes && doc.matched_codes[0]) || (doc.codes && doc.codes[0]) || '';
@@ -763,12 +755,7 @@ COD001
 
             let html = '';
             for (const doc of result.results) {
-                let pdfUrl = '';
-                if (doc.ruta_archivo) {
-                    pdfUrl = doc.ruta_archivo.includes('/')
-                        ? `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`
-                        : `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
-                }
+                const pdfUrl = doc.ruta_archivo ? `modules/resaltar/download.php?doc=${doc.id}` : '';
 
                 html += `
                     <div class="result-card">
@@ -919,14 +906,7 @@ COD001
 
                 document.getElementById('singleCodeList').innerHTML = result.documents.map(doc => {
                     // Construir ruta del PDF correctamente
-                    let pdfUrl = '';
-                    if (doc.ruta_archivo) {
-                        if (doc.ruta_archivo.includes('/')) {
-                            pdfUrl = `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`;
-                        } else {
-                            pdfUrl = `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
-                        }
-                    }
+                    const pdfUrl = doc.ruta_archivo ? `modules/resaltar/download.php?doc=${doc.id}` : '';
 
                     return `
                         <div class="result-card">
