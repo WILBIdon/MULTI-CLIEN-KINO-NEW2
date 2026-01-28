@@ -442,7 +442,11 @@ COD001
             }
 
             document.getElementById('searchLoading').classList.remove('hidden');
-            document.getElementById('searchResults').classList.add('hidden');
+            document.getElementById('searchResults').classList.add('hidden'); // Clear previous results
+            
+            // clear lists
+            document.getElementById('searchSummary').innerHTML = '';
+            document.getElementById('documentList').innerHTML = '';
 
             try {
                 const formData = new FormData();
@@ -913,7 +917,10 @@ COD001
                     return;
                 }
 
-                document.getElementById('singleCodeList').innerHTML = result.documents.map(doc => {
+                // Store for editing
+                window.currentSingleParams = result.documents; 
+
+                document.getElementById('singleCodeList').innerHTML = result.documents.map((doc, index) => {
                     // Construir ruta del PDF correctamente
                     let pdfUrl = '';
                     if (doc.ruta_archivo) {
@@ -934,12 +941,35 @@ COD001
                             <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
                                 🏷️ Coincidencia: <span style="font-weight: 600; color: var(--accent-primary);">${doc.codigo_encontrado}</span>
                             </div>
-                            <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                                ${pdfUrl ? `<a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(code)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</a>` : ''}
-                                ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
+                            
+                            <!-- Action Buttons -->
+                            <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                                ${pdfUrl ? `<a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(code)}" class="btn btn-success" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">🖍️ Resaltar</a>` : ''}
+                                ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">📄 PDF</a>` : ''}
+                     
+                                <button class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.85rem; background: #8B5CF6; color: white; border: none;" onclick="editDocumentFromSearch(${index})">
+                                    ✏️Editar
+                                </button>
+                                
+                                <button class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.85rem; background: #EF4444; color: white; border: none;" onclick="deleteDoc(${doc.id})">
+                                    🗑️Eliminar
+                                </button>
+                                
+                                <button class="btn btn-secondary" id="btn-codes-${doc.id}" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;" onclick="toggleCodes(${doc.id})">
+                                    Show Codes
+                                </button>
+                            </div>
+
+                            <!-- Hidden Codes List -->
+                            <div id="codes-list-${doc.id}" class="hidden" style="margin-top: 1rem; background: rgba(0,0,0,0.02); padding: 0.5rem; border-radius: 4px;">
+                                <div style="font-size: 0.8rem; color: #666; margin-bottom: 0.25rem;">Códigos asociados:</div>
+                                <div style="font-family: monospace; font-size: 0.85rem; word-break: break-all; line-height: 1.4;">
+                                    ${doc.all_codes ? doc.all_codes.split(',').join('<br>') : 'No extra codes'}
+                                </div>
                             </div>
                         </div>
                     `;
+                }).join('');
                 }).join('');
             } catch (error) {
                 alert('Error: ' + error.message);
@@ -951,6 +981,50 @@ COD001
                 suggestionsDiv.classList.add('hidden');
             }
         });
+
+        // ============ Helpers for UI Actions ============
+
+        function toggleCodes(docId) {
+            const list = document.getElementById(`codes-list-${docId}`);
+            const btn = document.getElementById(`btn-codes-${docId}`);
+            
+            if (list.classList.contains('hidden')) {
+                list.classList.remove('hidden');
+                btn.textContent = 'Ocultar Códigos';
+                btn.style.background = '#E5E7EB';
+                btn.style.color = '#374151';
+            } else {
+                list.classList.add('hidden');
+                btn.textContent = 'Ver Códigos';
+                btn.style.background = ''; // reset
+                btn.style.color = '';
+            }
+        }
+
+        function editDocumentFromSearch(index) {
+            const doc = window.currentSingleParams[index];
+            if (!doc) return;
+
+            // Switch to Subir tab
+            const tabSubir = document.querySelector('[data-tab="subir"]');
+            if (tabSubir) tabSubir.click();
+
+            // Populate fields
+            if (document.getElementById('docNumero')) document.getElementById('docNumero').value = doc.numero || '';
+            if (document.getElementById('docFecha')) document.getElementById('docFecha').value = doc.fecha || '';
+            if (document.getElementById('docProveedor')) document.getElementById('docProveedor').value = doc.proveedor || '';
+            
+            // Format codes for textarea (one per line)
+            if (document.getElementById('docCodes') && doc.all_codes) {
+                document.getElementById('docCodes').value = doc.all_codes.split(',').join('\n');
+            }
+
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            // Optional: Notify user
+            // alert('Datos cargados en la pestaña Subir. Modifica y guarda.');
+        }
     </script>
 </body>
 

@@ -32,7 +32,8 @@ function search_by_code(PDO $db, string $searchTerm): array
             d.fecha,
             d.proveedor,
             d.ruta_archivo,
-            MAX(c.codigo) AS codigo_encontrado
+            MAX(c.codigo) AS codigo_encontrado,
+            (SELECT GROUP_CONCAT(codigo, ',') FROM codigos WHERE documento_id = d.id) as all_codes
         FROM documentos d
         JOIN codigos c ON d.id = c.documento_id
         WHERE UPPER(c.codigo) LIKE UPPER(?)
