@@ -9,6 +9,9 @@
  * - Búsqueda por Código: Single code search
  */
 session_start();
+header("Cache-Control: no-cache, no-store, must-revalidate");
+header("Pragma: no-cache");
+header("Expires: 0");
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../helpers/tenant.php';
 require_once __DIR__ . '/../../helpers/search_engine.php';
@@ -989,9 +992,9 @@ COD001
                             <div id="codes-list-${doc.id}" class="hidden" style="margin-top: 1rem; background: rgba(0,0,0,0.02); padding: 0.5rem; border-radius: 4px;">
                                 <div style="font-size: 0.8rem; color: #666; margin-bottom: 0.25rem;">Códigos asociados:</div>
                                 <div style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; background: white; border: 1px solid #eee; padding: 4px;">
-                                    ${doc.all_codes 
-                                        ? doc.all_codes.split(',').map(c => `<div style="font-family: monospace; font-size: 0.9rem; padding: 2px 4px; border-bottom: 1px solid #f9f9f9;">${c}</div>`).join('') 
-                                        : '<div style="padding:4px">No extra codes</div>'}
+                                    ${doc.all_codes
+                            ? doc.all_codes.split(',').map(c => `<div style="font-family: monospace; font-size: 0.9rem; padding: 2px 4px; border-bottom: 1px solid #f9f9f9;">${c}</div>`).join('')
+                            : '<div style="padding:4px">No extra codes</div>'}
                                 </div>
                             </div>
                         </div>

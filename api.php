@@ -123,6 +123,12 @@ try {
         case 'pdf_diagnostic':
             (new SystemController($db, $clientCode))->diagnostic($_REQUEST);
             break;
+        case 'clear_cache':
+            if (class_exists('CacheManager')) {
+                CacheManager::clear($clientCode);
+                json_exit(['success' => true, 'message' => 'Caché limpiado correctamente']);
+            }
+            break;
 
         default:
             json_exit(['error' => 'Acción no válida']);
