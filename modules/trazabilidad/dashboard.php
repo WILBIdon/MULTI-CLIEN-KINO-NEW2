@@ -325,6 +325,15 @@ while ($row = $allDocsStmt->fetch(PDO::FETCH_ASSOC)) {
                 while (pending > 0) {
                     try {
                         const response = await fetch(`${apiUrl}?action=reindex_documents&batch=10`);
+
+                        // Check if response is valid JSON
+                        const contentType = response.headers.get("content-type");
+                        if (!contentType || !contentType.includes("application/json")) {
+                            const text = await response.text();
+                            console.error("Non-JSON response:", text);
+                            throw new Error("El servidor devolvió un error (no JSON). Revisa la consola.");
+                        }
+
                         const result = await response.json();
 
                         if (!result.success) {
@@ -345,6 +354,7 @@ while ($row = $allDocsStmt->fetch(PDO::FETCH_ASSOC)) {
                             break;
                         }
                     } catch (error) {
+                        console.error(error);
                         progressText.textContent = 'Error: ' + error.message;
                         break;
                     }
