@@ -24,6 +24,16 @@ function search_by_code(PDO $db, string $searchTerm): array
         return [];
     }
 
+    $clientCode = $_SESSION['client_code'] ?? 'default';
+    $cacheKey = 'search_by_code_' . md5($searchTerm);
+
+    if (class_exists('CacheManager')) {
+        $cached = CacheManager::get($clientCode, $cacheKey);
+        if ($cached !== null) {
+            return $cached;
+        }
+    }
+
     $stmt = $db->prepare("
         SELECT
             d.id,
@@ -42,7 +52,13 @@ function search_by_code(PDO $db, string $searchTerm): array
     ");
 
     $stmt->execute(['%' . $searchTerm . '%']);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (class_exists('CacheManager')) {
+        CacheManager::set($clientCode, $cacheKey, $result, 300); // 5 min
+    }
+
+    return $result;
 }
 
 /**
@@ -58,6 +74,16 @@ function greedy_search(PDO $db, array $codes): array
     $codes = array_filter(array_map('trim', $codes));
     if (empty($codes)) {
         return ['documents' => [], 'covered' => [], 'not_found' => []];
+    }
+
+    $clientCode = $_SESSION['client_code'] ?? 'default';
+    $cacheKey = 'greedy_search_' . md5(implode(',', $codes));
+
+    if (class_exists('CacheManager')) {
+        $cached = CacheManager::get($clientCode, $cacheKey);
+        if ($cached !== null) {
+            return $cached;
+        }
     }
 
     // Construir condición para buscar cualquiera de los códigos
@@ -130,13 +156,19 @@ function greedy_search(PDO $db, array $codes): array
         unset($documents[$best['id']]);
     }
 
-    return [
+    $result = [
         'documents' => $selected,
         'covered' => array_diff(array_map('strtoupper', $codes), $remaining),
         'not_found' => array_values($remaining),
         'total_searched' => count($codes),
         'total_covered' => count($codes) - count($remaining)
     ];
+
+    if (class_exists('CacheManager')) {
+        CacheManager::set($clientCode, $cacheKey, $result, 600); // 10 min
+    }
+
+    return $result;
 }
 
 /**

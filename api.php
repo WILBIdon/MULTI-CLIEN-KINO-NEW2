@@ -21,7 +21,7 @@ session_start();
 require_once __DIR__ . '/autoload.php';
 
 // ✨ Cargar helpers específicos bajo demanda
-load_helpers(['search_engine', 'pdf_extractor', 'gemini_ai']);
+load_helpers(['search_engine', 'pdf_extractor', 'gemini_ai', 'cache_manager']);
 
 // ✨ SEGURIDAD: Aplicar middlewares
 RateLimiter::middleware();    // Limitar a 100 req/min por IP
