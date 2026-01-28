@@ -14,14 +14,17 @@ class SystemController extends BaseController
         $forceAll = isset($request['force']);
         $batchSize = min(20, max(1, (int) ($request['batch'] ?? 10)));
 
+        $offset = (int) ($request['offset'] ?? 0);
+
         if ($forceAll) {
             $stmt = $this->db->prepare("
                 SELECT id, ruta_archivo, tipo 
                 FROM documentos 
                 WHERE ruta_archivo LIKE '%.pdf'
-                LIMIT ?
+                ORDER BY id DESC
+                LIMIT ? OFFSET ?
             ");
-            $stmt->execute([$batchSize]);
+            $stmt->execute([$batchSize, $offset]);
         } else {
             $stmt = $this->db->prepare("
                 SELECT id, ruta_archivo, tipo, datos_extraidos

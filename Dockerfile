@@ -3,6 +3,8 @@ FROM php:8.2-apache
 # Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y \
     poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-spa \
     libsqlite3-dev \
     libzip-dev \
     && rm -rf /var/lib/apt/lists/*

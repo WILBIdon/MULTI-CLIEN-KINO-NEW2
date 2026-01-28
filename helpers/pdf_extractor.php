@@ -39,10 +39,17 @@ function extract_text_from_pdf(string $pdfPath): string
         return $text;
     }
 
-    // Método 3: Extracción nativa PHP (básica, para PDFs simples)
-    $text = extract_with_native_php($pdfPath);
     if (!empty(trim($text))) {
         return $text;
+    }
+
+    // Método 4: OCR con Tesseract (para documentos escaneados)
+    // Solo si los métodos anteriores fallaron o devolvieron muy poco texto
+    if (function_exists('extract_with_ocr')) {
+        $text = extract_with_ocr($pdfPath);
+        if (!empty(trim($text))) {
+            return $text;
+        }
     }
 
     if (class_exists('Logger')) {
@@ -211,6 +218,88 @@ function extract_with_native_php(string $pdfPath): string
     $text = preg_replace('/\s+/', ' ', $text);
 
     return trim($text);
+}
+
+/**
+ * Extrae texto usando Tesseract OCR via pdftoppm (parte de poppler-utils)
+ * Convierte primero a imagen y luego aplica OCR.
+ */
+function extract_with_ocr(string $pdfPath): string
+{
+    $tesseractPath = find_tesseract();
+    if (!$tesseractPath) {
+        return '';
+    }
+
+    // Verificar si tenemos pdftoppm para convertir a imagen
+    $pdftoppmPath = find_pdftoppm();
+    if (!$pdftoppmPath) {
+        return '';
+    }
+
+    // Directorio temporal para imágenes
+    $tempDir = sys_get_temp_dir() . '/ocr_' . uniqid();
+    if (!mkdir($tempDir, 0777, true)) {
+        return '';
+    }
+
+    $text = '';
+
+    try {
+        // 1. Convertir PDF a imágenes (primera página o primeras 2 para velocidad)
+        // pdftoppm -png -f 1 -l 2 archivo.pdf prefix
+        $escapedPdf = escapeshellarg($pdfPath);
+        $escapedPrefix = escapeshellarg($tempDir . '/page');
+
+        $cmdConvert = "$pdftoppmPath -png -r 150 -f 1 -l 2 $escapedPdf $escapedPrefix";
+        exec($cmdConvert);
+
+        // 2. Procesar cada imagen con Tesseract
+        $images = glob($tempDir . '/*.png');
+        foreach ($images as $image) {
+            $escapedImage = escapeshellarg($image);
+            $escapedOut = escapeshellarg($image); // tesseract añade .txt
+
+            // tesseract imagen salida -l spa
+            $cmdOcr = "$tesseractPath $escapedImage $escapedOut -l spa";
+            exec($cmdOcr);
+
+            $txtFile = $image . '.txt';
+            if (file_exists($txtFile)) {
+                $text .= file_get_contents($txtFile) . "\n";
+            }
+        }
+
+    } catch (Exception $e) {
+        if (class_exists('Logger')) {
+            Logger::error('OCR error', ['error' => $e->getMessage()]);
+        }
+    } finally {
+        // Limpieza
+        array_map('unlink', glob("$tempDir/*"));
+        rmdir($tempDir);
+    }
+
+    return trim($text);
+}
+
+function find_tesseract(): ?string
+{
+    if (PHP_OS_FAMILY === 'Windows') {
+        // En Windows requeriría instalación manual y añadir al PATH
+        return shell_exec("where tesseract 2>nul") ? 'tesseract' : null;
+    }
+    $which = shell_exec('which tesseract 2>/dev/null');
+    return $which ? trim($which) : null;
+}
+
+function find_pdftoppm(): ?string
+{
+    if (PHP_OS_FAMILY === 'Windows') {
+        return null; // Difícil en hosting windows sin configuración
+    }
+    $which = shell_exec('which pdftoppm 2>/dev/null');
+    return $which ? trim($which) : null;
 }
 
 /**
