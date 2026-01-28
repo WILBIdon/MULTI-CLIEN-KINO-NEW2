@@ -255,9 +255,16 @@ class DocumentController extends BaseController
             $params[] = $tipo;
         }
 
-        $total = (int) $this->db->query("SELECT COUNT(*) FROM documentos $where")->fetchColumn();
+        if ($params) {
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM documentos $where");
+            $stmt->execute($params);
+            $total = (int) $stmt->fetchColumn();
+        } else {
+            $total = (int) $this->db->query("SELECT COUNT(*) FROM documentos")->fetchColumn();
+        }
 
         $offset = ($page - 1) * $perPage;
+        // Inject integers directly to avoid PDO string casting issues in LIMIT
         $stmt = $this->db->prepare("
             SELECT
                 d.id, d.tipo, d.numero, d.fecha, d.proveedor, d.ruta_archivo,
@@ -267,11 +274,10 @@ class DocumentController extends BaseController
             $where
             GROUP BY d.id
             ORDER BY d.fecha DESC, d.id DESC
-            LIMIT ? OFFSET ?
+            LIMIT $perPage OFFSET $offset
         ");
 
-        $allParams = array_merge($params, [$perPage, $offset]);
-        $stmt->execute($allParams);
+        $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $docs = array_map(function ($r) {
