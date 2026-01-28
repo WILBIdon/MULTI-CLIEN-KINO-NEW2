@@ -71,31 +71,35 @@ class SystemController extends BaseController
             foreach ($docs as $doc) {
                 $pdfPath = $uploadsDir . $doc['ruta_archivo'];
 
-                // Robust path resolution
+                // Robust path resolution with dynamic directory scanning
                 $pdfPath = null;
                 $filename = basename($doc['ruta_archivo']);
                 $type = strtolower($doc['tipo']);
 
-                // Folder variants
-                $folders = [$type, $type . 's', $type . 'es'];
-                $folders = array_unique($folders);
-
                 $possiblePaths = [];
                 // 1. Exact DB path
                 $possiblePaths[] = $uploadsDir . $doc['ruta_archivo'];
+                // 2. Root match
+                $possiblePaths[] = $uploadsDir . $filename;
 
-                // 2. Folder variants
-                foreach ($folders as $folder) {
-                    if (!empty($folder)) {
-                        $possiblePaths[] = $uploadsDir . $folder . '/' . $filename;
-                        if ($doc['ruta_archivo'] !== $filename) {
-                            $possiblePaths[] = $uploadsDir . $folder . '/' . $doc['ruta_archivo'];
+                // 3. Scan for existing folders (case-insensitive match)
+                $existingFolders = []; // To list in debug
+                $subdirs = glob($uploadsDir . '*', GLOB_ONLYDIR);
+                if ($subdirs) {
+                    foreach ($subdirs as $dir) {
+                        $dirname = basename($dir);
+                        $existingFolders[] = $dirname;
+
+                        $compare = strtolower($dirname);
+                        // Check if folder matches type (singular, plural 's', plural 'es')
+                        if ($compare === $type || $compare === $type . 's' || $compare === $type . 'es') {
+                            $possiblePaths[] = $dir . '/' . $filename;
+                            if ($doc['ruta_archivo'] !== $filename) {
+                                $possiblePaths[] = $dir . '/' . basename($doc['ruta_archivo']);
+                            }
                         }
                     }
                 }
-
-                // 3. Root match
-                $possiblePaths[] = $uploadsDir . $filename;
 
                 foreach ($possiblePaths as $path) {
                     if (file_exists($path)) {
@@ -115,6 +119,8 @@ class SystemController extends BaseController
 
                     $errorData = json_encode([
                         'error' => 'Archivo no encontrado',
+                        'type_expected' => $type,
+                        'available_folders' => array_slice($existingFolders, 0, 20), // List first 20 folders
                         'paths_tried' => $triedPaths,
                         'timestamp' => time()
                     ]);
