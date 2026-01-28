@@ -320,16 +320,19 @@ while ($row = $allDocsStmt->fetch(PDO::FETCH_ASSOC)) {
                 btn.style.display = 'none';
                 progress.style.display = 'block';
 
-                // Index in batches
+                let processedCount = 0;
                 let pending = totalPending;
-                while (pending > 0) {
-                    try {
-                        // Force small batch size explicitly in URL
-                        const response = await fetch(`${apiUrl}?action=reindex_documents&batch=3`);
+                // Use a large batch size to attempt single-pass, but support loop if needed
+                const batchSize = 50; 
+
+                try {
+                    do {
+                        // Request batch
+                        const response = await fetch(`${apiUrl}?action=reindex_documents&batch=${batchSize}`);
                         
                         // 1. Get raw text first
                         const rawText = await response.text();
-                        console.log("Server Response:", rawText); // Debug visibility
+                        console.log("Server Response:", rawText); 
 
                         if (!rawText.trim()) {
                             throw new Error("El servidor devolvió una respuesta vacía.");
@@ -341,43 +344,47 @@ while ($row = $allDocsStmt->fetch(PDO::FETCH_ASSOC)) {
                             result = JSON.parse(rawText);
                         } catch (e) {
                              console.error("JSON Parse Error:", e);
-                             throw new Error(`Respuesta inválida del servidor (no es JSON):\n${rawText.substring(0, 100)}...`);
+                             throw new Error(`Respuesta inválida (no JSON): ${rawText.substring(0, 100)}...`);
                         }
 
                         if (!result.success) {
-                            progressText.textContent = 'Error: ' + (result.error || 'Error desconocido');
-                            break;
+                            throw new Error(result.error || 'Error desconocido del servidor');
                         }
 
-                        totalIndexed += result.indexed;
+                        // Update counters
+                        processedCount += result.indexed;
                         pending = result.pending;
+                        totalIndexed += result.indexed;
 
+                        // Update UI
                         const percent = Math.round(((totalPending - pending) / totalPending) * 100);
                         progressBar.style.width = percent + '%';
                         progressText.textContent = `Indexados: ${totalIndexed}, Pendientes: ${pending}`;
 
-                        // Si no se indexó nada, detener para evitar loop infinito
+                        // Safety break if no progress is made
                         if (result.indexed === 0 && pending > 0) {
-                            progressText.textContent = `Completado. ${pending} docs no pudieron indexarse (archivos faltantes)`;
-                            break;
+                             throw new Error(`El proceso se detuvo. ${pending} documentos no se pudieron procesar (posiblemente archivos faltantes).`);
                         }
-                    } catch (error) {
-                        console.error(error);
-                        progressText.textContent = 'Error: ' + error.message;
-                        break;
-                    }
-                }
 
-                if (pending === 0) {
+                    } while (pending > 0);
+
+                    // Success!
                     progressText.textContent = '✅ ¡Todos los documentos indexados!';
                     progressBar.style.width = '100%';
                     progressBar.style.background = '#10b981';
 
-                    // Ocultar banner después de 3 segundos
                     setTimeout(() => {
                         banner.style.display = 'none';
                         progress.style.display = 'none';
-                    }, 3000);
+                        // Reload to reflect changes
+                        window.location.reload();
+                    }, 2000);
+
+                } catch (error) {
+                    console.error(error);
+                    progressText.textContent = 'Error: ' + error.message;
+                    // Re-enable button on error
+                    btn.style.display = 'inline-flex';
                 }
             }
         </script>

@@ -19,9 +19,12 @@ class SystemController extends BaseController
             set_time_limit(300);
             session_write_close(); // Prevent session locking during long process
 
+            // Silence fontconfig warnings at environment level
+            putenv('FONTCONFIG_PATH=/tmp');
+
             $forceAll = isset($request['force']);
-            // Increased batch size to 50 for max speed
-            $batchSize = min(100, max(1, (int) ($request['batch'] ?? 50)));
+            // Increased batch size to 120 for single-shot processing of typical workloads
+            $batchSize = min(150, max(1, (int) ($request['batch'] ?? 120)));
             $offset = (int) ($request['offset'] ?? 0);
 
             error_log("Reindex started: forceAll=" . ($forceAll ? 'true' : 'false') . ", batchSize=$batchSize, offset=$offset");
