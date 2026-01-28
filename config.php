@@ -14,6 +14,7 @@
 
 // Ruta base del proyecto
 define('BASE_DIR', __DIR__);
+define('APP_VERSION', time()); // Cache buster auto-generado
 
 // Directorio donde se almacenan los datos de cada cliente
 define('CLIENTS_DIR', BASE_DIR . DIRECTORY_SEPARATOR . 'clients');

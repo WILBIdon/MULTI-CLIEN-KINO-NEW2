@@ -34,14 +34,11 @@ class DocumentController extends BaseController
             $this->jsonExit(['error' => $uploadResult['error']]);
         }
 
-        // Verificar duplicado por hash
+        // Verificar duplicado por hash (Permitir duplicados pero loguearlos o advertir sin bloquear)
         $duplicate = SecureFileUploader::checkDuplicate($this->db, $uploadResult['hash']);
         if ($duplicate) {
-            $this->jsonExit([
-                'warning' => 'Este archivo ya existe',
-                'existing_doc' => $duplicate,
-                'message' => 'El documento "' . $duplicate['numero'] . '" ya contiene este archivo'
-            ]);
+            // Ya no bloqueamos la subida, solo podríamos loguearlo si fuera necesario.
+            // Logger::info("Archivo duplicado subido", ['hash' => $uploadResult['hash'], 'existing_id' => $duplicate['id']]);
         }
 
         $targetPath = CLIENTS_DIR . '/' . $this->clientCode . '/uploads/' . $uploadResult['path'];

@@ -38,7 +38,7 @@ $pageTitle = 'Gestor de Documentos';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestor de Documentos - KINO TRACE</title>
-    <link rel="stylesheet" href="../../assets/css/styles.css">
+    <link rel="stylesheet" href="../../assets/css/styles.css?v=<?= APP_VERSION ?>">
     <style>
         /* Additional styles for this module */
         .results-list {
@@ -251,6 +251,7 @@ COD001
                         <h3 style="margin-bottom: 1rem;">Subir Documento</h3>
 
                         <form id="uploadForm">
+                            <input type="hidden" id="editDocId" value="">
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                                 <div class="form-group">
                                     <label class="form-label">Tipo de documento</label>
@@ -262,7 +263,7 @@ COD001
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label class="form-label">Número</label>
+                                    <label class="form-label">Nombre o número de documento</label>
                                     <input type="text" class="form-input" name="numero" id="docNumero"
                                         placeholder="Ej: MAN-2024-001" required>
                                 </div>
@@ -295,6 +296,20 @@ COD001
                                     <p class="text-muted" style="font-size: 0.75rem;">PDF, máximo 10MB</p>
                                     <input type="file" id="fileInput" name="file" accept=".pdf" style="display: none;">
                                 </div>
+                                <div id="currentFileContainer" class="hidden" style="background: #f3f4f6; padding: 1rem; border-radius: 8px; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#ef4444">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 2H7a2 2 0 00-2 2v15a2 2 0 002 2z" />
+                                        </svg>
+                                        <div>
+                                            <div style="font-weight: 600; font-size: 0.9rem;">Archivo Actual</div>
+                                            <a id="currentFileLink" href="#" target="_blank" style="font-size: 0.85rem; color: #2563eb; text-decoration: underline;">documento.pdf</a>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.25rem 0.75rem;" onclick="enableFileReplace()">
+                                        Cambiar PDF
+                                    </button>
+                                </div>
                                 <p id="fileName" class="hidden file-selected mt-2"></p>
                             </div>
 
@@ -310,8 +325,10 @@ COD001
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                                 </svg>
-                                Subir Documento
+                                <span id="uploadBtnText">Subir Documento</span>
                             </button>
+                            <button type="button" id="cancelEditBtn" class="btn btn-secondary hidden"
+                                onclick="cancelEdit()">Cancelar Edición</button>
                         </form>
                     </div>
 
@@ -587,8 +604,12 @@ COD001
             btn.disabled = true;
             btn.textContent = 'Subiendo...';
 
+            const editId = document.getElementById('editDocId').value;
+            const action = editId ? 'update' : 'upload'; // Determinar acción
+
             const formData = new FormData();
-            formData.append('action', 'upload');
+            formData.append('action', action);
+            if  (editId) formData.append('id', editId);
             formData.append('tipo', document.getElementById('docTipo').value);
             formData.append('numero', document.getElementById('docNumero').value);
             formData.append('fecha', document.getElementById('docFecha').value);
@@ -601,9 +622,8 @@ COD001
                 const result = await response.json();
 
                 if (result.success) {
-                    alert('Documento subido correctamente');
-                    document.getElementById('uploadForm').reset();
-                    document.getElementById('fileName').classList.add('hidden');
+                    alert(editId ? 'Documento actualizado correctamente' : 'Documento subido correctamente');
+                    resetUploadForm();
                 } else {
                     alert('Error: ' + (result.error || 'Error desconocido'));
                 }
@@ -611,9 +631,33 @@ COD001
                 alert('Error: ' + error.message);
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg> Subir Documento`;
+                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg> <span id="uploadBtnText">${editId ? 'Actualizar Documento' : 'Subir Documento'}</span>`;
             }
         });
+
+        function resetUploadForm() {
+            document.getElementById('uploadForm').reset();
+            document.getElementById('editDocId').value = '';
+            document.getElementById('fileName').classList.add('hidden');
+            document.getElementById('uploadBtnText').textContent = 'Subir Documento';
+            document.getElementById('cancelEditBtn').classList.add('hidden');
+            document.getElementById('uploadBtn').classList.remove('btn-success');
+            document.getElementById('uploadBtn').classList.add('btn-primary');
+            
+            // Reset file UI
+            document.getElementById('uploadZone').classList.remove('hidden');
+            document.getElementById('currentFileContainer').classList.add('hidden');
+            document.getElementById('fileInput').value = '';
+        }
+
+        function cancelEdit() {
+            resetUploadForm();
+        }
+
+        function enableFileReplace() {
+            document.getElementById('currentFileContainer').classList.add('hidden');
+            document.getElementById('uploadZone').classList.remove('hidden');
+        }
 
         // ============ Consultar Tab ============
         async function loadDocuments(page = 1, tipo = '') {
@@ -661,18 +705,18 @@ COD001
                     <td><span class="code-tag">${doc.codes.length}</span></td>
                     <td>
                         <div class="flex gap-2">
-                            <button class="btn btn-secondary btn-icon" title="Ver Códigos" onclick="toggleTableCodes(${doc.id})">
+                            <button type="button" class="btn btn-secondary btn-icon" title="Ver Códigos" onclick="toggleTableCodes(${doc.id})">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                 </svg>
                             </button>
-                            <button class="btn btn-secondary btn-icon" title="Editar" onclick="editDocumentFromConsultar(${index})">
+                            <button type="button" class="btn btn-secondary btn-icon" title="Editar" onclick="editDocumentFromConsultar(${index})">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                 </svg>
                             </button>
-                            <button class="btn btn-secondary btn-icon" title="Eliminar" onclick="deleteDoc(${doc.id})">
+                            <button type="button" class="btn btn-secondary btn-icon" title="Eliminar" onclick="deleteDoc(${doc.id})">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
@@ -974,15 +1018,15 @@ COD001
                                 ${pdfUrl ? `<a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(code)}" class="btn btn-success" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">🖍️ Resaltar</a>` : ''}
                                 ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">📄 PDF</a>` : ''}
                      
-                                <button class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.85rem; background: #8B5CF6; color: white; border: none;" onclick="editDocumentFromSearch(${index})">
+                                <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.85rem; background: #8B5CF6; color: white; border: none;" onclick="editDocumentFromSearch(${index})">
                                     ✏️Editar
                                 </button>
                                 
-                                <button class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.85rem; background: #EF4444; color: white; border: none;" onclick="deleteDoc(${doc.id})">
+                                <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.85rem; background: #EF4444; color: white; border: none;" onclick="deleteDoc(${doc.id})">
                                     🗑️Eliminar
                                 </button>
                                 
-                                <button class="btn btn-secondary" id="btn-codes-${doc.id}" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;" onclick="toggleCodes(${doc.id})">
+                                <button type="button" class="btn btn-secondary" id="btn-codes-${doc.id}" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;" onclick="toggleCodes(${doc.id})">
                                     Show Codes
                                 </button>
                             </div>
@@ -1038,6 +1082,13 @@ COD001
             const tabSubir = document.querySelector('[data-tab="subir"]');
             if (tabSubir) tabSubir.click();
 
+            // Set edit mode
+            document.getElementById('editDocId').value = doc.id;
+            document.getElementById('uploadBtnText').textContent = 'Actualizar Documento';
+            document.getElementById('cancelEditBtn').classList.remove('hidden');  // Visual feedback
+            document.getElementById('uploadBtn').classList.remove('btn-primary');
+            document.getElementById('uploadBtn').classList.add('btn-success');
+
             // Populate fields
             if (document.getElementById('docNumero')) document.getElementById('docNumero').value = doc.numero || '';
             if (document.getElementById('docFecha')) document.getElementById('docFecha').value = doc.fecha || '';
@@ -1071,6 +1122,29 @@ COD001
             // Switch to Subir tab
             const tabSubir = document.querySelector('[data-tab="subir"]');
             if (tabSubir) tabSubir.click();
+
+            // Set edit mode
+            document.getElementById('editDocId').value = doc.id;
+            document.getElementById('uploadBtnText').textContent = 'Actualizar Documento';
+            document.getElementById('cancelEditBtn').classList.remove('hidden');
+
+            // Visual feedback
+            document.getElementById('uploadBtn').classList.remove('btn-primary');
+            document.getElementById('uploadBtn').classList.add('btn-success');
+
+            // Handle File Display
+            if (doc.ruta_archivo) {
+                let pdfUrl = doc.ruta_archivo.includes('/') 
+                    ? `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`
+                    : `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
+                
+                document.getElementById('uploadZone').classList.add('hidden');
+                document.getElementById('currentFileContainer').classList.remove('hidden');
+                document.getElementById('currentFileLink').href = pdfUrl;
+                document.getElementById('currentFileLink').textContent = doc.ruta_archivo.split('/').pop();
+            } else {
+                enableFileReplace();
+            }
 
             // Populate fields
             if (document.getElementById('docNumero')) document.getElementById('docNumero').value = doc.numero || '';
