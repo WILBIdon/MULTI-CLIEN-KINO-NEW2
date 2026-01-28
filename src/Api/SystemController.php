@@ -14,9 +14,11 @@ class SystemController extends BaseController
 
         try {
             set_time_limit(300);
+            session_write_close(); // Prevent session locking during long process
 
             $forceAll = isset($request['force']);
-            $batchSize = min(20, max(1, (int) ($request['batch'] ?? 10)));
+            // Reduce default batch to 3 to prevent timeouts on large files
+            $batchSize = min(10, max(1, (int) ($request['batch'] ?? 3)));
 
             $offset = (int) ($request['offset'] ?? 0);
 

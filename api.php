@@ -43,6 +43,10 @@ function apiShutdownHandler()
 {
     $error = error_get_last();
     if ($error && ($error['type'] === E_ERROR || $error['type'] === E_PARSE || $error['type'] === E_CORE_ERROR)) {
+        // Prepare clean slate for error JSON
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'error' => 'Critical System Error',
