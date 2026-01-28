@@ -411,7 +411,7 @@
             if (documents && documents.length > 0) {
                 html += '<div class="ai-doc-cards">';
                 documents.forEach(doc => {
-                    html += `<a href="../documento/view.php?id=${doc.id}" class="ai-doc-card">
+                    html += `<a href="${baseUrl}/modules/resaltar/viewer.php?doc=${doc.id}" class="ai-doc-card">
                     📄 ${doc.tipo.toUpperCase()} #${doc.numero}
                 </a>`;
                 });

@@ -452,7 +452,7 @@ PROMPT;
     $response = preg_replace_callback(
         '/\[DOC:(\d+):([^\]]+)\]/',
         function ($matches) {
-            return '<a href="../documento/view.php?id=' . $matches[1] . '" class="chat-link">' . htmlspecialchars($matches[2]) . '</a>';
+            return '<a href="../resaltar/viewer.php?doc=' . $matches[1] . '" class="chat-link">' . htmlspecialchars($matches[2]) . '</a>';
         },
         $response
     );

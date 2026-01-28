@@ -257,7 +257,7 @@ while ($row = $allDocsStmt->fetch(PDO::FETCH_ASSOC)) {
                                                 <td><?= htmlspecialchars($doc['fecha']) ?></td>
                                                 <td><span class="code-tag"><?= $doc['code_count'] ?></span></td>
                                                 <td>
-                                                    <a href="../../modules/documento/view.php?id=<?= $doc['id'] ?>"
+                                                    <a href="../../modules/resaltar/viewer.php?doc=<?= $doc['id'] ?>"
                                                         class=" btn btn-secondary btn-icon" title="Ver documento">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
                                                             fill="none" viewBox="0 0 24 24" stroke="currentColor">

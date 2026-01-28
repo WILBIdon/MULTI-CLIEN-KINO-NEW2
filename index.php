@@ -522,7 +522,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                     <td><span class="code-tag">${doc.codes.length}</span></td>
                     <td>
                         <div class="flex gap-2">
-                            <a href="modules/documento/view.php?id=${doc.id}" class="btn btn-secondary btn-icon" title="Ver documento">
+                            <a href="modules/resaltar/viewer.php?doc=${doc.id}" class="btn btn-secondary btn-icon" title="Ver documento">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -885,7 +885,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                             </div>
                             <div class="result-title">${doc.numero}</div>
                             <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                                <a href="../documento/view.php?id=${doc.id}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Códigos</a>
+                                <a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(result.query)}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Documento</a>
                                 ${pdfUrl ? `<a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(code)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</a>` : ''}
                                 ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
                             </div>
@@ -917,11 +917,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             }
         }
 
-        // ============ Edit Document ============
-        function editDoc(docId) {
-            // Redirect to document view/edit page
-            window.location.href = `modules/documento/view.php?id=${docId}&edit=1`;
-        }
+
 
         // ============ Delete Document ============
         async function confirmDelete(docId, docNumero) {
