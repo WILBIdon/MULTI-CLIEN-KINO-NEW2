@@ -121,14 +121,9 @@ function parseXLSX(string $filePath): array
 }
 
 /**
- * Find document by name - STRICT VERSION (User Request)
- * Priority: exact PDF filename matches ONLY.
- * Valid matches:
- * 1. Exact 'ruta_archivo' (e.g. "file.pdf" == "file.pdf")
- * 2. Exact 'original_path'
- * 3. Filename at end of path (e.g. "uploads/file.pdf" matches "file.pdf")
- * 
- * REMOVED: Matching by 'numero', stripping extensions, or partial text matches.
+ * Find document by name - ROBUST STRICT VERSION
+ * Matches ONLY by the exact filename (basename), ignoring the folder path.
+ * Case-insensitive to prevent silly mismatches.
  */
 function findDocumentByName(PDO $db, string $name): ?array
 {
@@ -137,21 +132,39 @@ function findDocumentByName(PDO $db, string $name): ?array
         return null;
     }
 
-    // 1. Exact match on full stored path or original name
-    $stmt = $db->prepare('SELECT * FROM documentos WHERE ruta_archivo = ? OR original_path = ? LIMIT 1');
+    // 1. Try exact match on 'ruta_archivo' or 'original_path' (Case Insensitive)
+    // using LIKE for implicit CI in SQLite
+    $stmt = $db->prepare('
+        SELECT * FROM documentos 
+        WHERE ruta_archivo LIKE ? 
+           OR original_path LIKE ? 
+        LIMIT 1
+    ');
     $stmt->execute([$name, $name]);
     $doc = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if ($doc) {
+    if ($doc)
         return $doc;
-    }
 
-    // 2. Exact match on filename (handling subdirectories)
-    // Checks if the database path ends with "/name"
-    $stmt = $db->prepare('SELECT * FROM documentos WHERE ruta_archivo LIKE ? LIMIT 1');
-    $stmt->execute(['%/' . $name]);
+    // 2. Try matching as a filename at the end of a path (Basename match)
+    // Matches "uploads/folder/file.pdf" if search is "file.pdf"
+    // We check for both / and \ to be safe
+    $stmt = $db->prepare('
+        SELECT * FROM documentos 
+        WHERE ruta_archivo LIKE ? 
+           OR ruta_archivo LIKE ?
+           OR original_path LIKE ?
+           OR original_path LIKE ?
+        LIMIT 1
+    ');
+    $stmt->execute([
+        '%/' . $name,  // Forward slash separator
+        '%\\' . $name, // Backslash separator
+        '%/' . $name,  // Check original_path too
+        '%\\' . $name
+    ]);
+
     $doc = $stmt->fetch(PDO::FETCH_ASSOC);
-
     return $doc ?: null;
 }
 
