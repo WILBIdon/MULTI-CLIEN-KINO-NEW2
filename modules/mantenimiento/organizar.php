@@ -12,7 +12,8 @@ require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../helpers/tenant.php';
 
 if (!isset($_SESSION['client_code'])) {
-    die('Acceso denegado');
+    header('Location: ../../login.php');
+    exit;
 }
 
 $clientCode = $_SESSION['client_code'];
@@ -150,7 +151,8 @@ if ($action === 'organize') {
     <div class="container">
         <h1>🗄️ Organizador de Archivos</h1>
         <p>Esta herramienta moverá todos los archivos PDF a carpetas separadas por tipo (<code>manifiestos/</code>,
-            <code>declaraciones/</code>, etc.).</p>
+            <code>declaraciones/</code>, etc.).
+        </p>
 
         <div class="card">
             <?php if (!$action): ?>
