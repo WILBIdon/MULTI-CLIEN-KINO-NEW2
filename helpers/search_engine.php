@@ -322,10 +322,10 @@ function suggest_codes(PDO $db, string $term, int $limit = 10): array
         FROM codigos
         WHERE codigo LIKE ?
         ORDER BY codigo ASC
-        LIMIT ?
+        LIMIT $limit
     ");
 
-    $stmt->execute([$term . '%', $limit]);
+    $stmt->execute([$term . '%']);
     return $stmt->fetchAll(PDO::FETCH_COLUMN);
 }
 

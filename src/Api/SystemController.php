@@ -26,9 +26,9 @@ class SystemController extends BaseController
                 FROM documentos 
                 WHERE ruta_archivo LIKE '%.pdf'
                 ORDER BY id DESC
-                LIMIT ? OFFSET ?
+                LIMIT $batchSize OFFSET $offset
             ");
-                $stmt->execute([$batchSize, $offset]);
+                $stmt->execute();
             } else {
                 $stmt = $this->db->prepare("
                 SELECT id, ruta_archivo, tipo, datos_extraidos
@@ -66,56 +66,23 @@ class SystemController extends BaseController
             $errors = [];
 
             $updateStmt = $this->db->prepare("UPDATE documentos SET datos_extraidos = ? WHERE id = ?");
-            $uploadsDir = CLIENTS_DIR . "/{$this->clientCode}/uploads/";
+            // $uploadsDir not needed here as resolve_pdf_path handles it
 
             foreach ($docs as $doc) {
-                $pdfPath = $uploadsDir . $doc['ruta_archivo'];
-
-                // Robust path resolution with dynamic directory scanning
-                $pdfPath = null;
-                $filename = basename($doc['ruta_archivo']);
+                // Robust path resolution via centralized helper
+                $pdfPath = resolve_pdf_path($this->clientCode, $doc);
                 $type = strtolower($doc['tipo']);
 
-                $possiblePaths = [];
-                // 1. Exact DB path
-                $possiblePaths[] = $uploadsDir . $doc['ruta_archivo'];
-                // 2. Root match
-                $possiblePaths[] = $uploadsDir . $filename;
+                if (!$pdfPath) {
+                    $uploadsDir = CLIENTS_DIR . "/{$this->clientCode}/uploads/";
+                    $existingFolders = get_available_folders($this->clientCode);
 
-                // 3. Scan for existing folders (case-insensitive match)
-                $existingFolders = []; // To list in debug
-                $subdirs = glob($uploadsDir . '*', GLOB_ONLYDIR);
-                if ($subdirs) {
-                    foreach ($subdirs as $dir) {
-                        $dirname = basename($dir);
-                        $existingFolders[] = $dirname;
-
-                        $compare = strtolower($dirname);
-                        // Check if folder matches type (singular, plural 's', plural 'es')
-                        if ($compare === $type || $compare === $type . 's' || $compare === $type . 'es') {
-                            $possiblePaths[] = $dir . '/' . $filename;
-                            if ($doc['ruta_archivo'] !== $filename) {
-                                $possiblePaths[] = $dir . '/' . basename($doc['ruta_archivo']);
-                            }
-                        }
-                    }
-                }
-
-                foreach ($possiblePaths as $path) {
-                    if (file_exists($path)) {
-                        $pdfPath = $path;
-                        break;
-                    }
-                }
-
-                if (!file_exists($pdfPath)) {
                     $triedPaths = [
                         $uploadsDir . $doc['ruta_archivo'],
-                        $uploadsDir . $doc['tipo'] . '/' . basename($doc['ruta_archivo']),
-                        $uploadsDir . $doc['tipo'] . '/' . $doc['ruta_archivo'],
-                        "GLOB: " . ($searchPattern ?? 'N/A')
+                        $uploadsDir . $type . '/' . basename($doc['ruta_archivo']),
+                        "Resolved was NULL"
                     ];
-                    $folderList = $existingFolders ? implode(', ', array_slice($existingFolders, 0, 10)) : 'Ninguna';
+                    $folderList = implode(', ', array_slice($existingFolders, 0, 10));
                     $errors[] = "#{$doc['id']}: Archivo no encontrado. Carpetas en uploads/: [$folderList]";
 
                     $errorData = json_encode([

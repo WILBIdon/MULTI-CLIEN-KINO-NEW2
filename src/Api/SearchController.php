@@ -55,10 +55,10 @@ class SearchController extends BaseController
             FROM documentos d
             WHERE d.datos_extraidos LIKE ? OR d.numero LIKE ?
             ORDER BY d.fecha DESC, d.id DESC
-            LIMIT ?
+            LIMIT $limit
         ");
         $likeQuery = '%' . $query . '%';
-        $stmt->execute([$likeQuery, $likeQuery, $limit]);
+        $stmt->execute([$likeQuery, $likeQuery]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $results = [];
