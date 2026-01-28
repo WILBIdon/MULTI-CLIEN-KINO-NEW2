@@ -238,11 +238,44 @@ function search_in_pdf_content(PDO $db, string $searchTerm, string $clientCode):
     $documents = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($documents as $doc) {
-        $pdfPath = $uploadsDir . $doc['ruta_archivo'];
+        // Robust path resolution logic
+        $pdfPathFound = null;
+        $filename = basename($doc['ruta_archivo']);
+        $type = strtolower($doc['tipo']);
 
-        if (!file_exists($pdfPath)) {
+        // Folder variants
+        $folders = [$type, $type . 's', $type . 'es'];
+        $folders = array_unique($folders);
+
+        $possiblePaths = [];
+        // 1. Exact DB path
+        $possiblePaths[] = $uploadsDir . $doc['ruta_archivo'];
+
+        // 2. Folder variants
+        foreach ($folders as $folder) {
+            if (!empty($folder)) {
+                $possiblePaths[] = $uploadsDir . $folder . '/' . $filename;
+                if ($doc['ruta_archivo'] !== $filename) {
+                    $possiblePaths[] = $uploadsDir . $folder . '/' . $doc['ruta_archivo'];
+                }
+            }
+        }
+
+        // 3. Root match
+        $possiblePaths[] = $uploadsDir . $filename;
+
+        foreach ($possiblePaths as $path) {
+            if (file_exists($path)) {
+                $pdfPathFound = $path;
+                break;
+            }
+        }
+
+        if (!$pdfPathFound) {
             continue;
         }
+
+        $pdfPath = $pdfPathFound;
 
         try {
             $text = extract_text_from_pdf($pdfPath);
