@@ -11,16 +11,20 @@ class SystemController extends BaseController
     {
         // Start output buffering to catch any stray warnings/errors
         ob_start();
+        $docs = [];
+        $indexed = 0;
+        $errors = [];
 
         try {
             set_time_limit(300);
             session_write_close(); // Prevent session locking during long process
 
             $forceAll = isset($request['force']);
-            // Increased batch size to 15 for better performance now that crash bug is fixed
+            // Increased batch size to 15 for better performance
             $batchSize = min(50, max(1, (int) ($request['batch'] ?? 15)));
-
             $offset = (int) ($request['offset'] ?? 0);
+
+            error_log("Reindex started: forceAll=" . ($forceAll ? 'true' : 'false') . ", batchSize=$batchSize, offset=$offset");
 
             if ($forceAll) {
                 $stmt = $this->db->prepare("
@@ -31,51 +35,39 @@ class SystemController extends BaseController
                 LIMIT $batchSize OFFSET $offset
             ");
                 $stmt->execute();
+                $docs = $stmt->fetchAll(PDO::FETCH_ASSOC);
             } else {
+                // Optimized: Select only potential candidates for reindexing
+                // (Null data, empty string, or missing "text" key in JSON)
                 $stmt = $this->db->prepare("
                 SELECT id, ruta_archivo, tipo, datos_extraidos
                 FROM documentos 
                 WHERE ruta_archivo LIKE '%.pdf'
+                AND (
+                    datos_extraidos IS NULL 
+                    OR datos_extraidos = '' 
+                    OR datos_extraidos NOT LIKE '%\"text\":%'
+                )
                 ORDER BY id DESC
+                LIMIT $batchSize
             ");
                 $stmt->execute();
-
-                $allDocs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                $docs = [];
-                foreach ($allDocs as $d) {
-                    $data = json_decode($d['datos_extraidos'] ?? '', true);
-                    $text = $data['text'] ?? '';
-                    $hasError = isset($data['error']);
-
-                    if (!$forceAll && $hasError) {
-                        continue;
-                    }
-
-                    if (empty($text) || strlen($text) < 100) {
-                        unset($d['datos_extraidos']);
-                        $docs[] = $d;
-                        if (count($docs) >= $batchSize)
-                            break;
-                    }
-                }
-            }
-
-            if ($forceAll) {
                 $docs = $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
 
-            $indexed = 0;
-            $errors = [];
+            error_log("Docs to process: " . count($docs));
 
             $updateStmt = $this->db->prepare("UPDATE documentos SET datos_extraidos = ? WHERE id = ?");
-            // $uploadsDir not needed here as resolve_pdf_path handles it
 
             foreach ($docs as $doc) {
+                // error_log("Processing doc #{$doc['id']}");
+
                 // Robust path resolution via centralized helper
                 $pdfPath = resolve_pdf_path($this->clientCode, $doc);
                 $type = strtolower($doc['tipo']);
 
-                if (!$pdfPath) {
+                // 3. Verify physical existence
+                if (!$pdfPath || !file_exists($pdfPath)) {
                     $uploadsDir = CLIENTS_DIR . "/{$this->clientCode}/uploads/";
                     $existingFolders = get_available_folders($this->clientCode);
 
@@ -85,13 +77,14 @@ class SystemController extends BaseController
                         "Resolved was NULL"
                     ];
                     $folderList = implode(', ', array_slice($existingFolders, 0, 10));
-                    $errors[] = "#{$doc['id']}: Archivo no encontrado. Carpetas en uploads/: [$folderList]";
+                    $errorMsg = "Archivo no encontrado. Carpetas en uploads/: [$folderList]";
+                    $errors[] = "#{$doc['id']}: $errorMsg";
+                    error_log("Doc #{$doc['id']} error: $errorMsg");
 
+                    // Save error to DB so we don't retry forever
                     $errorData = json_encode([
                         'error' => 'Archivo no encontrado',
                         'type_expected' => $type,
-                        'available_folders' => array_slice($existingFolders, 0, 20), // List first 20 folders
-                        'paths_tried' => $triedPaths,
                         'timestamp' => time()
                     ]);
                     $updateStmt->execute([$errorData, $doc['id']]);
@@ -101,7 +94,17 @@ class SystemController extends BaseController
 
                 try {
                     $extractResult = extract_codes_from_pdf($pdfPath);
-                    if ($extractResult['success'] && !empty($extractResult['text'])) {
+
+                    // 5. Validate extraction result
+                    if (!isset($extractResult['success']) || !$extractResult['success'] || empty($extractResult['text'])) {
+                        $msg = $extractResult['error'] ?? 'Extracción fallida o sin texto';
+                        $errors[] = "#{$doc['id']}: $msg";
+
+                        // Save error status
+                        $errorData = json_encode(['error' => $msg, 'timestamp' => time()]);
+                        $updateStmt->execute([$errorData, $doc['id']]);
+                    } else {
+                        // Success
                         $datosExtraidos = [
                             'text' => substr($extractResult['text'], 0, 50000),
                             'auto_codes' => $extractResult['codes'],
@@ -109,25 +112,29 @@ class SystemController extends BaseController
                         ];
                         $updateStmt->execute([json_encode($datosExtraidos, JSON_UNESCAPED_UNICODE), $doc['id']]);
                         $indexed++;
-                    } else {
-                        $errors[] = "#{$doc['id']}: " . ($extractResult['error'] ?? 'Sin texto');
                     }
                 } catch (Exception $e) {
                     $errors[] = "#{$doc['id']}: " . $e->getMessage();
+                    error_log("Doc #{$doc['id']} fatal match: " . $e->getMessage());
                 }
 
                 // Free memory after each iteration
                 gc_collect_cycles();
             }
 
-            $allStmt = $this->db->query("SELECT datos_extraidos FROM documentos WHERE ruta_archivo LIKE '%.pdf'");
-            $pending = 0;
-            while ($row = $allStmt->fetch(PDO::FETCH_ASSOC)) {
-                $data = json_decode($row['datos_extraidos'] ?? '', true);
-                if (empty($data['text']) || strlen($data['text'] ?? '') < 100) {
-                    $pending++;
-                }
-            }
+            // 4. Optimized Pending Count using SQL
+            $stmtCount = $this->db->prepare("
+                SELECT COUNT(*) as total
+                FROM documentos 
+                WHERE ruta_archivo LIKE '%.pdf'
+                AND (
+                    datos_extraidos IS NULL 
+                    OR datos_extraidos = '' 
+                    OR datos_extraidos NOT LIKE '%\"text\":%'
+                )
+            ");
+            $stmtCount->execute();
+            $pending = $stmtCount->fetchColumn();
 
             $response = [
                 'success' => true,
@@ -138,6 +145,7 @@ class SystemController extends BaseController
             ];
 
         } catch (\Throwable $e) {
+            error_log("Reindex Fatal Error: " . $e->getMessage());
             $response = [
                 'success' => false,
                 'error' => $e->getMessage()
