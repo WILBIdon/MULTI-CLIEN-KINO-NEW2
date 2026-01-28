@@ -663,8 +663,8 @@ COD001
                     <td colspan="6">
                          <div style="padding: 1rem;">
                             <strong>Códigos vinculados:</strong>
-                            <div class="codes-list" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;">
-                                ${doc.codes.map(c => `<span class="code-tag">${c}</span>`).join('')}
+                            <div class="codes-list" style="margin-top: 0.5rem; max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0; background: white; padding: 0.5rem; border: 1px solid #f0f0f0; border-radius: 4px;">
+                                ${doc.codes.map(c => `<div style="font-family: inherit; font-size: 0.9rem; padding: 2px 0; color: #374151; width: 100%; display: block;">${c}</div>`).join('')}
                             </div>
                         </div>
                     </td>
@@ -961,14 +961,14 @@ COD001
 
             if (row.classList.contains('hidden')) {
                 row.classList.remove('hidden');
-                if(btn) {
+                if (btn) {
                     btn.textContent = 'Ocultar Códigos';
                     btn.style.backgroundColor = '#d1d5db';
                     btn.style.color = '#1f2937';
                 }
             } else {
                 row.classList.add('hidden');
-                if(btn) {
+                if (btn) {
                     btn.textContent = 'Ver Códigos';
                     btn.style.backgroundColor = '';
                     btn.style.color = '';
