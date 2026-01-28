@@ -115,6 +115,9 @@ class SystemController extends BaseController
                 } catch (Exception $e) {
                     $errors[] = "#{$doc['id']}: " . $e->getMessage();
                 }
+
+                // Free memory after each iteration
+                gc_collect_cycles();
             }
 
             $allStmt = $this->db->query("SELECT datos_extraidos FROM documentos WHERE ruta_archivo LIKE '%.pdf'");

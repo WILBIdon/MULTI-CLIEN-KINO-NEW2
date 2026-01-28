@@ -324,17 +324,25 @@ while ($row = $allDocsStmt->fetch(PDO::FETCH_ASSOC)) {
                 let pending = totalPending;
                 while (pending > 0) {
                     try {
-                        const response = await fetch(`${apiUrl}?action=reindex_documents&batch=10`);
+                        // Force small batch size explicitly in URL
+                        const response = await fetch(`${apiUrl}?action=reindex_documents&batch=3`);
+                        
+                        // 1. Get raw text first
+                        const rawText = await response.text();
+                        console.log("Server Response:", rawText); // Debug visibility
 
-                        // Check if response is valid JSON
-                        const contentType = response.headers.get("content-type");
-                        if (!contentType || !contentType.includes("application/json")) {
-                            const text = await response.text();
-                            console.error("Non-JSON response:", text);
-                            throw new Error("El servidor devolvió un error (no JSON). Revisa la consola.");
+                        if (!rawText.trim()) {
+                            throw new Error("El servidor devolvió una respuesta vacía.");
                         }
 
-                        const result = await response.json();
+                        // 2. Try parse JSON
+                        let result;
+                        try {
+                            result = JSON.parse(rawText);
+                        } catch (e) {
+                             console.error("JSON Parse Error:", e);
+                             throw new Error(`Respuesta inválida del servidor (no es JSON):\n${rawText.substring(0, 100)}...`);
+                        }
 
                         if (!result.success) {
                             progressText.textContent = 'Error: ' + (result.error || 'Error desconocido');
