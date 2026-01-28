@@ -121,8 +121,14 @@ function parseXLSX(string $filePath): array
 }
 
 /**
- * Find document by name - IMPROVED VERSION
- * Priority: exact PDF filename -> exact numero -> partial matches
+ * Find document by name - STRICT VERSION (User Request)
+ * Priority: exact PDF filename matches ONLY.
+ * Valid matches:
+ * 1. Exact 'ruta_archivo' (e.g. "file.pdf" == "file.pdf")
+ * 2. Exact 'original_path'
+ * 3. Filename at end of path (e.g. "uploads/file.pdf" matches "file.pdf")
+ * 
+ * REMOVED: Matching by 'numero', stripping extensions, or partial text matches.
  */
 function findDocumentByName(PDO $db, string $name): ?array
 {
@@ -131,41 +137,22 @@ function findDocumentByName(PDO $db, string $name): ?array
         return null;
     }
 
-    // ====== PRIORIDAD 1: Buscar por nombre exacto del archivo PDF ======
+    // 1. Exact match on full stored path or original name
     $stmt = $db->prepare('SELECT * FROM documentos WHERE ruta_archivo = ? OR original_path = ? LIMIT 1');
     $stmt->execute([$name, $name]);
     $doc = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($doc) {
-        return $doc; // Match exacto por nombre de archivo
+        return $doc;
     }
 
-    // ====== PRIORIDAD 2: Buscar en ruta_archivo (LIKE con % solo al final) ======
+    // 2. Exact match on filename (handling subdirectories)
+    // Checks if the database path ends with "/name"
     $stmt = $db->prepare('SELECT * FROM documentos WHERE ruta_archivo LIKE ? LIMIT 1');
-    $stmt->execute(['%/' . $name]); // Buscar al final de la ruta
+    $stmt->execute(['%/' . $name]);
     $doc = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if ($doc) {
-        return $doc;
-    }
-
-    // ====== PRIORIDAD 3: Limpiar extensión y buscar ======
-    $nameClean = preg_replace('/\.(pdf|xlsx?|csv)$/i', '', $name);
-
-    // Try exact match on 'numero'
-    $stmt = $db->prepare('SELECT * FROM documentos WHERE numero = ? LIMIT 1');
-    $stmt->execute([$nameClean]);
-    $doc = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if ($doc) {
-        return $doc;
-    }
-
-    // ====== PRIORIDAD 4: Partial match (ÚLTIMO RECURSO) ======
-    $stmt = $db->prepare('SELECT * FROM documentos WHERE numero LIKE ? OR ruta_archivo LIKE ? LIMIT 1');
-    $stmt->execute(['%' . $nameClean . '%', '%' . $nameClean . '%']);
-
-    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    return $doc ?: null;
 }
 
 // ============ ACTION HANDLERS ============
