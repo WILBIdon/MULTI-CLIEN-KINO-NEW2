@@ -17,8 +17,8 @@ class SystemController extends BaseController
             session_write_close(); // Prevent session locking during long process
 
             $forceAll = isset($request['force']);
-            // Reduce default batch to 3 to prevent timeouts on large files
-            $batchSize = min(10, max(1, (int) ($request['batch'] ?? 3)));
+            // Increased batch size to 15 for better performance now that crash bug is fixed
+            $batchSize = min(50, max(1, (int) ($request['batch'] ?? 15)));
 
             $offset = (int) ($request['offset'] ?? 0);
 
