@@ -216,3 +216,105 @@ function clone_client(
     $updateStmt = $centralDb->prepare('UPDATE control_clientes SET titulo = ?, color_primario = ?, color_secundario = ? WHERE codigo = ?');
     $updateStmt->execute([$titulo, $colorP, $colorS, $newCode]);
 }
+
+/**
+ * Obtiene lista de carpetas disponibles en el directorio de uploads del cliente.
+ * Utilizado para depuración cuando no se encuentra un archivo.
+ * 
+ * @param string $clientCode
+ * @return array Lista de rutas relativas de carpetas
+ */
+function get_available_folders(string $clientCode): array
+{
+    $baseDir = CLIENTS_DIR . DIRECTORY_SEPARATOR . $clientCode . DIRECTORY_SEPARATOR . 'uploads';
+    $folders = [];
+
+    if (!is_dir($baseDir)) {
+        return ["No existe directorio uploads para $clientCode"];
+    }
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($baseDir, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST
+    );
+
+    foreach ($iterator as $file) {
+        if ($file->isDir()) {
+            $folders[] = str_replace(CLIENTS_DIR . DIRECTORY_SEPARATOR, '', $file->getPathname());
+        }
+    }
+
+    // Incluir la raíz uploads también
+    if (empty($folders)) {
+        $folders[] = "$clientCode/uploads (raíz)";
+    }
+
+    return $folders;
+}
+
+/**
+ * Busca un archivo PDF de manera robusta en el sistema de archivos del cliente.
+ * 
+ * Estrategia:
+ * 1. Verificar ruta exacta en BD (si es absoluta o relativa válida).
+ * 2. Buscar por nombre de archivo en carpetas estándar (manifiestos, declaraciones, etc).
+ * 3. Búsqueda recursiva rápida en todo el directorio uploads del cliente.
+ * 
+ * @param string $clientCode Código del cliente.
+ * @param array $document Array con datos del documento (debe tener 'ruta_archivo').
+ * @return string|null Ruta absoluta del archivo o null si no existe.
+ */
+function resolve_pdf_path(string $clientCode, array $document): ?string
+{
+    $filename = basename($document['ruta_archivo']);
+    $uploadsDir = CLIENTS_DIR . DIRECTORY_SEPARATOR . $clientCode . DIRECTORY_SEPARATOR . 'uploads';
+
+    // 1. Verificar si la ruta en BD funciona directamente
+    // Caso A: Ruta absoluta
+    if (file_exists($document['ruta_archivo'])) {
+        return $document['ruta_archivo'];
+    }
+
+    // Caso B: Ruta relativa a uploads
+    $candidate = $uploadsDir . DIRECTORY_SEPARATOR . $document['ruta_archivo'];
+    if (file_exists($candidate)) {
+        return $candidate;
+    }
+
+    // Caso C: Ruta relativa a uploads, pero quitando posibles prefijos de carpeta en la ruta de BD
+    // Si ruta_bd es "manifiestos/archivo.pdf", ya probamos eso arriba.
+    // Si es solo "archivo.pdf", probamos en subcarpetas comunes.
+
+    $commonSubdirs = [
+        '', // Raíz de uploads
+        'manifiestos',
+        'declaraciones',
+        'facturas',
+        'otros',
+        'tmp'
+    ];
+
+    foreach ($commonSubdirs as $subdir) {
+        $path = $uploadsDir . ($subdir ? DIRECTORY_SEPARATOR . $subdir : '') . DIRECTORY_SEPARATOR . $filename;
+        if (file_exists($path)) {
+            return $path;
+        }
+    }
+
+    // 2. Búsqueda recursiva (fallback final)
+    // Si el archivo se movió a una carpeta no estándar
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($uploadsDir, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST
+    );
+
+    foreach ($iterator as $file) {
+        if ($file->isFile()) {
+            if ($file->getFilename() === $filename) {
+                return $file->getPathname();
+            }
+        }
+    }
+
+    return null;
+}

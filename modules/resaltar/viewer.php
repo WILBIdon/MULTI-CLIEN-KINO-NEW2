@@ -46,51 +46,14 @@ $rutaArchivo = $document['ruta_archivo'];
 
 // Build the PDF path - try multiple possible locations
 $pdfPath = null;
-// Build the PDF path - try multiple possible locations
-$pdfPath = null;
-$filename = basename($rutaArchivo);
-
-// Define folder variants (singular and plural)
-$type = strtolower($document['tipo']);
-$folders = [$type]; // Singular (e.g., "manifiesto")
-
-// Add common plurals
-$folders[] = $type . 's';   // "manifiestos", "facturas"
-$folders[] = $type . 'es';  // "declaraciones"
-
-// Deduplicate
-$folders = array_unique($folders);
-
-$possiblePaths = [];
-
-// 1. Try exact path stored in DB (relative to uploads root)
-$possiblePaths[] = $uploadsDir . $rutaArchivo;
-
-// 2. Try in subfolders (using both full path and basename to be safe)
-foreach ($folders as $folder) {
-    if (!empty($folder)) {
-        // Try with just filename (most likely for sorted files)
-        $possiblePaths[] = $uploadsDir . $folder . '/' . $filename;
-        // Try with original relative path (in case it had some structure)
-        if ($rutaArchivo !== $filename) {
-            $possiblePaths[] = $uploadsDir . $folder . '/' . $rutaArchivo;
-        }
-    }
-}
-
-// 3. Try in root uploads (just filename)
-$possiblePaths[] = $uploadsDir . $filename;
-
-// Check which one exists
-foreach ($possiblePaths as $path) {
-    if (file_exists($path)) {
-        $pdfPath = $path;
-        break;
-    }
-}
+// Use centralized robust path resolution
+$pdfPath = resolve_pdf_path($clientCode, $document);
 
 if (!$pdfPath) {
-    die('Archivo PDF no encontrado. Rutas probadas: ' . implode(', ', array_map('basename', $possiblePaths)));
+    // Debug info if not found
+    $available = get_available_folders($clientCode);
+    $foldersStr = implode(', ', $available);
+    die("Archivo PDF no encontrado. <br>ID Documento: {$document['id']} <br>Tipo: {$document['tipo']} <br>Ruta BD: {$document['ruta_archivo']} <br>Carpetas disponibles en servidor: [$foldersStr]");
 }
 
 // For sidebar

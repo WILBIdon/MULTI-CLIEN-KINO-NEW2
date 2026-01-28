@@ -238,38 +238,7 @@ function search_in_pdf_content(PDO $db, string $searchTerm, string $clientCode):
     $documents = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($documents as $doc) {
-        // Robust path resolution logic with dynamic scanning
-        $pdfPathFound = null;
-        $filename = basename($doc['ruta_archivo']);
-        $type = strtolower($doc['tipo']);
-
-        $possiblePaths = [];
-        // 1. Exact DB path
-        $possiblePaths[] = $uploadsDir . $doc['ruta_archivo'];
-        // 2. Root match
-        $possiblePaths[] = $uploadsDir . $filename;
-
-        // 3. Scan for existing folders
-        $subdirs = glob($uploadsDir . '*', GLOB_ONLYDIR);
-        if ($subdirs) {
-            foreach ($subdirs as $dir) {
-                $dirname = basename($dir);
-                $compare = strtolower($dirname);
-                if ($compare === $type || $compare === $type . 's' || $compare === $type . 'es') {
-                    $possiblePaths[] = $dir . '/' . $filename;
-                    if ($doc['ruta_archivo'] !== $filename) {
-                        $possiblePaths[] = $dir . '/' . basename($doc['ruta_archivo']);
-                    }
-                }
-            }
-        }
-
-        foreach ($possiblePaths as $path) {
-            if (file_exists($path)) {
-                $pdfPathFound = $path;
-                break;
-            }
-        }
+        $pdfPathFound = resolve_pdf_path($clientCode, $doc);
 
         if (!$pdfPathFound) {
             continue;

@@ -524,13 +524,10 @@ COD001
             let html = '';
             for (const doc of result.documents) {
                 // Construir ruta del PDF correctamente
+                // Use download.php to resolve path server-side
                 let pdfUrl = '';
                 if (doc.ruta_archivo) {
-                    if (doc.ruta_archivo.includes('/')) {
-                        pdfUrl = `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`;
-                    } else {
-                        pdfUrl = `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
-                    }
+                    pdfUrl = `../resaltar/download.php?doc=${doc.id}`;
                 }
 
                 // 1. CÓDIGO OFICIAL (Tal cual está en BD)

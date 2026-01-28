@@ -198,9 +198,8 @@ $pageTitle = 'Resaltar Documento';
             for (const doc of result.results) {
                 let pdfUrl = '';
                 if (doc.ruta_archivo) {
-                    pdfUrl = doc.ruta_archivo.includes('/')
-                        ? `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`
-                        : `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
+                    // Use download.php to resolve path server-side
+                    pdfUrl = `download.php?doc=${doc.id}`;
                 }
 
                 html += `

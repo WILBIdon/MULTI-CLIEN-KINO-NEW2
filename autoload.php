@@ -41,10 +41,13 @@ require_once __DIR__ . '/config.php';
 
 // Cargar helpers principales automáticamente
 $helpers = [
+    'db',
+    'config_helper',
+    'auth',
     'tenant',
-    'logger',
-    'error_codes',
     'secure_uploader',
+    'file_manager',
+    'error_codes',
     'rate_limiter',
     'csrf_protection'
 ];

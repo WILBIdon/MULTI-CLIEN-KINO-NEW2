@@ -34,35 +34,13 @@ if (!$document) {
 $uploadsDir = CLIENTS_DIR . "/{$clientCode}/uploads/";
 $rutaArchivo = $document['ruta_archivo'];
 
-// --- Path Resolution Logic (Same as viewer.php) ---
-$pdfPath = null;
-$filename = basename($rutaArchivo);
-$type = strtolower($document['tipo']);
-$folders = [$type, $type . 's', $type . 'es'];
-$folders = array_unique($folders);
-
-$possiblePaths = [];
-$possiblePaths[] = $uploadsDir . $rutaArchivo;
-
-foreach ($folders as $folder) {
-    if (!empty($folder)) {
-        $possiblePaths[] = $uploadsDir . $folder . '/' . $filename;
-        if ($rutaArchivo !== $filename) {
-            $possiblePaths[] = $uploadsDir . $folder . '/' . $rutaArchivo;
-        }
-    }
-}
-$possiblePaths[] = $uploadsDir . $filename; // Root fallback
-
-foreach ($possiblePaths as $path) {
-    if (file_exists($path)) {
-        $pdfPath = $path;
-        break;
-    }
-}
+// --- Centralized Path Resolution ---
+$pdfPath = resolve_pdf_path($clientCode, $document);
 
 if (!$pdfPath) {
-    die('Archivo PDF no encontrado en el servidor.');
+    $folders = get_available_folders($clientCode);
+    $foldersStr = implode(', ', $folders);
+    die("Archivo PDF no encontrado en el servidor.<br>Rutas revisadas automáticamente.<br>Carpetas disponibles: $foldersStr");
 }
 
 // Calculate relative path for URL
