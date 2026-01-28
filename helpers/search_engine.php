@@ -25,17 +25,18 @@ function search_by_code(PDO $db, string $searchTerm): array
     }
 
     $stmt = $db->prepare("
-        SELECT DISTINCT
+        SELECT
             d.id,
             d.tipo,
             d.numero,
             d.fecha,
             d.proveedor,
             d.ruta_archivo,
-            c.codigo AS codigo_encontrado
+            MAX(c.codigo) AS codigo_encontrado
         FROM documentos d
         JOIN codigos c ON d.id = c.documento_id
         WHERE UPPER(c.codigo) LIKE UPPER(?)
+        GROUP BY d.id
         ORDER BY d.fecha DESC
     ");
 
