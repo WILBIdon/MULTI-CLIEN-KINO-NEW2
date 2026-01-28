@@ -20,8 +20,8 @@ class SystemController extends BaseController
             session_write_close(); // Prevent session locking during long process
 
             $forceAll = isset($request['force']);
-            // Increased batch size to 15 for better performance
-            $batchSize = min(50, max(1, (int) ($request['batch'] ?? 15)));
+            // Increased batch size to 50 for max speed
+            $batchSize = min(100, max(1, (int) ($request['batch'] ?? 50)));
             $offset = (int) ($request['offset'] ?? 0);
 
             error_log("Reindex started: forceAll=" . ($forceAll ? 'true' : 'false') . ", batchSize=$batchSize, offset=$offset");
@@ -93,7 +93,14 @@ class SystemController extends BaseController
                 }
 
                 try {
+                    // Suppress fontconfig warnings temporarily
+                    $originalErrorReporting = error_reporting();
+                    error_reporting($originalErrorReporting & ~E_NOTICE & ~E_WARNING);
+
                     $extractResult = extract_codes_from_pdf($pdfPath);
+
+                    // Restore error reporting
+                    error_reporting($originalErrorReporting);
 
                     // 5. Validate extraction result
                     if (!isset($extractResult['success']) || !$extractResult['success'] || empty($extractResult['text'])) {
