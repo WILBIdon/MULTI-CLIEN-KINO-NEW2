@@ -159,7 +159,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             right: 0;
             bottom: 0;
             overflow: hidden;
-            opacity: 0.2;
+            opacity: 1;
             line-height: 1;
         }
 
@@ -170,10 +170,11 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         }
 
         .text-layer mark {
-            background: #038802 !important;
+            background: rgba(50, 255, 50, 0.5) !important;
             color: transparent;
             padding: 2px;
             border-radius: 2px;
+            mix-blend-mode: multiply;
         }
 
         .page-number {
@@ -271,7 +272,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             }
 
             .text-layer mark {
-                background: #038802 !important;
+                background: rgba(50, 255, 50, 0.5) !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
