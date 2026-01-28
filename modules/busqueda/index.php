@@ -443,7 +443,7 @@ COD001
 
             document.getElementById('searchLoading').classList.remove('hidden');
             document.getElementById('searchResults').classList.add('hidden'); // Clear previous results
-            
+
             // clear lists
             document.getElementById('searchSummary').innerHTML = '';
             document.getElementById('documentList').innerHTML = '';
@@ -646,8 +646,11 @@ COD001
                 return;
             }
 
-            tbody.innerHTML = result.data.map(doc => `
-                <tr>
+            // Store for access
+            window.currentConsultDocs = result.data;
+
+            tbody.innerHTML = result.data.map((doc, index) => `
+                <tr class="document-row">
                     <td><span class="badge badge-primary">${doc.tipo.toUpperCase()}</span></td>
                     <td>${doc.numero}</td>
                     <td>${doc.fecha}</td>
@@ -655,17 +658,37 @@ COD001
                     <td><span class="code-tag">${doc.codes.length}</span></td>
                     <td>
                         <div class="flex gap-2">
-                            <a href="../../modules/documento/view.php?id=${doc.id}" class="btn btn-secondary btn-icon" title="Ver documento">
+                            <button class="btn btn-secondary btn-icon" title="Ver Códigos" onclick="toggleTableCodes(${doc.id})">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                 </svg>
-                            </a>
+                            </button>
+                            <button class="btn btn-secondary btn-icon" title="Editar" onclick="editDocumentFromConsultar(${index})">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                            </button>
                             <button class="btn btn-secondary btn-icon" title="Eliminar" onclick="deleteDoc(${doc.id})">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                             </button>
+                        </div>
+                    </td>
+                </tr>
+                <tr id="codes-row-${doc.id}" class="hidden bg-gray-50">
+                    <td colspan="6" style="background-color: #f9fafb; padding: 1rem;">
+                        <div style="max-width: 100%; overflow-x: auto;">
+                            <strong>Códigos asociados (${doc.codes.length}):</strong>
+                            <div style="margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                                ${doc.codes.map(c => `<span style="background: #e5e7eb; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem;">${c}</span>`).join('')}
+                            </div>
+                            <div style="margin-top: 0.75rem;">
+                                <a href="../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}" target="_blank" class="text-blue-600 hover:underline text-sm">
+                                    📄 Ver PDF Original
+                                </a>
+                            </div>
                         </div>
                     </td>
                 </tr>
@@ -918,7 +941,7 @@ COD001
                 }
 
                 // Store for editing
-                window.currentSingleParams = result.documents; 
+                window.currentSingleParams = result.documents;
 
                 document.getElementById('singleCodeList').innerHTML = result.documents.map((doc, index) => {
                     // Construir ruta del PDF correctamente
@@ -970,10 +993,10 @@ COD001
                         </div>
                     `;
                 }).join('');
-                }).join('');
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
+            }).join('');
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
         }
 
         document.addEventListener('click', (e) => {
@@ -987,7 +1010,7 @@ COD001
         function toggleCodes(docId) {
             const list = document.getElementById(`codes-list-${docId}`);
             const btn = document.getElementById(`btn-codes-${docId}`);
-            
+
             if (list.classList.contains('hidden')) {
                 list.classList.remove('hidden');
                 btn.textContent = 'Ocultar Códigos';
@@ -1013,7 +1036,7 @@ COD001
             if (document.getElementById('docNumero')) document.getElementById('docNumero').value = doc.numero || '';
             if (document.getElementById('docFecha')) document.getElementById('docFecha').value = doc.fecha || '';
             if (document.getElementById('docProveedor')) document.getElementById('docProveedor').value = doc.proveedor || '';
-            
+
             // Format codes for textarea (one per line)
             if (document.getElementById('docCodes') && doc.all_codes) {
                 document.getElementById('docCodes').value = doc.all_codes.split(',').join('\n');
@@ -1024,6 +1047,37 @@ COD001
 
             // Optional: Notify user
             // alert('Datos cargados en la pestaña Subir. Modifica y guarda.');
+        }
+
+        function toggleTableCodes(docId) {
+            const row = document.getElementById(`codes-row-${docId}`);
+            if (row.classList.contains('hidden')) {
+                row.classList.remove('hidden');
+            } else {
+                row.classList.add('hidden');
+            }
+        }
+
+        function editDocumentFromConsultar(index) {
+            const doc = window.currentConsultDocs[index];
+            if (!doc) return;
+
+            // Switch to Subir tab
+            const tabSubir = document.querySelector('[data-tab="subir"]');
+            if (tabSubir) tabSubir.click();
+
+            // Populate fields
+            if (document.getElementById('docNumero')) document.getElementById('docNumero').value = doc.numero || '';
+            if (document.getElementById('docFecha')) document.getElementById('docFecha').value = doc.fecha || '';
+            if (document.getElementById('docProveedor')) document.getElementById('docProveedor').value = doc.proveedor || '';
+
+            // Format codes for textarea (one per line)
+            if (document.getElementById('docCodes') && doc.codes) {
+                document.getElementById('docCodes').value = doc.codes.join('\n');
+            }
+
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     </script>
 </body>
