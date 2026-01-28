@@ -1,65 +1,30 @@
-# PUNTO DE RESTAURACIÓN: 2026-01-28
-## ESTADO: PUNTO FUNCIONAL RESALTADO IMPORTANTE
+# PUNTO DE RESTAURACIÓN - FASE FUNCIONAL CON BASE DE DATOS
+**Fecha:** 28 de Enero, 2026
+**Estado:** Estable / Funcional
 
-**Fecha:** 2026-01-28 12:30 (Local)
-**Versión Git:** `6fe2cd37210b237bfdc122b`
-**Etiqueta Git:** `v2026-01-28-funcional`
+## Resumen del Estado Actual
+Este punto de restauración marca una versión funcional estable del sistema Multi-Cliente KINO TRACE.
 
----
+### Características Verificadas:
+1.  **Gestión de Documentos:**
+    *   Subida de archivos PDF correcta.
+    *   Asociación automática de códigos.
+    *   Visualización de "Códigos vinculados" en columna vertical limpia.
+    *   Descarga y visualización de "Original" corregida con redirección robusta (`download.php`).
 
-### 🚀 Logros y Mejoras Implementadas
+2.  **Base de Datos:**
+    *   SQLite funcional por cliente.
+    *   Sincronización de BD implementada.
+    *   Tabla `documentos` y `codigos` operativas.
 
-1.  **Visor Unificado (Resaltar/Viewer):** 
-    *   Se eliminó el legado de `modules/documento/view.php`.
-    *   Todos los enlaces de la aplicación apuntan ahora a `resaltar/viewer.php`.
-    *   Funcionalidad completa de resaltado de términos, zoom y modo impresión.
+3.  **Interfaz:**
+    *   Diseño responsivo y limpio.
+    *   Corrección de enlaces rotos en el dashboard y buscador.
+    *   Buscador por código y texto completo operativo.
 
-2.  **Gestión de Códigos (Botón Dinámico):**
-    *   Implementado botón dinámico **"Ver Códigos" / "Ocultar Códigos"** en las tablas de consulta y búsqueda.
-    *   Previene recargas innecesarias y mejora la experiencia de usuario.
+### Notas Técnicas
+- Se implementó `modules/resaltar/download.php` para manejar la resolución de rutas de archivos PDF de manera flexible (soportando carpetas 'manifiesto' vs 'manifiestos').
+- Se actualizaron todos los enlaces en `index.php`, `index_tabs.php`, etc., para usar este descargador.
 
-3.  **Búsqueda de Códigos Optimizada:**
-    *   Cambiado `LIKE` por `=` para búsquedas exactas por código, eliminando falsos positivos.
-
-4.  **Seguridad y Archivos:**
-    *   Bloqueo estricto de duplicados basado en hash de archivo.
-    *   Actualización de etiquetas: "Número o nombre de documento".
-    *   Mejora en la previsualización del PDF actual durante la edición.
-
-5.  **Caché (Asset Versioning):**
-    *   Implementado `APP_VERSION` en `config.php` para forzar la actualización de CSS/JS en el navegador.
-
----
-
-### 🔄 Estrategia de Recuperación
-
-#### A. Recuperación vía GIT (Recomendada)
-Si el sistema presenta fallos y deseas volver a este punto exacto:
-
-1.  **Verificar estado:**
-    ```bash
-    git status
-    ```
-2.  **Volver al punto:**
-    ```bash
-    git reset --hard 6fe2cd37210b237bfdc122b
-    ```
-3.  **Limpiar archivos no rastreados (Opcional):**
-    ```bash
-    git clean -fd
-    ```
-
-#### B. Recuperación Local
-1.  Busca el archivo `PUNTO_RESTAURACION_2026-01-28.md` para confirmar los cambios realizados hasta esta fecha.
-2.  Los archivos principales modificados son:
-    *   `index.php`
-    *   `modules/busqueda/index.php`
-    *   `modules/resaltar/viewer.php`
-    *   `src/Api/DocumentController.php`
-    *   `config.php`
-
----
-
-> [!IMPORTANT]
-> **Este punto es considerado ESTABLE Y FUNCIONAL.** 
-> Antes de realizar cambios mayores, asegúrate de crear uno nuevo.
+### Instrucciones de Restauración
+Para volver a este punto, hacer checkout de este commit o usar los archivos clonados en esta fecha.
