@@ -931,6 +931,9 @@ COD001
                                 <span class="result-meta">${doc.fecha}</span>
                             </div>
                             <div class="result-title">${doc.numero}</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                🏷️ Coincidencia: <span style="font-weight: 600; color: var(--accent-primary);">${doc.codigo_encontrado}</span>
+                            </div>
                             <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                                 ${pdfUrl ? `<a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(code)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</a>` : ''}
                                 ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
