@@ -13,3 +13,18 @@ Se modificó la consulta SQL en `helpers/search_engine.php` dentro de la funció
 
 ### 📂 Archivos Modificados
 - `helpers/search_engine.php`
+
+## 2026-01-28 - Error 404 al Ver Documento
+
+### 🔴 Problema
+Al intentar ver un documento desde los módulos de "Búsqueda" o "Recientes", se generaba un error 404.
+La URL resultante era `.../documento/view.php`, lo cual es incorrecto porque el archivo se encuentra en `modules/documento/view.php`.
+El problema se debía a enlaces relativos `../documento/view.php` que fallaban dependiendo de la URL base del navegador (posiblemente debido a reescritura de URL o acceso directo a módulos sin la estructura de carpetas esperada).
+
+### 🟢 Solución
+Se actualizaron los enlaces en los siguientes archivos para usar una ruta relativa más robusta (`../../modules/documento/view.php`) que fuerza la navegación desde la raíz del sistema de módulos.
+
+### 📂 Archivos Modificados
+- `modules/busqueda/index.php`
+- `modules/recientes/index.php`
+- `modules/trazabilidad/dashboard.php`
