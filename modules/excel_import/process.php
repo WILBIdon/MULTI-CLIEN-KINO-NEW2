@@ -201,7 +201,7 @@ if ($action === 'import') {
 
         foreach ($columns as $col) {
             $colLower = strtolower($col);
-            if (in_array($colLower, ['archivo', 'nombre', 'documento', 'file', 'name', 'numero'])) {
+            if (in_array($colLower, ['archivo', 'nombre', 'documento', 'file', 'name', 'numero', 'nombre_pdf', 'nombre_doc'])) {
                 $nameColumn = $col;
             }
             if (in_array($colLower, ['codigo', 'code', 'código', 'codigos', 'codes'])) {
