@@ -351,8 +351,8 @@ COD001
                                     🔄 Indexar Pendientes
                                 </button>
                                 <button class="btn btn-secondary" onclick="reindexDocuments(true)" id="reindexAllBtn"
-                                    title="Re-procesar TODOS los documentos (incluyendo OCR)">
-                                    ⚡ Re-indexar TODO (OCR)
+                                    title="Re-procesar TODOS los documentos">
+                                    ⚡ Re-indexar TODO
                                 </button>
                             </div>
                             <div id="indexStatus"

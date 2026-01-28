@@ -115,7 +115,8 @@ class SystemController extends BaseController
                         $uploadsDir . $doc['tipo'] . '/' . $doc['ruta_archivo'],
                         "GLOB: " . ($searchPattern ?? 'N/A')
                     ];
-                    $errors[] = "#{$doc['id']}: Archivo no encontrado";
+                    $folderList = $existingFolders ? implode(', ', array_slice($existingFolders, 0, 10)) : 'Ninguna';
+                    $errors[] = "#{$doc['id']}: Archivo no encontrado. Carpetas en uploads/: [$folderList]";
 
                     $errorData = json_encode([
                         'error' => 'Archivo no encontrado',
