@@ -46,12 +46,12 @@ function search_by_code(PDO $db, string $searchTerm): array
             (SELECT GROUP_CONCAT(codigo, ',') FROM codigos WHERE documento_id = d.id) as all_codes
         FROM documentos d
         JOIN codigos c ON d.id = c.documento_id
-        WHERE UPPER(c.codigo) LIKE UPPER(?)
+        WHERE UPPER(c.codigo) = UPPER(?)
         GROUP BY d.id
         ORDER BY d.fecha DESC
     ");
 
-    $stmt->execute(['%' . $searchTerm . '%']);
+    $stmt->execute([$searchTerm]);
     $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     if (class_exists('CacheManager')) {
