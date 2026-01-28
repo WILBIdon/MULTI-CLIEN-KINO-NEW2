@@ -679,15 +679,16 @@ COD001
                 </tr>
                 <tr id="codes-row-${doc.id}" class="hidden bg-gray-50">
                     <td colspan="6" style="background-color: #f9fafb; padding: 1rem;">
-                        <div style="max-width: 100%; overflow-x: auto;">
-                            <strong>Códigos asociados (${doc.codes.length}):</strong>
-                            <div style="margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">
-                                ${doc.codes.map(c => `<span style="background: #e5e7eb; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem;">${c}</span>`).join('')}
-                            </div>
-                            <div style="margin-top: 0.75rem;">
+                        <div style="max-width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                                <strong>Códigos asociados (${doc.codes.length}):</strong>
                                 <a href="../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}" target="_blank" class="text-blue-600 hover:underline text-sm">
                                     📄 Ver PDF Original
                                 </a>
+                            </div>
+                            <!-- Vertical List -->
+                            <div style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; border: 1px solid #e5e7eb; background: white; padding: 0.5rem; border-radius: 4px;">
+                                ${doc.codes.map(c => `<div style="font-family: monospace; font-size: 0.9rem; padding: 2px 4px; border-bottom: 1px solid #f3f4f6;">${c}</div>`).join('')}
                             </div>
                         </div>
                     </td>
@@ -984,10 +985,13 @@ COD001
                             </div>
 
                             <!-- Hidden Codes List -->
+                            <!-- Hidden Codes List -->
                             <div id="codes-list-${doc.id}" class="hidden" style="margin-top: 1rem; background: rgba(0,0,0,0.02); padding: 0.5rem; border-radius: 4px;">
                                 <div style="font-size: 0.8rem; color: #666; margin-bottom: 0.25rem;">Códigos asociados:</div>
-                                <div style="font-family: monospace; font-size: 0.85rem; word-break: break-all; line-height: 1.4;">
-                                    ${doc.all_codes ? doc.all_codes.split(',').join('<br>') : 'No extra codes'}
+                                <div style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; background: white; border: 1px solid #eee; padding: 4px;">
+                                    ${doc.all_codes 
+                                        ? doc.all_codes.split(',').map(c => `<div style="font-family: monospace; font-size: 0.9rem; padding: 2px 4px; border-bottom: 1px solid #f9f9f9;">${c}</div>`).join('') 
+                                        : '<div style="padding:4px">No extra codes</div>'}
                                 </div>
                             </div>
                         </div>
