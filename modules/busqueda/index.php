@@ -738,8 +738,8 @@ COD001
                                 </a>
                             </div>
                             <!-- Vertical List -->
-                            <div style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 2px; border: 1px solid #e5e7eb; background: white; padding: 0.5rem; border-radius: 4px;">
-                                ${doc.codes.map(c => `<div style="font-family: monospace; font-size: 0.9rem; padding: 4px 8px; border-bottom: 1px solid #f3f4f6; width: 100%; display: block;">${c}</div>`).join('')}
+                            <div style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0; background: white; padding: 0.5rem; border: 1px solid #f0f0f0; border-radius: 4px;">
+                                ${doc.codes.map(c => `<div style="font-family: inherit; font-size: 0.9rem; padding: 2px 0; color: #374151; width: 100%; display: block;">${c}</div>`).join('')}
                             </div>
                         </div>
                     </td>
@@ -1039,9 +1039,9 @@ COD001
                             <!-- Hidden Codes List -->
                             <div id="codes-list-${doc.id}" class="hidden" style="margin-top: 1rem; background: rgba(0,0,0,0.02); padding: 0.5rem; border-radius: 4px;">
                                 <div style="font-size: 0.8rem; color: #666; margin-bottom: 0.25rem;">Códigos asociados:</div>
-                                <div style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 1px; background: white; border: 1px solid #eee; padding: 4px;">
+                                <div style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0; background: white; padding: 0.5rem; border: 1px solid #f0f0f0; border-radius: 4px;">
                                     ${doc.all_codes
-                            ? doc.all_codes.split(',').map(c => `<div style="font-family: monospace; font-size: 0.9rem; padding: 4px 8px; border-bottom: 1px solid #f9f9f9; width: 100%; display: block;">${c}</div>`).join('')
+                            ? doc.all_codes.split(',').map(c => `<div style="font-family: inherit; font-size: 0.9rem; padding: 2px 0; color: #374151; width: 100%; display: block;">${c}</div>`).join('')
                             : '<div style="padding:4px">No extra codes</div>'}
                                 </div>
                             </div>
