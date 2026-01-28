@@ -296,17 +296,23 @@ COD001
                                     <p class="text-muted" style="font-size: 0.75rem;">PDF, máximo 10MB</p>
                                     <input type="file" id="fileInput" name="file" accept=".pdf" style="display: none;">
                                 </div>
-                                <div id="currentFileContainer" class="hidden" style="background: #f3f4f6; padding: 1rem; border-radius: 8px; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between;">
+                                <div id="currentFileContainer" class="hidden"
+                                    style="background: #f3f4f6; padding: 1rem; border-radius: 8px; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between;">
                                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#ef4444">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 2H7a2 2 0 00-2 2v15a2 2 0 002 2z" />
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none"
+                                            viewBox="0 0 24 24" stroke="#ef4444">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 2H7a2 2 0 00-2 2v15a2 2 0 002 2z" />
                                         </svg>
                                         <div>
                                             <div style="font-weight: 600; font-size: 0.9rem;">Archivo Actual</div>
-                                            <a id="currentFileLink" href="#" target="_blank" style="font-size: 0.85rem; color: #2563eb; text-decoration: underline;">documento.pdf</a>
+                                            <a id="currentFileLink" href="#" target="_blank"
+                                                style="font-size: 0.85rem; color: #2563eb; text-decoration: underline;">documento.pdf</a>
                                         </div>
                                     </div>
-                                    <button type="button" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.25rem 0.75rem;" onclick="enableFileReplace()">
+                                    <button type="button" class="btn btn-secondary"
+                                        style="font-size: 0.8rem; padding: 0.25rem 0.75rem;"
+                                        onclick="enableFileReplace()">
                                         Cambiar PDF
                                     </button>
                                 </div>
@@ -609,7 +615,7 @@ COD001
 
             const formData = new FormData();
             formData.append('action', action);
-            if  (editId) formData.append('id', editId);
+            if (editId) formData.append('id', editId);
             formData.append('tipo', document.getElementById('docTipo').value);
             formData.append('numero', document.getElementById('docNumero').value);
             formData.append('fecha', document.getElementById('docFecha').value);
@@ -643,7 +649,7 @@ COD001
             document.getElementById('cancelEditBtn').classList.add('hidden');
             document.getElementById('uploadBtn').classList.remove('btn-success');
             document.getElementById('uploadBtn').classList.add('btn-primary');
-            
+
             // Reset file UI
             document.getElementById('uploadZone').classList.remove('hidden');
             document.getElementById('currentFileContainer').classList.add('hidden');
@@ -1026,8 +1032,8 @@ COD001
                                     🗑️Eliminar
                                 </button>
                                 
-                                <button type="button" class="btn btn-secondary" id="btn-codes-${doc.id}" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;" onclick="toggleCodes(${doc.id})">
-                                    Show Codes
+                                <button type="button" class="btn btn-secondary" id="btn-codes-${doc.id}" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;" onclick="toggleCodes(event, ${doc.id})">
+                                    Ver Códigos
                                 </button>
                             </div>
 
@@ -1057,7 +1063,8 @@ COD001
 
         // ============ Helpers for UI Actions ============
 
-        function toggleCodes(docId) {
+        function toggleCodes(e, docId) {
+            if (e) e.preventDefault();
             const list = document.getElementById(`codes-list-${docId}`);
             const btn = document.getElementById(`btn-codes-${docId}`);
 
@@ -1134,10 +1141,10 @@ COD001
 
             // Handle File Display
             if (doc.ruta_archivo) {
-                let pdfUrl = doc.ruta_archivo.includes('/') 
+                let pdfUrl = doc.ruta_archivo.includes('/')
                     ? `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`
                     : `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
-                
+
                 document.getElementById('uploadZone').classList.add('hidden');
                 document.getElementById('currentFileContainer').classList.remove('hidden');
                 document.getElementById('currentFileLink').href = pdfUrl;
