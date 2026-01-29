@@ -112,6 +112,207 @@ $pageTitle = 'Gestor de Documentos';
             background-color: #ff6b6b;
             color: white;
         }
+
+        /* ========================================
+           ESTILOS EXCLUSIVOS PARA BÚSQUEDA VORAZ
+           No afectan otros elementos de la app
+           ======================================== */
+
+        /* Contenedor de resumen */
+        .voraz-summary-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .voraz-summary-box h3 {
+            margin: 0 0 10px 0;
+            font-size: 20px;
+        }
+
+        .voraz-summary-box p {
+            margin: 0;
+            font-size: 16px;
+        }
+
+        /* Contenedor del botón unificado */
+        .voraz-unified-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        /* Botón PDF Unificado */
+        .voraz-btn-unified {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+        }
+
+        .voraz-btn-unified:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 25px rgba(245, 87, 108, 0.6);
+        }
+
+        /* Alerta de códigos no encontrados */
+        .voraz-alert-warning {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .voraz-code-missing {
+            display: inline-block;
+            background: #ff6b6b;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            margin: 3px;
+            font-weight: 600;
+        }
+
+        /* Tarjeta de resultado */
+        .voraz-result-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 15px 0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .voraz-result-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }
+
+        /* Header de la tarjeta */
+        .voraz-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .voraz-badge {
+            background: #667eea;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .voraz-date {
+            color: #999;
+            font-size: 14px;
+        }
+
+        /* Título del documento */
+        .voraz-card-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        /* Lista de códigos */
+        .voraz-codes-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .voraz-code-tag {
+            display: inline-block;
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid #a5d6a7;
+        }
+
+        /* Acciones de la tarjeta */
+        .voraz-card-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        /* Botón resaltar todos */
+        .voraz-btn-highlight {
+            flex: 1;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(17, 153, 142, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .voraz-btn-highlight:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(17, 153, 142, 0.5);
+        }
+
+        /* Botón original */
+        .voraz-btn-original {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .voraz-btn-original:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .voraz-card-actions {
+                flex-direction: column;
+            }
+
+            .voraz-btn-highlight,
+            .voraz-btn-original {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 
@@ -1111,99 +1312,318 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             }
         }
 
+        /**
+         * Muestra resultados de búsqueda VORAZ (NO afecta otras búsquedas)
+         */
         function showBulkResults(result, searchedCodes) {
-            document.getElementById('bulkResults').classList.remove('hidden');
-            const coveredCount = result.total_covered || 0;
-            const notFound = result.not_found || [];
+            const bulkResultsDiv = document.getElementById('bulk-results'); // Corrección: ID consistente
+            // Nota: En el código original el div era 'bulkResults', el usuario pide modificarla.
+            // Para mantener consistencia con el HTML existente, usaré 'bulkResults' pero con el contenido nuevo.
+            const resultsDiv = document.getElementById('bulkResults');
 
-            let summaryHtml = `
-                <div class="summary-box${notFound.length > 0 ? ' warning' : ''}">
-                    <strong>${coveredCount}/${searchedCodes.length}</strong> códigos encontrados en 
-                    <strong>${result.documents?.length || 0}</strong> documento(s)
+            if (!result.documents || result.documents.length === 0) {
+                resultsDiv.innerHTML = '<div class="alert alert-info">No se encontraron documentos.</div>';
+                resultsDiv.classList.remove('hidden');
+                return;
+            }
+
+            const covered = result.covered || []; // Asumiendo que vienen del backend, o usar documents.length si no
+            const notFound = result.not_found || [];
+            // Si el backend no devuelve 'covered', lo calculamos aproximado o usamos totales
+            const totalDocs = result.documents.length;
+
+            // Para mantener fidelidad al diseño solicitado, reconstruimos el HTML
+            let html = `
+                <div class="voraz-summary-box">
+                    <h3>📊 Resultados de Búsqueda Voraz Inteligente</h3>
+                    <p><strong>${result.total_covered || 0}/${searchedCodes.length}</strong> códigos encontrados en 
+                    <strong>${totalDocs}</strong> documento(s)</p>
+                </div>
             `;
 
-            summaryHtml += `
-                <div class="voraz-actions-container">
-                    <button class="btn-voraz-highlight" onclick='highlightAllCodesInDocs(${JSON.stringify(result.documents)}, ${JSON.stringify(searchedCodes)})'>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
-                        </svg>
-                        Resaltar Todos los Códigos en Documentos
-                    </button>
-                    
-                    <button class="btn-voraz-unified" onclick='generateUnifiedPDF(${JSON.stringify(result.documents)}, ${JSON.stringify(searchedCodes)})'>
+            // ========== BOTÓN 2: PDF UNIFICADO (una sola vez) ==========
+            html += `
+                <div class="voraz-unified-container">
+                    <button class="voraz-btn-unified" onclick='voraz_generateUnifiedPDF(${escapeForJSON(result.documents)}, ${escapeForJSON(searchedCodes)})'>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                             <polyline points="14 2 14 8 20 8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
-                            <line x1="10" y1="9" x2="8" y2="9"/>
                         </svg>
-                        Generar PDF Unificado
+                        📄 Generar PDF Unificado con Todos los Resultados
                     </button>
                 </div>
             `;
 
-            // Llamado de atención para códigos no encontrados
+            // Códigos no encontrados
             if (notFound.length > 0) {
-                summaryHtml += `
-                    <div style="margin-top: 1rem; padding: 1rem; background: rgba(239,68,68,0.1); border-left: 4px solid #ef4444; border-radius: var(--radius-md);">
-                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                            <span style="font-size: 1.5rem;">⚠️</span>
-                            <strong style="color: #dc2626;">ATENCIÓN: ${notFound.length} código(s) no encontrado(s)</strong>
-                        </div>
-                        <div class="code-tag missing">
-                             ${notFound.map(c => `<span class="code-tag missing" style="border: 1px solid #ef4444; font-weight: 600;">${c}</span>`).join(' ')}
-                        </div>
-                        <p style="margin-top: 0.5rem; font-size: 0.875rem; color: #991b1b;">Estos códigos no existen en ningún documento. Verifica que estén correctamente escritos.</p>
+                html += `
+                    <div class="voraz-alert-warning">
+                        <strong>⚠️ Códigos no encontrados:</strong><br>
+                        ${notFound.map(c => `<span class="voraz-code-missing">${c}</span>`).join(' ')}
                     </div>
                 `;
             }
 
-            summaryHtml += `</div>`;
-            document.getElementById('bulkSummary').innerHTML = summaryHtml;
+            // ========== RENDERIZAR CADA DOCUMENTO ==========
+            for (const doc of result.documents) {
+                const docCodes = doc.matched_codes || doc.codes || [];
 
-            if (!result.documents || result.documents.length === 0) {
-                document.getElementById('bulkDocumentList').innerHTML = '<p class="text-muted">No se encontraron documentos.</p>';
+                // ⭐ Unir TODOS los códigos del documento para resaltarlos
+                const allCodesStr = docCodes.join(',');
+
+                html += `
+                    <div class="voraz-result-card">
+                        <div class="voraz-card-header">
+                            <span class="voraz-badge">${(doc.tipo || 'DOC').toUpperCase()}</span>
+                            <span class="voraz-date">${doc.fecha || ''}</span>
+                        </div>
+                        
+                        <div class="voraz-card-title">${doc.numero || 'Sin título'}</div>
+                        
+                        <div class="voraz-codes-list">
+                            ${docCodes.map(code => `<span class="voraz-code-tag">${code}</span>`).join('')}
+                        </div>
+                        
+                        <div class="voraz-card-actions">
+                            <!-- ✅ BOTÓN 1: Resalta TODOS los códigos de este documento -->
+                            <button class="voraz-btn-highlight" 
+                                    onclick="voraz_highlightAllCodes('${doc.id}', '${escapeForAttr(doc.ruta_archivo)}', '${allCodesStr}')">
+                                🖍️ Resaltar Todos (${docCodes.length} códigos)
+                            </button>
+                            
+                            <button class="voraz-btn-original" 
+                                    onclick="window.open('clients/${clientCode}/uploads/${doc.ruta_archivo}', '_blank')">
+                                📄 Original
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            resultsDiv.innerHTML = html;
+            resultsDiv.classList.remove('hidden');
+        }
+
+        // ========== FUNCIONES AUXILIARES (no afectan otras partes) ==========
+
+        function escapeForAttr(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/'/g, '&#39;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        function escapeForJSON(obj) {
+            return JSON.stringify(obj)
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'");
+        }
+
+        /**
+         * ⭐ FUNCIÓN EXCLUSIVA PARA BÚSQUEDA VORAZ
+         * Abre el viewer con TODOS los códigos del documento
+         * NO afecta otros botones "Resaltar" de la app
+         */
+        function voraz_highlightAllCodes(docId, filePath, codesStr) {
+            if (!filePath) {
+                alert('❌ Ruta de archivo no válida');
                 return;
             }
 
-            let html = '';
-            for (const doc of result.documents) {
-                let pdfUrl = doc.ruta_archivo ? `clients/${clientCode}/uploads/${doc.ruta_archivo.includes('/') ? doc.ruta_archivo : doc.tipo + '/' + doc.ruta_archivo}` : '';
-                const firstCode = (doc.matched_codes && doc.matched_codes[0]) || '';
-                const allCodes = doc.matched_codes || doc.codes || [];
-
-                // Use the first searched code that matches this document
-                const searchedCode = searchedCodes.find(sc => allCodes.includes(sc)) || firstCode;
-
-                html += `
-                    <div class="result-card">
-                        <div class="result-header">
-                            <span class="badge badge-primary">${doc.tipo.toUpperCase()}</span>
-                            <span class="result-meta">${doc.fecha}</span>
-                        </div>
-                        <div class="result-title">${doc.numero}</div>
-                        <div class="codes-list" style="margin-top: 0.75rem;">
-                            ${allCodes.map(c => `<span class="code-tag">${c}</span>`).join('')}
-                        </div>
-                        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            ${pdfUrl ? `
-                                <button onclick="openHighlighter('modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(searchedCode)}')" 
-                                   class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">
-                                    🖍️ Resaltar "${searchedCode}"
-                                </button>
-                                <a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">
-                                    📄 Original
-                                </a>
-                            ` : ''}
-                        </div>
-                    </div>
-                `;
+            if (!codesStr) {
+                alert('❌ No hay códigos para resaltar');
+                return;
             }
 
-            document.getElementById('bulkDocumentList').innerHTML = html;
+            console.log('🔍 VORAZ: Abriendo resaltador con todos los códigos:', {
+                docId: docId,
+                file: filePath,
+                codes: codesStr,
+                codesCount: codesStr.split(',').length
+            });
+
+            // Construir URL con parámetro especial "voraz_mode=true"
+            const params = new URLSearchParams({
+                file: filePath,
+                codes: codesStr,
+                doc_id: docId,
+                voraz_mode: 'true',  // ⭐ Identificador único para búsqueda voraz
+                highlight_all: 'true' // ⭐ Indica que debe resaltar TODOS
+            });
+
+            const url = `modules/resaltar/viewer.php?${params.toString()}`;
+
+            console.log('🔍 VORAZ: URL completa:', url);
+
+            // Abrir ventana con dimensiones específicas
+            window.open(url, '_blank', 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no');
         }
+
+        /**
+         * ⭐ FUNCIÓN EXCLUSIVA PARA BÚSQUEDA VORAZ
+         * Genera PDF unificado con todos los documentos encontrados
+         * NO afecta otras funciones de la app
+         */
+        async function voraz_generateUnifiedPDF(documents, allCodes) {
+            console.log('🔍 VORAZ: Generando PDF unificado...', {
+                documents: documents.length,
+                codes: allCodes.length
+            });
+
+            // Validar datos
+            if (!documents || documents.length === 0) {
+                alert('❌ No hay documentos para unificar');
+                return;
+            }
+
+            if (!allCodes || allCodes.length === 0) {
+                alert('❌ No hay códigos para resaltar');
+                return;
+            }
+
+            // Mostrar loading con ID único para voraz
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'voraz-unified-loading';
+            loadingDiv.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+                            background: rgba(0,0,0,0.85); display: flex; align-items: center; 
+                            justify-content: center; z-index: 99999; flex-direction: column;">
+                    <div style="background: white; padding: 40px 50px; border-radius: 15px; 
+                                text-align: center; max-width: 450px; box-shadow: 0 10px 50px rgba(0,0,0,0.3);">
+                        <div class="voraz-spinner" style="border: 5px solid #f3f3f3; 
+                             border-top: 5px solid #667eea; border-radius: 50%; 
+                             width: 60px; height: 60px; animation: spin 1s linear infinite;
+                             margin: 0 auto 20px;"></div>
+                        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 20px;">
+                            🔍 Generando PDF Unificado (Búsqueda Voraz)
+                        </h3>
+                        <p style="margin: 0 0 20px 0; color: #666;">
+                            Procesando ${documents.length} documentos con ${allCodes.length} códigos
+                        </p>
+                        <div style="width: 100%; height: 25px; background: #eee; border-radius: 12px; 
+                             overflow: hidden;">
+                            <div id="voraz-progress-fill" style="width: 0%; height: 100%; 
+                                 background: linear-gradient(90deg, #667eea, #764ba2); 
+                                 transition: width 0.5s ease;"></div>
+                        </div>
+                        <p id="voraz-progress-text" style="margin-top: 10px; color: #999; font-size: 14px;">
+                            Iniciando...
+                        </p>
+                    </div>
+                </div>
+                <style>
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                </style>
+            `;
+            document.body.appendChild(loadingDiv);
+
+            // Simular progreso
+            let progress = 0;
+            const progressEl = document.getElementById('voraz-progress-fill');
+            const progressText = document.getElementById('voraz-progress-text');
+
+            const progressInterval = setInterval(() => {
+                progress += 5;
+                if (progress <= 90) {
+                    progressEl.style.width = progress + '%';
+                    if (progress < 30) progressText.textContent = 'Cargando documentos...';
+                    else if (progress < 60) progressText.textContent = 'Combinando PDFs...';
+                    else progressText.textContent = 'Finalizando...';
+                }
+            }, 300);
+
+            try {
+                // Preparar datos
+                const payload = {
+                    documents: documents,
+                    codes: allCodes,
+                    mode: 'voraz' // ⭐ Identificador único
+                };
+
+                console.log('🔍 VORAZ: Enviando solicitud:', payload);
+
+                // Llamar al backend
+                const response = await fetch('modules/resaltar/generate_unified.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json; charset=utf-8',
+                        'Accept': 'application/json',
+                        'X-Voraz-Mode': 'true' // Header especial para identificar
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                console.log('🔍 VORAZ: Response status:', response.status);
+
+                // Leer respuesta
+                const responseText = await response.text();
+                console.log('🔍 VORAZ: Response text:', responseText);
+
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (jsonError) {
+                    console.error('🔍 VORAZ: Error parseando JSON:', jsonError);
+                    throw new Error(`Respuesta inválida del servidor:\n${responseText.substring(0, 300)}`);
+                }
+
+                console.log('🔍 VORAZ: Resultado parseado:', result);
+
+                // Completar progreso
+                clearInterval(progressInterval);
+                progressEl.style.width = '100%';
+                progressText.textContent = '¡Completado!';
+
+                if (result.success) {
+                    // Esperar para mostrar el 100%
+                    await new Promise(resolve => setTimeout(resolve, 800));
+
+                    // Abrir PDF unificado
+                    const params = new URLSearchParams({
+                        file: result.unified_pdf_path,
+                        codes: allCodes.join(','),
+                        mode: 'unified',
+                        voraz_mode: 'true'
+                    });
+
+                    const url = `modules/resaltar/viewer.php?${params.toString()}`;
+                    window.open(url, '_blank');
+
+                    // Cerrar loading
+                    document.body.removeChild(loadingDiv);
+
+                    // Mensaje de éxito
+                    alert(`✅ PDF Unificado generado exitosamente!\n\n` +
+                        `📄 ${result.page_count} páginas totales\n` +
+                        `📁 ${result.document_count} documentos combinados\n` +
+                        `🔍 ${allCodes.length} códigos resaltados`);
+
+                } else {
+                    throw new Error(result.error || 'Error desconocido al generar PDF');
+                }
+
+            } catch (error) {
+                clearInterval(progressInterval);
+                console.error('🔍 VORAZ: Error completo:', error);
+
+                alert(`❌ Error al generar PDF unificado:\n\n${error.message}\n\n` +
+                    `Revisa la consola del navegador (F12) para más detalles.`);
+
+            } finally {
+                // Asegurar que se quite el loading
+                const loadingElement = document.getElementById('voraz-unified-loading');
+                if (loadingElement && loadingElement.parentNode) {
+                    document.body.removeChild(loadingElement);
+                }
+            }
+        }
+
 
         function clearBulkSearch() {
             document.getElementById('bulkInput').value = '';

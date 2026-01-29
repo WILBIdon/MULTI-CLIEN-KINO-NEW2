@@ -11,6 +11,13 @@ use setasign\Fpdi\Tcpdf\Fpdi;
 header('Content-Type: application/json');
 session_start();
 
+// ⭐ SOLO PROCESAR SI VIENE DE BÚSQUEDA VORAZ
+if (!isset($_SERVER['HTTP_X_VORAZ_MODE']) || $_SERVER['HTTP_X_VORAZ_MODE'] !== 'true') {
+    header('HTTP/1.1 403 Forbidden');
+    echo json_encode(['success' => false, 'error' => 'Acceso no autorizado']);
+    exit;
+}
+
 try {
     if (!isset($_SESSION['client_code'])) {
         throw new Exception('No autenticado');
