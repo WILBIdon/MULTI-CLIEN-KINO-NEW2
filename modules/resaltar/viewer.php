@@ -27,33 +27,50 @@ $db = open_client_db($clientCode);
 // Get parameters
 $documentId = isset($_GET['doc']) ? (int) $_GET['doc'] : 0;
 $searchTerm = isset($_GET['term']) ? trim($_GET['term']) : '';
+$fileParam = isset($_GET['file']) ? $_GET['file'] : '';
+$mode = isset($_GET['mode']) ? $_GET['mode'] : 'single'; // 'single', 'voraz_multi', 'unified'
+$totalDocs = isset($_GET['total']) ? (int) $_GET['total'] : 1;
+$downloadUrl = isset($_GET['download']) ? $_GET['download'] : '';
 
-if ($documentId <= 0) {
-    die('ID de documento inválido');
-}
-
-// Get document info
-$stmt = $db->prepare('SELECT * FROM documentos WHERE id = ?');
-$stmt->execute([$documentId]);
-$document = $stmt->fetch(PDO::FETCH_ASSOC);
-
-if (!$document) {
-    die('Documento no encontrado');
+if ($documentId <= 0 && empty($fileParam)) {
+    die('ID de documento inválido o archivo no especificado');
 }
 
 $uploadsDir = CLIENTS_DIR . "/{$clientCode}/uploads/";
-$rutaArchivo = $document['ruta_archivo'];
-
-// Build the PDF path - try multiple possible locations
 $pdfPath = null;
-// Use centralized robust path resolution
-$pdfPath = resolve_pdf_path($clientCode, $document);
+$document = [];
 
-if (!$pdfPath) {
+if ($documentId > 0) {
+    // Get document info from DB
+    $stmt = $db->prepare('SELECT * FROM documentos WHERE id = ?');
+    $stmt->execute([$documentId]);
+    $document = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$document) {
+        die('Documento no encontrado');
+    }
+
+    // Use centralized robust path resolution
+    $pdfPath = resolve_pdf_path($clientCode, $document);
+} else {
+    // Use file param directly (Unified or Manual Path)
+    $pdfPath = $uploadsDir . $fileParam;
+
+    // Mock document info
+    $document = [
+        'id' => 0,
+        'tipo' => ($mode === 'unified' ? 'Resumen' : 'PDF'),
+        'numero' => ($mode === 'unified' ? 'PDF Unificado' : basename($fileParam)),
+        'fecha' => date('Y-m-d'),
+        'ruta_archivo' => $fileParam
+    ];
+}
+
+if (!$pdfPath || !file_exists($pdfPath)) {
     // Debug info if not found
     $available = get_available_folders($clientCode);
     $foldersStr = implode(', ', $available);
-    die("Archivo PDF no encontrado. <br>ID Documento: {$document['id']} <br>Tipo: {$document['tipo']} <br>Ruta BD: {$document['ruta_archivo']} <br>Carpetas disponibles en servidor: [$foldersStr]");
+    die("Archivo PDF no encontrado. <br>Ruta intentada: " . htmlspecialchars($pdfPath ?? 'NULL') . "<br>Carpetas disponibles: [$foldersStr]");
 }
 
 // For sidebar
@@ -344,6 +361,74 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             font-size: 0.875rem;
             margin-bottom: 0.5rem;
         }
+
+        /* Voraz Navigation & Control Styles */
+        .voraz-navigation {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #667eea;
+            margin-bottom: 10px;
+            border-radius: var(--radius-md);
+        }
+
+        .nav-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .nav-btn:hover {
+            background: #764ba2;
+            transform: scale(1.05);
+        }
+
+        .nav-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        #doc-counter {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .unified-download {
+            text-align: center;
+            padding: 15px;
+            background: rgba(240, 147, 251, 0.1);
+            border: 1px solid #f093fb;
+            border-radius: var(--radius-md);
+            margin-bottom: 1rem;
+        }
+
+        .btn-download-unified {
+            padding: 12px 30px;
+            background: white;
+            color: #f5576c;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            display: inline-block;
+            transition: all 0.3s;
+            border: 1px solid #f5576c;
+        }
+
+        .btn-download-unified:hover {
+            background: #f5576c;
+            color: white;
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
     </style>
 </head>
 
@@ -358,6 +443,26 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 <div class="viewer-container">
                     <!-- Sidebar Controls -->
                     <div class="viewer-sidebar">
+                        <?php if ($mode === 'voraz_multi'): ?>
+                            <div class="voraz-navigation">
+                                <button onclick="navigateVorazDoc(-1)" id="btn-prev-doc" class="nav-btn">
+                                    ◀
+                                </button>
+                                <span id="doc-counter"><span id="current-doc">1</span>/<?= $totalDocs ?></span>
+                                <button onclick="navigateVorazDoc(1)" id="btn-next-doc" class="nav-btn">
+                                    ▶
+                                </button>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($mode === 'unified' && $downloadUrl): ?>
+                            <div class="unified-download">
+                                <a href="<?= htmlspecialchars($downloadUrl) ?>" download class="btn-download-unified">
+                                    📥 Descargar Unificado
+                                </a>
+                            </div>
+                        <?php endif; ?>
+
                         <h3>📄 Documento</h3>
 
                         <div class="doc-info">
@@ -458,6 +563,46 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
     <script>
         // Initialize PDF.js
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // NEW: Voraz Navigation Logic
+        const viewerMode = '<?= $mode ?>';
+        let vorazData = null;
+        let currentDocIndex = 0;
+
+        // Cargar datos de navegación si es modo voraz
+        if (viewerMode === 'voraz_multi') {
+            const stored = sessionStorage.getItem('voraz_viewer_data');
+            if (stored) {
+                vorazData = JSON.parse(stored);
+                currentDocIndex = vorazData.currentIndex || 0;
+
+                // Update UI counter
+                const currentDocSpan = document.getElementById('current-doc');
+                if (currentDocSpan) currentDocSpan.textContent = currentDocIndex + 1;
+            }
+        }
+
+        // Función para navegar entre documentos
+        function navigateVorazDoc(direction) {
+            if (!vorazData) return;
+
+            const newIndex = currentDocIndex + direction;
+            if (newIndex < 0 || newIndex >= vorazData.documents.length) return;
+
+            currentDocIndex = newIndex;
+            vorazData.currentIndex = currentDocIndex;
+            sessionStorage.setItem('voraz_viewer_data', JSON.stringify(vorazData));
+
+            // Recargar con nuevo documento
+            const doc = vorazData.documents[currentDocIndex];
+            const params = new URLSearchParams(window.location.search);
+
+            // Update params
+            if (doc.id) params.set('doc', doc.id);
+            if (doc.ruta_archivo) params.set('file', doc.ruta_archivo);
+
+            window.location.search = params.toString();
+        }
 
         const pdfUrl = '<?= addslashes($pdfUrl) ?>';
         const searchTerm = '<?= addslashes($searchTerm) ?>';

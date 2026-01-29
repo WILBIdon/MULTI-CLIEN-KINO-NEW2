@@ -40,6 +40,79 @@ $pageTitle = 'Gestor de Documentos';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestor de Documentos - KINO TRACE</title>
     <link rel="stylesheet" href="assets/css/styles.css">
+    <style>
+        /* Contenedor de acciones voraz */
+        .voraz-actions-container {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            padding: 15px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Botón: Resaltar Todos */
+        .btn-voraz-highlight {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 15px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-voraz-highlight:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        /* Botón: PDF Unificado */
+        .btn-voraz-unified {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 15px 25px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+        }
+
+        .btn-voraz-unified:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(245, 87, 108, 0.6);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .voraz-actions-container {
+                flex-direction: column;
+            }
+        }
+
+        /* Tag para códigos faltantes */
+        .code-tag.missing {
+            background-color: #ff6b6b;
+            color: white;
+        }
+    </style>
 </head>
 
 
@@ -1049,6 +1122,28 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                     <strong>${result.documents?.length || 0}</strong> documento(s)
             `;
 
+            summaryHtml += `
+                <div class="voraz-actions-container">
+                    <button class="btn-voraz-highlight" onclick='highlightAllCodesInDocs(${JSON.stringify(result.documents)}, ${JSON.stringify(searchedCodes)})'>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                        </svg>
+                        Resaltar Todos los Códigos en Documentos
+                    </button>
+                    
+                    <button class="btn-voraz-unified" onclick='generateUnifiedPDF(${JSON.stringify(result.documents)}, ${JSON.stringify(searchedCodes)})'>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <line x1="10" y1="9" x2="8" y2="9"/>
+                        </svg>
+                        Generar PDF Unificado
+                    </button>
+                </div>
+            `;
+
             // Llamado de atención para códigos no encontrados
             if (notFound.length > 0) {
                 summaryHtml += `
@@ -1057,8 +1152,8 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                             <span style="font-size: 1.5rem;">⚠️</span>
                             <strong style="color: #dc2626;">ATENCIÓN: ${notFound.length} código(s) no encontrado(s)</strong>
                         </div>
-                        <div class="codes-list">
-                            ${notFound.map(c => `<span class="code-tag" style="background: rgba(239,68,68,0.15); color: #dc2626; border: 1px solid #ef4444; font-weight: 600;">${c}</span>`).join('')}
+                        <div class="code-tag missing">
+                             ${notFound.map(c => `<span class="code-tag missing" style="border: 1px solid #ef4444; font-weight: 600;">${c}</span>`).join(' ')}
                         </div>
                         <p style="margin-top: 0.5rem; font-size: 0.875rem; color: #991b1b;">Estos códigos no existen en ningún documento. Verifica que estén correctamente escritos.</p>
                     </div>
@@ -1128,6 +1223,122 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             setTimeout(() => {
                 modal.classList.add('hidden');
             }, 3000);
+        }
+
+        /**
+         * Abre el viewer con navegación entre múltiples documentos
+         * Resalta TODOS los códigos buscados en cada documento
+         */
+        function highlightAllCodesInDocs(documents, allCodes) {
+            // Crear estructura de datos para el viewer
+            const viewerData = {
+                documents: documents.map(d => ({
+                    ruta: d.ruta_archivo, // Usar ruta_archivo como espera el viewer
+                    ...d
+                })),
+                searchCodes: allCodes,
+                currentIndex: 0
+            };
+
+            // Guardar en sessionStorage para que el viewer los reciba
+            sessionStorage.setItem('voraz_viewer_data', JSON.stringify(viewerData));
+
+            // Abrir el viewer especial para búsqueda voraz
+            const firstDoc = documents[0];
+            const queryParams = new URLSearchParams({
+                // El viewer espera 'doc' (ID) o 'file' (ruta). Usaremos doc ID si es posible para mantener consistencia,
+                // pero la logica nueva del viewer usa 'file' para los siguientes. 
+                // Usaremos la logica existente para el primero.
+                doc: firstDoc.id,
+                codes: allCodes.join(','),
+                mode: 'voraz_multi',
+                total: documents.length
+            });
+
+            openHighlighter(`modules/resaltar/viewer.php?${queryParams.toString()}`);
+        }
+
+        /**
+         * Genera un PDF unificado combinando todos los documentos
+         * y resalta todos los códigos buscados
+         */
+        async function generateUnifiedPDF(documents, allCodes) {
+            // Mostrar loading
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'unified-loading';
+            loadingDiv.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+                            background: rgba(0,0,0,0.8); display: flex; align-items: center; 
+                            justify-content: center; z-index: 10000;">
+                    <div style="background: white; padding: 30px; border-radius: 12px; text-align: center;">
+                        <div class="spinner"></div>
+                        <h3>Generando PDF Unificado...</h3>
+                        <p>Procesando ${documents.length} documentos</p>
+                        <div id="progress-bar" style="width: 300px; height: 20px; background: #eee; 
+                             border-radius: 10px; overflow: hidden; margin-top: 15px;">
+                            <div id="progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); 
+                                 transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(loadingDiv);
+
+            // Simular progreso
+            const progressFill = loadingDiv.querySelector('#progress-fill');
+            let progress = 10;
+            progressFill.style.width = '10%';
+            const interval = setInterval(() => {
+                progress += 5;
+                if (progress > 90) progress = 90;
+                progressFill.style.width = progress + '%';
+            }, 500);
+
+            try {
+                // Llamar al backend para generar el PDF unificado
+                const response = await fetch('modules/resaltar/generate_unified.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        documents: documents,
+                        codes: allCodes
+                    })
+                });
+
+                const result = await response.json();
+                clearInterval(interval);
+                progressFill.style.width = '100%';
+
+                if (result.success) {
+                    // Abrir el PDF unificado en el viewer
+                    const queryParams = new URLSearchParams({
+                        file: result.unified_pdf_path, // Path relative to uploads expected by logic? 
+                        // Wait, viewer expects 'doc' ID usually. If passing 'file', we need to check viewer logic.
+                        // I will add file param support to viewer.php as requested.
+                        file: result.unified_pdf_path,
+                        codes: allCodes.join(','),
+                        mode: 'unified',
+                        download: result.download_url
+                    });
+
+                    // Small delay to allow UI update
+                    setTimeout(() => {
+                        openHighlighter(`modules/resaltar/viewer.php?${queryParams.toString()}`);
+                        document.body.removeChild(loadingDiv);
+                    }, 500);
+
+                } else {
+                    throw new Error(result.error || 'Error desconocido');
+                }
+
+            } catch (error) {
+                clearInterval(interval);
+                alert('Error al generar PDF unificado: ' + error.message);
+                console.error(error);
+                document.body.removeChild(loadingDiv);
+            }
         }
     </script>
 
