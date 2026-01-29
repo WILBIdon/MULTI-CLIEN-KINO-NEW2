@@ -212,13 +212,14 @@ $pageTitle = 'Gestor de Documentos';
                     <!-- Tab: Buscar -->
                     <div class="tab-content active" id="tab-buscar">
                         <h3 style="margin-bottom: 1rem;">Búsqueda Inteligente</h3>
-                        <p class="text-muted mb-4">Pega aquí tus códigos o bloque de texto. El sistema encontrará los
-                            documentos que los contienen.</p>
+                        <p class="text-muted mb-4">Pega aquí tus códigos o un bloque de texto (ej: desde Excel). Solo se
+                            usará la <strong>primera columna</strong> de cada línea para buscar.</p>
 
                         <form id="searchForm">
                             <div class="form-group">
                                 <textarea class="form-textarea" id="codesInput" rows="6" placeholder="ABC123
-XYZ789
+ABC123    descripción    otro dato
+XYZ789    texto adicional
 COD001
 ..."></textarea>
                             </div>

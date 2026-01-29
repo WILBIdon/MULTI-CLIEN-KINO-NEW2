@@ -8,7 +8,25 @@ class SearchController extends BaseController
 {
     public function search($post)
     {
-        $codes = array_filter(array_map('trim', explode("\n", $post['codes'] ?? $_GET['codes'] ?? '')));
+        $rawInput = $post['codes'] ?? $_GET['codes'] ?? '';
+        $lines = explode("\n", $rawInput);
+
+        // Extract only the first column (first token before whitespace) from each line
+        // This allows pasting blocks of text where codes are in the first column
+        $codes = [];
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '')
+                continue;
+
+            // Split by whitespace (spaces or tabs) and take only the first token
+            $parts = preg_split('/[\s\t]+/', $line, 2);
+            $firstColumn = trim($parts[0] ?? '');
+
+            if ($firstColumn !== '') {
+                $codes[] = $firstColumn;
+            }
+        }
 
         if (empty($codes)) {
             $this->jsonExit(['error' => 'No se proporcionaron códigos']);
