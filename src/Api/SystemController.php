@@ -19,8 +19,9 @@ class SystemController extends BaseController
             set_time_limit(300);
             session_write_close(); // Prevent session locking during long process
 
-            // Silence fontconfig warnings at environment level
-            putenv('FONTCONFIG_PATH=/tmp');
+            // Silence fontconfig warnings - ensure valid temp dir
+            $tmpDir = sys_get_temp_dir();
+            putenv("FONTCONFIG_PATH=$tmpDir");
 
             $forceAll = isset($request['force']);
             // Increased batch size to 200 for faster processing of large workloads
