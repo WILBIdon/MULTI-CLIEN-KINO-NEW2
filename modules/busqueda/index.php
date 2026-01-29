@@ -517,18 +517,23 @@ COD001
                 </div>
             `;
 
-            // Button "Resaltar Todos" (Voracious)
-            if (result.documents && result.documents.length > 0) {
-                summaryHtml += `
-                    <div style="margin-top: 1rem;">
-                        <button onclick="highlightAllVoracious()" class="btn btn-warning" style="width: 100%; font-weight: bold; background-color: #f59e0b; border: none; color: white;">
-                            🚀 Resaltar Todos (Búsqueda Voraz)
-                        </button>
-                    </div>
-                `;
-            }
-
             document.getElementById('searchSummary').innerHTML = summaryHtml;
+
+            // Button "Resaltar Todos" (Voracious) - Append separately to ensure visibility
+            if (result.documents && result.documents.length > 0) {
+                const btnContainer = document.createElement('div');
+                btnContainer.style.marginTop = '1rem';
+                btnContainer.innerHTML = `
+                    <button onclick="highlightAllVoracious()" class="btn btn-warning" style="width: 100%; font-weight: bold; background-color: #f59e0b; border: none; color: white; padding: 0.75rem; font-size: 1.1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        🚀 Resaltar Todos (Búsqueda Voraz)
+                    </button>
+                    <small style="display: block; text-align: center; margin-top: 0.5rem; color: #6b7280;">Genera un único PDF con solo las páginas relevantes</small>
+                `;
+                document.getElementById('searchSummary').appendChild(btnContainer);
+                console.log('Botón Voraz agregado');
+            } else {
+                console.log('No hay documentos para botón Voraz');
+            }
 
             if (!result.documents || result.documents.length === 0) {
                 document.getElementById('documentList').innerHTML = '<p class="text-muted">No se encontraron documentos.</p>';
