@@ -484,6 +484,7 @@ COD001
                 const result = await response.json();
 
                 document.getElementById('searchLoading').classList.add('hidden');
+                currentSearchResults = result.documents; // Save results
                 showSearchResults(result, codes); // Pass original search codes
             } catch (error) {
                 document.getElementById('searchLoading').classList.add('hidden');
@@ -515,6 +516,18 @@ COD001
                     ` : ''}
                 </div>
             `;
+
+            // Button "Resaltar Todos" (Voracious)
+            if (result.documents && result.documents.length > 0) {
+                summaryHtml += `
+                    <div style="margin-top: 1rem;">
+                        <button onclick="highlightAllVoracious()" class="btn btn-warning" style="width: 100%; font-weight: bold; background-color: #f59e0b; border: none; color: white;">
+                            🚀 Resaltar Todos (Búsqueda Voraz)
+                        </button>
+                    </div>
+                `;
+            }
+
             document.getElementById('searchSummary').innerHTML = summaryHtml;
 
             if (!result.documents || result.documents.length === 0) {
@@ -1172,30 +1185,58 @@ COD001
             // Scroll to top
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
+        // ============ Voracious Search Highlight ============
+        function highlightAllVoracious() {
+            if (!currentSearchResults || currentSearchResults.length === 0) return;
+
+            // Get all document IDs found
+            const ids = currentSearchResults.map(d => d.id).join(',');
+
+            // Get all search terms from the input
+            const codesText = document.getElementById('codesInput').value.trim();
+            const codes = codesText.split('\n').map(c => c.trim()).filter(c => c.length > 0);
+
+            if (codes.length === 0) return;
+
+            // Encode terms for URL
+            const termsParam = encodeURIComponent(codes.join(','));
+
+            // Open merge/highlight script (re-implementing simple version)
+            // We'll call it merge.php again as it's the best name, but implementing it safer this time.
+            const url = `merge.php?ids=${ids}&terms=${termsParam}#search=${encodeURIComponent(codes[0])}`;
+
+            // Show modal and open
+            openHighlighter(url);
+        }
+
         // ============ Highlighter Modal Function ============
         function openHighlighter(url) {
             // Show modal
             const modal = document.getElementById('highlighterModal');
             modal.classList.remove('hidden');
-            
+
             // Open in new tab
             window.open(url, '_blank');
-            
+
             // Auto-hide modal after 3 seconds
             setTimeout(() => {
                 modal.classList.add('hidden');
             }, 3000);
         }
     </script>
-    
+
     <!-- Highlighter Loading Modal -->
-    <div id="highlighterModal" class="hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;">
-        <div style="background: white; padding: 2rem 3rem; border-radius: 12px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+    <div id="highlighterModal" class="hidden"
+        style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+        <div
+            style="background: white; padding: 2rem 3rem; border-radius: 12px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
             <div style="font-size: 3rem; margin-bottom: 1rem;">🖍️</div>
             <h3 style="margin: 0 0 0.5rem 0; color: #333;">Estamos resaltando...</h3>
             <p style="margin: 0; color: #666;">¡Espera un momento!</p>
             <div style="margin-top: 1rem;">
-                <div class="spinner" style="border: 3px solid #f3f3f3; border-top: 3px solid #038802; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+                <div class="spinner"
+                    style="border: 3px solid #f3f3f3; border-top: 3px solid #038802; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto;">
+                </div>
             </div>
         </div>
     </div>
