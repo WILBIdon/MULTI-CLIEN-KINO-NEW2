@@ -246,12 +246,12 @@ function extract_with_ocr(string $pdfPath): string
     $text = '';
 
     try {
-        // 1. Convertir PDF a imágenes (primera página o primeras 2 para velocidad)
-        // pdftoppm -png -f 1 -l 2 archivo.pdf prefix
+        // 1. Convertir PDF a imágenes (TODAS las páginas para extracción completa)
         $escapedPdf = escapeshellarg($pdfPath);
         $escapedPrefix = escapeshellarg($tempDir . '/page');
 
-        $cmdConvert = "$pdftoppmPath -png -r 150 -f 1 -l 2 $escapedPdf $escapedPrefix";
+        // Sin límite de páginas para extraer de TODO el documento
+        $cmdConvert = "$pdftoppmPath -png -r 150 $escapedPdf $escapedPrefix";
         exec($cmdConvert);
 
         // 2. Procesar cada imagen con Tesseract
@@ -351,7 +351,7 @@ function extract_codes_with_pattern(
     if ($prefix === '') {
         // Si no hay prefijo, buscar secuencias alfanuméricas largas
         // Típicos códigos de importación: números largos o combinaciones
-        $pattern = '/\b([A-Z0-9]{' . $minLength . ',' . $maxLength . '})\b/i';
+        $pattern = '/\b([A-Z0-9][A-Z0-9\-\.]{' . ($minLength - 1) . ',' . ($maxLength - 1) . '})\b/i';
     } else {
         // Con prefijo: buscar "PREFIJO...TERMINADOR"
         $escapedPrefix = preg_quote($prefix, '/');
@@ -363,15 +363,90 @@ function extract_codes_with_pattern(
 
     if (!empty($matches[1])) {
         foreach ($matches[1] as $code) {
-            $code = trim($code);
+            $cleanedCode = clean_extracted_code($code);
             // Filtrar códigos que sean solo números muy cortos o muy largos
-            if (strlen($code) >= $minLength && strlen($code) <= $maxLength) {
-                $codes[] = $code;
+            if (strlen($cleanedCode) >= $minLength && strlen($cleanedCode) <= $maxLength) {
+                // Validar que no sea solo puntos, guiones o caracteres inválidos
+                if (validate_code($cleanedCode)) {
+                    $codes[] = $cleanedCode;
+                }
             }
         }
     }
 
-    return array_values(array_unique($codes));
+    // Eliminar duplicados de forma robusta (case-insensitive pero preservando original)
+    $uniqueCodes = [];
+    $seenLower = [];
+    foreach ($codes as $code) {
+        $lowerCode = strtolower($code);
+        if (!in_array($lowerCode, $seenLower)) {
+            $uniqueCodes[] = $code;
+            $seenLower[] = $lowerCode;
+        }
+    }
+
+    return array_values($uniqueCodes);
+}
+
+/**
+ * Limpia un código extraído: elimina puntos finales, espacios extra, etc.
+ */
+function clean_extracted_code(string $code): string
+{
+    // Eliminar espacios al inicio y final
+    $code = trim($code);
+
+    // Eliminar puntos al final (puede haber varios)
+    $code = rtrim($code, '.');
+
+    // Eliminar comas al final
+    $code = rtrim($code, ',');
+
+    // Eliminar guiones al final (si quedaron solos)
+    $code = rtrim($code, '-');
+
+    // Eliminar espacios internos extra (convertir múltiples espacios a uno)
+    $code = preg_replace('/\s+/', ' ', $code);
+
+    // Si el código tiene espacios internos, podría ser erróneo - eliminar espacios
+    // (códigos normalmente no tienen espacios)
+    $code = str_replace(' ', '', $code);
+
+    // Correcciones comunes de OCR (letras/números confundidos)
+    // Solo aplicar si el contexto lo sugiere (alfanumérico mezclado)
+    // O (letra O mayúscula) confundida con 0 (cero) - NO corregir automáticamente
+    // Esto debe manejarse con cuidado para no alterar códigos válidos
+
+    return $code;
+}
+
+/**
+ * Valida que un código sea válido (no solo caracteres especiales)
+ */
+function validate_code(string $code): bool
+{
+    // Debe contener al menos un caracter alfanumérico
+    if (!preg_match('/[A-Z0-9]/i', $code)) {
+        return false;
+    }
+
+    // No puede ser solo números de 1-3 dígitos (muy genérico)
+    if (preg_match('/^\d{1,3}$/', $code)) {
+        return false;
+    }
+
+    // No puede ser palabras comunes
+    $commonWords = ['de', 'la', 'el', 'en', 'que', 'del', 'los', 'las', 'por', 'con', 'una', 'para'];
+    if (in_array(strtolower($code), $commonWords)) {
+        return false;
+    }
+
+    // No puede ser solo puntos, guiones o espacios
+    if (preg_match('/^[\-\.\s]+$/', $code)) {
+        return false;
+    }
+
+    return true;
 }
 
 /**
