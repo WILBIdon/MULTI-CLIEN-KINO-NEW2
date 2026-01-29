@@ -23,8 +23,8 @@ class SystemController extends BaseController
             putenv('FONTCONFIG_PATH=/tmp');
 
             $forceAll = isset($request['force']);
-            // Increased batch size to 120 for single-shot processing of typical workloads
-            $batchSize = min(150, max(1, (int) ($request['batch'] ?? 120)));
+            // Increased batch size to 200 for faster processing of large workloads
+            $batchSize = min(200, max(1, (int) ($request['batch'] ?? 120)));
             $offset = (int) ($request['offset'] ?? 0);
 
             error_log("Reindex started: forceAll=" . ($forceAll ? 'true' : 'false') . ", batchSize=$batchSize, offset=$offset");
