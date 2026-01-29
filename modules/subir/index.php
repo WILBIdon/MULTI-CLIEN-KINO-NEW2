@@ -10,6 +10,10 @@ require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../helpers/tenant.php';
 require_once __DIR__ . '/../../helpers/pdf_extractor.php';
 require_once __DIR__ . '/../../helpers/gemini_ai.php';
+require_once __DIR__ . '/../../helpers/csrf_protection.php';
+
+// Generar token CSRF para este módulo
+$csrfToken = CsrfProtection::getToken();
 
 // Verificar autenticación
 if (!isset($_SESSION['client_code'])) {
@@ -103,6 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Subir Documento - KINO TRACE</title>
+    <meta name="csrf-token" content="<?= htmlspecialchars($csrfToken) ?>">
     <link rel="stylesheet" href="../../assets/css/styles.css">
     <style>
         * {
@@ -515,6 +520,7 @@ También puedes escribirlos manualmente (uno por línea)"></textarea>
 
     <script>
         const apiUrl = '../../api.php';
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const codesInput = document.getElementById('codesInput');
@@ -573,7 +579,13 @@ También puedes escribirlos manualmente (uno por línea)"></textarea>
                 formData.append('min_length', document.getElementById('minLength').value);
                 formData.append('max_length', document.getElementById('maxLength').value);
 
-                const response = await fetch(apiUrl, { method: 'POST', body: formData });
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRF-Token': csrfToken
+                    }
+                });
                 const result = await response.json();
 
                 loading.style.display = 'none';
@@ -616,7 +628,13 @@ También puedes escribirlos manualmente (uno por línea)"></textarea>
                 formData1.append('action', 'extract_codes');
                 formData1.append('file', fileInput.files[0]);
 
-                const response1 = await fetch(apiUrl, { method: 'POST', body: formData1 });
+                const response1 = await fetch(apiUrl, {
+                    method: 'POST',
+                    body: formData1,
+                    headers: {
+                        'X-CSRF-Token': csrfToken
+                    }
+                });
                 const result1 = await response1.json();
 
                 if (!result1.text) {
@@ -633,7 +651,13 @@ También puedes escribirlos manualmente (uno por línea)"></textarea>
                 formData2.append('text', result1.text);
                 formData2.append('document_type', document.getElementById('tipoDoc').value);
 
-                const response2 = await fetch(apiUrl, { method: 'POST', body: formData2 });
+                const response2 = await fetch(apiUrl, {
+                    method: 'POST',
+                    body: formData2,
+                    headers: {
+                        'X-CSRF-Token': csrfToken
+                    }
+                });
                 const result2 = await response2.json();
 
                 loading.style.display = 'none';
