@@ -343,7 +343,7 @@ function extract_codes_with_pattern(
     string $text,
     string $prefix = '',
     string $terminator = '/',
-    int $minLength = 4,
+    int $minLength = 2,
     int $maxLength = 50
 ): array {
     $codes = [];
@@ -413,9 +413,22 @@ function clean_extracted_code(string $code): string
     $code = str_replace(' ', '', $code);
 
     // Correcciones comunes de OCR (letras/números confundidos)
-    // Solo aplicar si el contexto lo sugiere (alfanumérico mezclado)
-    // O (letra O mayúscula) confundida con 0 (cero) - NO corregir automáticamente
-    // Esto debe manejarse con cuidado para no alterar códigos válidos
+    // El usuario reportó específicamente: G confundida con 6, H con M.
+
+    // Si parece un número pero tiene una G, cambiar a 6.
+    // Ej: 123G45 -> 123645
+    // Solo si la mayoría son números y no es una palabra válida.
+    if (preg_match('/^\d*[Gg]\d*$/', $code) && strlen($code) > 2) {
+        $code = str_replace(['G', 'g'], '6', $code);
+    }
+
+    // Si parece un número pero tiene H/M (casos específicos reportados)
+    // Esto es más delicado, aplicamos si el contexto parece numérico
+    // H -> M (o viceversa según reporte, "H con M")
+    // Asumiremos corrección hacia números si aplica, pero H y M son letras.
+    // Si el usuario dice "H con la M", puede ser visual. 
+    // Como no son números, solo normalizamos si hay patrón claro.
+    // De momento dejaremos la corrección G->6 que es la más clara de OCR numérico.
 
     return $code;
 }
@@ -540,6 +553,7 @@ function prepare_for_ai_extraction(string $text, string $documentType = 'documen
             'provider' => 'Proveedor o emisor',
             'total' => 'Valor total si aplica',
             'items' => 'Lista de items con cantidad y descripción'
-        ]
+        ],
+        'instructions' => 'IMPORTANTE: Corrige errores comunes de OCR en los códigos. Si un código parece numérico pero tiene una "G", cámbiala por "6". Si ves confusión entre "H" y "M", usa el contexto para decidir cuál es correcta. Los códigos suelen tener al menos 2 caracteres. Ignora puntos o basura al final de los códigos.'
     ];
 }

@@ -140,6 +140,13 @@ Responde SOLO con un JSON válido con el siguiente formato:
     "notas": "observaciones importantes"
 }
 
+INSTRUCCIONES DE CORRECCIÓN OCR:
+- El documento proviene de una extracción OCR y puede tener errores.
+- Específicamente, corrige la confusión entre la letra "G" y el número "6" en códigos numéricos.
+- Corrige la confusión visual entre "H" y "M".
+- Elimina puntos, comas o guiones sueltos al final de los valores.
+- Los códigos válidos tienen mínimo 2 caracteres. Ignora basura de 1 caracter.
+
 Si un campo no se encuentra, usar null.
 
 TEXTO DEL DOCUMENTO:
