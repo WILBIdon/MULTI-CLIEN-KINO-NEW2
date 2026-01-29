@@ -2,18 +2,16 @@
 /**
  * Print-Optimized PDF Viewer with Highlighting
  * 
- * This viewer:
- * - Receives a document_id and search_term
- * - Extracts text from the PDF
- * - Identifies pages containing the search term
- * - Renders only those pages with highlighted text
- * - Provides print-optimized CSS
+ * Optimized Version:
+ * - NO server-side extraction (too slow on Windows without pdftotext).
+ * - Client-side ONLY highlighting.
+ * - Lazy Loading for pages.
  */
 
 session_start();
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../helpers/tenant.php';
-require_once __DIR__ . '/../../helpers/pdf_extractor.php';
+// Removed: require_once __DIR__ . '/../../helpers/pdf_extractor.php'; // Not needed anymore
 
 // Verify authentication
 if (!isset($_SESSION['client_code'])) {
@@ -81,23 +79,10 @@ $pageTitle = 'Visor con Resaltado';
 // La validación contra BD fue eliminada para confiar puramente en la extracción del PDF.
 $validationWarning = '';
 
-// Extract text if search term provided (mantenemos la lógica original como fallback)
-$pagesWithMatches = [];
-$fullText = '';
-
-if (!empty($searchTerm)) {
-    $fullText = extract_text_from_pdf($pdfPath);
-    if (!empty($fullText)) {
-        // Find all positions of the search term
-        $pos = 0;
-        while (($pos = stripos($fullText, $searchTerm, $pos)) !== false) {
-            $pagesWithMatches[] = $pos;
-            $pos += strlen($searchTerm);
-        }
-    }
-}
-
-$matchCount = count($pagesWithMatches);
+// OPTIMIZATION: REMOVED SERVER SIDE EXTRACTION
+// We rely 100% on client side Mark.js
+$pagesWithMatches = []; // Will be populated by JS
+$matchCount = 0; // Will be populated by JS
 
 // Build the PDF URL - extract the relative path from the found pdfPath
 $relativePath = str_replace($uploadsDir, '', $pdfPath);
@@ -156,6 +141,8 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             flex-direction: column;
             align-items: center;
             gap: 1rem;
+            min-height: 500px;
+            /* Ensure space for scrolling */
         }
 
         .pdf-page-wrapper {
@@ -163,6 +150,9 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             background: white;
             margin-bottom: 1rem;
+            /* Placeholder size until loaded */
+            min-height: 800px;
+            min-width: 600px;
         }
 
         .pdf-page-wrapper canvas {
@@ -488,25 +478,10 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                             </form>
                         </div>
 
-                        <?php if (!empty($validationWarning)): ?>
-                            <div class="summary-box warning" style="margin-bottom: 1rem; font-size: 0.875rem;">
-                                <strong>⚠️ Advertencia</strong><br>
-                                <?= nl2br(htmlspecialchars($validationWarning)) ?>
-                                <br><br>
-                                <strong>Opciones:</strong><br>
-                                • Intenta buscar con un formato diferente<br>
-                                • <a href="../../index.php" style="color: var(--accent-primary);">Re-indexar documento</a>
-                                (tab Consultar → Re-indexar)
-                            </div>
-                        <?php endif; ?>
-
                         <?php if (!empty($searchTerm)): ?>
-                            <div class="match-badge">
-                                <span>🎯</span>
-                                <span>
-                                    <?= $matchCount ?> coincidencia(s) de "
-                                    <?= htmlspecialchars($searchTerm) ?>"
-                                </span>
+                            <div class="match-badge" id="matchBadge">
+                                <span>⌛</span>
+                                <span id="matchText">Calculando...</span>
                             </div>
                         <?php endif; ?>
 
@@ -564,28 +539,34 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         // Initialize PDF.js
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-        // NEW: Voraz Navigation Logic
+        // Variables Globales
         const viewerMode = '<?= $mode ?>';
         let vorazData = null;
         let currentDocIndex = 0;
 
-        // Cargar datos de navegación si es modo voraz
+        const pdfUrl = '<?= addslashes($pdfUrl) ?>';
+        const searchTerm = '<?= addslashes($searchTerm) ?>';
+        // Note: No matchedPages from PHP anymore
+        let totalMatchesFound = 0;
+        let pagesWithMatches = [];
+
+        const container = document.getElementById('pdfContainer');
+        const scale = 1.5;
+        let pdfDoc = null;
+
+        // --- Voraz Navigation ---
         if (viewerMode === 'voraz_multi') {
             const stored = sessionStorage.getItem('voraz_viewer_data');
             if (stored) {
                 vorazData = JSON.parse(stored);
                 currentDocIndex = vorazData.currentIndex || 0;
-
-                // Update UI counter
                 const currentDocSpan = document.getElementById('current-doc');
                 if (currentDocSpan) currentDocSpan.textContent = currentDocIndex + 1;
             }
         }
 
-        // Función para navegar entre documentos
         function navigateVorazDoc(direction) {
             if (!vorazData) return;
-
             const newIndex = currentDocIndex + direction;
             if (newIndex < 0 || newIndex >= vorazData.documents.length) return;
 
@@ -593,250 +574,211 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             vorazData.currentIndex = currentDocIndex;
             sessionStorage.setItem('voraz_viewer_data', JSON.stringify(vorazData));
 
-            // Recargar con nuevo documento
             const doc = vorazData.documents[currentDocIndex];
             const params = new URLSearchParams(window.location.search);
-
-            // Update params
             if (doc.id) params.set('doc', doc.id);
             if (doc.ruta_archivo) params.set('file', doc.ruta_archivo);
-
             window.location.search = params.toString();
         }
 
-        const pdfUrl = '<?= addslashes($pdfUrl) ?>';
-        const searchTerm = '<?= addslashes($searchTerm) ?>';
-        // Pass matched pages from PHP to JS
-        const matchedPages = <?= json_encode($pagesWithMatches) ?>;
-        const container = document.getElementById('pdfContainer');
-        const scale = 1.5;
-
-        async function renderPDF() {
+        // --- Render Logic with Lazy Load ---
+        async function loadPDF() {
             try {
-                const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
-                const numPages = pdf.numPages;
+                pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
+                const numPages = pdfDoc.numPages;
+                container.innerHTML = ''; // Clear loading spinner
 
-                container.innerHTML = '';
-
-                // Track if we have scrolled to the first match
-                let scrolledToFirstMatch = false;
-
+                // Create placeholders for all pages immediately
                 for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-                    const page = await pdf.getPage(pageNum);
-                    const viewport = page.getViewport({ scale });
+                    createPagePlaceholder(pageNum);
+                }
 
-                    // Create page wrapper
-                    const wrapper = document.createElement('div');
-                    wrapper.className = 'pdf-page-wrapper';
-                    wrapper.id = 'page-' + pageNum; // Add ID for scrolling
-                    wrapper.style.width = viewport.width + 'px';
-                    wrapper.style.height = viewport.height + 'px';
-
-                    // Create canvas
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-                    wrapper.appendChild(canvas);
-
-                    // Render PDF page
-                    await page.render({
-                        canvasContext: context,
-                        viewport: viewport
-                    }).promise;
-
-                    // Create text layer
-                    const textContent = await page.getTextContent();
-                    const textLayer = document.createElement('div');
-                    textLayer.className = 'text-layer';
-                    textLayer.style.width = viewport.width + 'px';
-                    textLayer.style.height = viewport.height + 'px';
-                    // Ensure text layer matches canvas scaling
-                    textLayer.style.setProperty('--scale-factor', scale);
-
-                    textContent.items.forEach(item => {
-                        const span = document.createElement('span');
-                        const transform = item.transform;
-
-                        // Calculate dimensions based on viewport
-                        // transform: [scaleX, skewY, skewX, scaleY, x, y]
-                        // We need to map PDF coordinates to scaled Viewport coordinates
-
-                        // Use PDF.js internal conversion if available, or manual math
-                        // Manual math matching standard PDF coordinate system (origin bottom-left):
-
-                        // Font height in PDF points
-                        const fontHeight = Math.sqrt((transform[0] * transform[0]) + (transform[1] * transform[1]));
-                        const scaledFontSize = fontHeight * scale;
-
-                        // X coordinate
-                        const x = transform[4] * scale;
-
-                        // Y coordinate (PDF is bottom-up, CSS is top-down)
-                        // item.transform[5] is the baseline Y. 
-                        // We align top by subtracting font ascent (roughly).
-                        const y = viewport.height - (transform[5] * scale) - scaledFontSize;
-
-                        // Width adjustment (crucial for mark.js to have space to mark)
-                        const width = item.width * scale;
-
-                        span.textContent = item.str;
-                        span.style.left = x + 'px';
-                        span.style.top = y + 'px';
-                        span.style.fontSize = scaledFontSize + 'px';
-                        span.style.fontFamily = item.fontName || 'sans-serif';
-                        span.style.width = Math.ceil(width) + 'px'; // Expand slightly
-
-                        // Fix rotation if needed (basic support)
-                        if (viewport.rotation !== 0) {
-                            // Rotation handling is complex manually, but basic layout usually works for 0 deg
-                        }
-
-                        textLayer.appendChild(span);
-                    });
-
-                    wrapper.appendChild(textLayer);
-
-                    // Add page number
-                    const pageLabel = document.createElement('div');
-                    pageLabel.className = 'page-number';
-                    pageLabel.textContent = `Página ${pageNum} de ${numPages}`;
-
-                    const pageContainer = document.createElement('div');
-                    pageContainer.appendChild(wrapper);
-                    pageContainer.appendChild(pageLabel);
-                    container.appendChild(pageContainer);
-
-                    // Smart highlighting with code variations
-                    if (searchTerm) {
-                        let foundMatch = false; // Initialize flag for this page
-                        const marker = new Mark(textLayer);
-
-                        // Generate variations of the search term
-                        function getCodeVariations(term) {
-                            const variations = [term];
-
-                            // For numeric codes, try common variations
-                            if (/^\d+$/.test(term)) {
-                                const digits = term.split('');
-
-                                // Try with spaces between all digits
-                                if (digits.length > 1) {
-                                    variations.push(digits.join(' '));
-                                }
-
-                                // Try common 4-digit patterns
-                                if (digits.length === 4) {
-                                    variations.push(`${digits[0]}${digits[1]} ${digits[2]}${digits[3]}`); // "15 43"
-                                    variations.push(`${digits[0]} ${digits[1]}${digits[2]}${digits[3]}`); // "1 543"
-                                    variations.push(`${digits[0]}${digits[1]}-${digits[2]}${digits[3]}`); // "15-43"
-                                }
+                // Setup Intersection Observer for Lazy Loading
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const pageNum = parseInt(entry.target.dataset.pageNum);
+                            // Render if not already rendered
+                            if (!entry.target.dataset.rendered) {
+                                renderPage(pageNum, entry.target);
+                                entry.target.dataset.rendered = 'true';
                             }
-
-                            return [...new Set(variations)];
                         }
+                    });
+                }, {
+                    root: null,
+                    rootMargin: '200px', // Pre-load 200px before appearing
+                    threshold: 0.1
+                });
 
-                        // ✨ SOLUCIÓN REGEX: Búsqueda flexible para códigos numéricos
-                        // Si es numérico (o alfanumérico corto), usamos regex para tolerar espacios
-                        if (/^[\w\-\.]+$/.test(searchTerm) && searchTerm.length >= 3) {
-                            // Escapar caracteres especiales de regex
-                            const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // Observe all page wrappers
+                document.querySelectorAll('.pdf-page-wrapper').forEach(el => observer.observe(el));
 
-                            // Crear patrón regex que permite espacios, guiones o puntos entre caracteres
-                            // Ejemplo: 1543 -> /1[\s\-\.]*5[\s\-\.]*4[\s\-\.]*3/gi
-                            const patternStr = searchTerm.split('').map(char => {
-                                // Escapar cada caracter por seguridad
-                                const safeChar = char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                                return safeChar;
-                            }).join('[\\s\\-\\.]*');
-
-                            const regex = new RegExp(patternStr, 'gi');
-                            console.log('🔍 Regex Search:', patternStr);
-
-                            marker.markRegExp(regex, {
-                                separateWordSearch: false,
-                                acrossElements: true,
-                                done: function (totalMatches) {
-                                    if (totalMatches > 0) {
-                                        foundMatch = true;
-                                        console.log(`✅ Regex Match: Found ${totalMatches}`);
-                                        if (!scrolledToFirstMatch) {
-                                            setTimeout(() => {
-                                                const firstMark = textLayer.querySelector('mark');
-                                                if (firstMark) {
-                                                    scrolledToFirstMatch = true;
-                                                    wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                                }
-                                            }, 100);
-                                        }
-                                    }
-                                }
-                            });
-                        }
-
-                        // Si regex no encontró nada (o no era aplicable), probar búsqueda exacta estándar
-                        if (!foundMatch) {
-                            marker.mark(searchTerm, {
-                                separateWordSearch: false,
-                                accuracy: 'exactly',
-                                caseSensitive: false,
-                                diacritics: false,
-                                done: function (totalMatches) {
-                                    if (totalMatches > 0) {
-                                        foundMatch = true;
-                                        // Scroll logic...
-                                        if (!scrolledToFirstMatch) {
-                                            setTimeout(() => {
-                                                const firstMark = textLayer.querySelector('mark');
-                                                if (firstMark) {
-                                                    scrolledToFirstMatch = true;
-                                                    wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                                }
-                                            }, 100);
-                                        }
-                                    }
-                                }
-                            });
-                        }
-
-                        // Last resort: partial matching
-                        if (!foundMatch) {
-                            marker.mark(searchTerm, {
-                                separateWordSearch: false,
-                                accuracy: 'partially',
-                                caseSensitive: false,
-                                diacritics: false,
-                                done: function (partialMatches) {
-                                    if (partialMatches > 0 && !scrolledToFirstMatch) {
-                                        console.log(`⚠️ Partial match: ${partialMatches} results for "${searchTerm}"`);
-                                        setTimeout(() => {
-                                            const firstMark = textLayer.querySelector('mark');
-                                            if (firstMark) {
-                                                scrolledToFirstMatch = true;
-                                                wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                            }
-                                        }, 100);
-                                    }
-                                }
-                            });
+                // If it's a short document (e.g. < 5 pages), force render them all immediately to verify matches faster
+                if (numPages <= 5) {
+                    for (let i = 1; i <= numPages; i++) {
+                        const el = document.getElementById('page-' + i);
+                        if (el && !el.dataset.rendered) {
+                            renderPage(i, el);
+                            el.dataset.rendered = 'true';
                         }
                     }
                 }
+
             } catch (error) {
-                console.error(error);
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">⚠️</div>
-                        <h4 class="empty-state-title">Error al cargar PDF</h4>
-                        <p class="empty-state-text">${error.message}</p>
-                    </div>
-                `;
+                console.error("PDF Load Error:", error);
+                container.innerHTML = `<p style='color:red;'>Error al cargar PDF: ${error.message}</p>`;
             }
         }
 
-        renderPDF();
+        function createPagePlaceholder(pageNum) {
+            const pageContainer = document.createElement('div');
 
-        // ============ Print Modal Functions ============
+            const wrapper = document.createElement('div');
+            wrapper.className = 'pdf-page-wrapper';
+            wrapper.id = 'page-' + pageNum;
+            wrapper.dataset.pageNum = pageNum;
+            // Initial dummy size, will update on render
+            wrapper.style.marginBottom = '20px';
+
+            // Add skeleton loading effect
+            wrapper.innerHTML = `
+                <div style="display:flex; justify-content:center; align-items:center; height:100%; color:#999;">
+                    Cargando página ${pageNum}...
+                </div>`;
+
+            const pageLabel = document.createElement('div');
+            pageLabel.className = 'page-number';
+            pageLabel.textContent = `Página ${pageNum}`;
+
+            pageContainer.appendChild(wrapper);
+            pageContainer.appendChild(pageLabel);
+            container.appendChild(pageContainer);
+        }
+
+        async function renderPage(pageNum, wrapper) {
+            try {
+                const page = await pdfDoc.getPage(pageNum);
+                const viewport = page.getViewport({ scale });
+
+                wrapper.innerHTML = ''; // Clear placeholder
+                wrapper.style.width = viewport.width + 'px';
+                wrapper.style.height = viewport.height + 'px';
+
+                // Canvas
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                wrapper.appendChild(canvas);
+
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise;
+
+                // Text Layer
+                const textContent = await page.getTextContent();
+                const textLayer = document.createElement('div');
+                textLayer.className = 'text-layer';
+                textLayer.style.width = viewport.width + 'px';
+                textLayer.style.height = viewport.height + 'px';
+                textLayer.style.setProperty('--scale-factor', scale);
+
+                // Populate text layer logic (simplified version of previous loop)
+                textContent.items.forEach(item => {
+                    const span = document.createElement('span');
+                    const tx = item.transform; // [sx, ky, kx, sy, tx, ty]
+                    const fontHeight = Math.sqrt((tx[0] * tx[0]) + (tx[1] * tx[1]));
+                    const scaledFontSize = fontHeight * scale;
+                    const x = tx[4] * scale;
+                    const y = viewport.height - (tx[5] * scale) - scaledFontSize;
+                    const width = item.width * scale;
+
+                    span.textContent = item.str;
+                    span.style.left = x + 'px';
+                    span.style.top = y + 'px';
+                    span.style.fontSize = scaledFontSize + 'px';
+                    span.style.fontFamily = item.fontName || 'sans-serif';
+                    span.style.width = Math.ceil(width) + 'px';
+
+                    textLayer.appendChild(span);
+                });
+
+                wrapper.appendChild(textLayer);
+
+                // Highlight Logic using Mark.js
+                if (searchTerm) {
+                    processHighlights(textLayer, pageNum);
+                }
+
+            } catch (err) {
+                console.error(`Page ${pageNum} Render Error:`, err);
+                wrapper.innerHTML = `<p style="color:red">Error rendering page ${pageNum}</p>`;
+            }
+        }
+
+        function processHighlights(textLayer, pageNum) {
+            const marker = new Mark(textLayer);
+            let pageHasMatch = false;
+
+            // Regex approach (same as before for flexible codes)
+            if (/^[\w\-\.]+$/.test(searchTerm) && searchTerm.length >= 3) {
+                const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const patternStr = searchTerm.split('').map(char => {
+                    return char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                }).join('[\\s\\-\\.]*');
+
+                const regex = new RegExp(patternStr, 'gi');
+
+                marker.markRegExp(regex, {
+                    separateWordSearch: false,
+                    acrossElements: true,
+                    done: (count) => {
+                        if (count > 0) updateMatchStats(count, pageNum);
+                    }
+                });
+            } else {
+                // Normal search
+                marker.mark(searchTerm, {
+                    separateWordSearch: false,
+                    accuracy: 'partially', // slightly more flexible than exactly
+                    caseSensitive: false,
+                    done: (count) => {
+                        if (count > 0) updateMatchStats(count, pageNum);
+                    }
+                });
+            }
+        }
+
+        function updateMatchStats(count, pageNum) {
+            totalMatchesFound += count;
+            if (!pagesWithMatches.includes(pageNum)) {
+                pagesWithMatches.push(pageNum);
+            }
+
+            // Update UI
+            const badge = document.getElementById('matchBadge');
+            const txt = document.getElementById('matchText');
+            if (badge && txt) {
+                txt.textContent = `${totalMatchesFound} coincidencia(s)`;
+                badge.querySelector('span').textContent = '🎯';
+            }
+
+            // Scroll to first match if this is the first one found
+            if (totalMatchesFound > 0 && totalMatchesFound === count) {
+                // It means this was the first batch of matches found
+                const pageEl = document.getElementById('page-' + pageNum);
+                if (pageEl) {
+                    pageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        }
+
+        // Start
+        loadPDF();
+
+        // --- Print Logic ---
         function showPrintModal() {
             document.getElementById('printModal').classList.add('active');
         }
@@ -846,62 +788,41 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         }
 
         function printFullDocument() {
-            closePrintModal();
             window.print();
+            closePrintModal();
         }
 
         function printHighlightedPages() {
-            closePrintModal();
+            // Basic print for now, as hiding pages dynamically in CSS print media 
+            // without re-rendering is tricky with Lazy Loading (unrendered pages are empty).
+            // Strategy: Force render matched pages if not rendered? 
+            // For now, warn user if pages aren't loaded.
+            alert('Imprimiendo: Asegúrate de haber visualizado las páginas resaltadas para que se carguen.');
 
-            // Get all pages with highlights
-            const markedPages = document.querySelectorAll('.pdf-page-wrapper mark');
+            // Add a class that hides non-matched pages in print
+            const style = document.createElement('style');
+            style.id = 'print-filter-style';
 
-            if (markedPages.length === 0) {
-                alert('⚠️ No hay páginas con resaltados para imprimir.\n\nPor favor, busca un término primero.');
-                return;
+            let css = '@media print { .pdf-page-wrapper { display: none; } ';
+            if (pagesWithMatches.length > 0) {
+                pagesWithMatches.forEach(p => {
+                    css += `#page-${p} { display: block !important; } `;
+                });
+            } else {
+                // Fallback if no matches found yet
+                css += '.pdf-page-wrapper { display: block !important; }';
             }
+            css += '}';
 
-            // Hide all pages without highlights
-            const allPagesWrappers = document.querySelectorAll('.pdf-page-wrapper');
-            const pagesWithMarks = new Set();
+            document.head.appendChild(style);
 
-            markedPages.forEach(mark => {
-                const pageWrapper = mark.closest('.pdf-page-wrapper');
-                if (pageWrapper) {
-                    pagesWithMarks.add(pageWrapper);
-                }
-            });
-
-            allPagesWrappers.forEach(page => {
-                if (!pagesWithMarks.has(page)) {
-                    page.style.display = 'none';
-                }
-            });
-
-            // Print
             window.print();
 
-            // Restore all pages after print
-            setTimeout(() => {
-                allPagesWrappers.forEach(page => {
-                    page.style.display = '';
-                });
-            }, 500);
+            // Clean up
+            setTimeout(() => document.head.removeChild(style), 1000);
+            closePrintModal();
         }
 
-        // Close modal on ESC key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                closePrintModal();
-            }
-        });
-
-        // Close modal clicking outside
-        document.getElementById('printModal').addEventListener('click', (e) => {
-            if (e.target.id === 'printModal') {
-                closePrintModal();
-            }
-        });
     </script>
 </body>
 
