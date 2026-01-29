@@ -895,7 +895,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                             <div class="result-title">${doc.numero}</div>
                             <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                                 <a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(result.query)}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Documento</a>
-                                ${pdfUrl ? `<a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(code)}" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</a>` : ''}
+                                ${pdfUrl ? `<button onclick="openHighlighter('modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(code)}')" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</button>` : ''}
                                 ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
                             </div>
                         </div>
@@ -1094,10 +1094,10 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                         </div>
                         <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                             ${pdfUrl ? `
-                                <a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(searchedCode)}" 
-                                   class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;" target="_blank">
+                                <button onclick="openHighlighter('modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(searchedCode)}')" 
+                                   class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">
                                     🖍️ Resaltar "${searchedCode}"
-                                </a>
+                                </button>
                                 <a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">
                                     📄 Original
                                 </a>
@@ -1115,7 +1115,37 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             document.getElementById('extractedCodesPreview').classList.add('hidden');
             document.getElementById('bulkResults').classList.add('hidden');
         }
+        // ============ Highlighter Modal Function ============
+        function openHighlighter(url) {
+            // Show modal
+            const modal = document.getElementById('highlighterModal');
+            modal.classList.remove('hidden');
+
+            // Open in new tab
+            window.open(url, '_blank');
+
+            // Auto-hide modal after 3 seconds
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 3000);
+        }
     </script>
+
+    <!-- Highlighter Loading Modal -->
+    <div id="highlighterModal" class="hidden"
+        style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+        <div
+            style="background: white; padding: 2rem 3rem; border-radius: 12px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🖍️</div>
+            <h3 style="margin: 0 0 0.5rem 0; color: #333;">Estamos resaltando...</h3>
+            <p style="margin: 0; color: #666;">¡Espera un momento!</p>
+            <div style="margin-top: 1rem;">
+                <div class="spinner"
+                    style="border: 3px solid #f3f3f3; border-top: 3px solid #038802; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto;">
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>
