@@ -617,17 +617,20 @@ COD001
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            if (!fileInput.files.length) {
+            const editId = document.getElementById('editDocId').value;
+            const isEditMode = !!editId;
+
+            // In edit mode, file is optional. in upload mode, it is required.
+            if (!isEditMode && !fileInput.files.length) {
                 alert('Selecciona un archivo PDF');
                 return;
             }
 
             const btn = document.getElementById('uploadBtn');
             btn.disabled = true;
-            btn.textContent = 'Subiendo...';
+            btn.textContent = isEditMode ? 'Guardando...' : 'Subiendo...';
 
-            const editId = document.getElementById('editDocId').value;
-            const action = editId ? 'update' : 'upload'; // Determinar acción
+            const action = isEditMode ? 'update' : 'upload'; // Determinar acción
 
             const formData = new FormData();
             formData.append('action', action);
@@ -637,7 +640,10 @@ COD001
             formData.append('fecha', document.getElementById('docFecha').value);
             formData.append('proveedor', document.getElementById('docProveedor').value);
             formData.append('codes', document.getElementById('docCodes').value);
-            formData.append('file', fileInput.files[0]);
+
+            if (fileInput.files.length > 0) {
+                formData.append('file', fileInput.files[0]);
+            }
 
             try {
                 const response = await fetch(apiUrl, { method: 'POST', body: formData });
