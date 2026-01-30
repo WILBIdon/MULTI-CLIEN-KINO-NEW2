@@ -57,7 +57,7 @@ if (!empty($codesInput)) {
 $termsToHighlight = array_unique(array_filter(array_map('trim', $termsToHighlight)));
 $searchTerm = implode(' ', $termsToHighlight); // Fallback for basic variable if needed, but we will use JSON in JS.
 $fileParam = isset($_GET['file']) ? $_GET['file'] : '';
-$mode = isset($_GET['mode']) ? $_GET['mode'] : 'single'; // 'single', 'voraz_multi', 'unified'
+$mode = isset($_GET['mode']) ? $_GET['mode'] : (isset($_GET['voraz_mode']) ? 'voraz_multi' : 'single'); // 'single', 'voraz_multi', 'unified'
 $totalDocs = isset($_GET['total']) ? (int) $_GET['total'] : 1;
 $downloadUrl = isset($_GET['download']) ? $_GET['download'] : '';
 
@@ -501,6 +501,12 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                         <div class="search-form">
                             <form method="GET">
                                 <input type="hidden" name="doc" value="<?= $documentId ?>">
+                                <?php if (isset($_GET['voraz_mode'])): ?>
+                                    <input type="hidden" name="voraz_mode" value="true">
+                                <?php endif; ?>
+                                <?php if (isset($_GET['highlight_all'])): ?>
+                                    <input type="hidden" name="highlight_all" value="true">
+                                <?php endif; ?>
                                 <textarea name="term" rows="6"
                                     style="width: 100%; border-radius: 6px; border: 1px solid #d1d5db; padding: 0.5rem; font-family: monospace;"
                                     placeholder="Buscar texto (uno por línea)..."><?= htmlspecialchars(implode("\n", $termsToHighlight)) ?></textarea>
