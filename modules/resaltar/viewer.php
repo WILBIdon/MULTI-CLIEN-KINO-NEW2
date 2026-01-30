@@ -515,6 +515,12 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                                 <span>⌛</span>
                                 <span id="matchText">Calculando...</span>
                             </div>
+                            <!-- Search Summary Container -->
+                            <div id="searchSummary"
+                                style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb; font-size: 0.85rem; max-height: 300px; overflow-y: auto;">
+                                <p style="margin: 0 0 5px 0; font-weight: bold; color: #6b7280;">Procesando búsqueda...</p>
+                                <div id="summaryList"></div>
+                            </div>
                         <?php endif; ?>
 
                         <button class="btn-print" onclick="showPrintModal()">
@@ -658,9 +664,91 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                     }
                 }
 
+                // ⭐ INICIAR ESCANEO DE FONDO PARA RESUMEN
+                scanAllPagesForSummary();
+
             } catch (error) {
                 console.error("PDF Load Error:", error);
                 container.innerHTML = `<p style='color:red;'>Error al cargar PDF: ${error.message}</p>`;
+            }
+        }
+
+        // Función de escaneo en segundo plano para el reporte Found/Not Found
+        async function scanAllPagesForSummary() {
+            const summaryDiv = document.getElementById('searchSummary');
+            if (!summaryDiv) return;
+
+            // Obtener términos (PHP terms)
+            const terms = <?= json_encode(array_values($termsToHighlight)) ?>;
+            if (!terms || terms.length === 0) {
+                summaryDiv.innerHTML = '<p class="text-muted">Sin términos de búsqueda.</p>';
+                return;
+            }
+
+            const foundSet = new Set();
+            const notFoundSet = new Set(terms);
+
+            // Escanear página por página (solo texto, sin renderizar canvas)
+            document.getElementById('summaryList').innerHTML = '<span style="color:orange">Analizando todo el PDF...</span>';
+
+            for (let i = 1; i <= pdfDoc.numPages; i++) {
+                try {
+                    const textContent = await pdfDoc.getPage(i).getTextContent();
+                    const pageText = textContent.items.map(s => s.str).join(' '); // Unir con espacios
+
+                    // Chequear cada término pendiente
+                    notFoundSet.forEach(term => {
+                        if (checkTermMatch(term, pageText)) {
+                            foundSet.add(term);
+                            notFoundSet.delete(term);
+                        }
+                    });
+
+                    // Si ya encontramos todos, parar temprano
+                    if (notFoundSet.size === 0) break;
+
+                } catch (e) {
+                    console.error("Error scanning page " + i, e);
+                }
+            }
+
+            // Actualizar UI Final
+            let html = '';
+
+            // Encontrados
+            if (foundSet.size > 0) {
+                html += `<div style="margin-bottom:8px;"><strong style="color:green">✅ Encontrados (${foundSet.size}):</strong><br>`;
+                foundSet.forEach(t => html += `<span style="background:#dcfce7; color:#166534; padding:1px 4px; border-radius:3px; font-size:0.75rem; margin-right:2px; display:inline-block; margin-bottom:2px;">${t}</span> `);
+                html += `</div>`;
+            }
+
+            // No encontrados
+            if (notFoundSet.size > 0) {
+                html += `<div><strong style="color:red">❌ No Encontrados (${notFoundSet.size}):</strong><br`;
+                notFoundSet.forEach(t => html += `<span style="background:#fee2e2; color:#991b1b; padding:1px 4px; border-radius:3px; font-size:0.75rem; margin-right:2px; display:inline-block; margin-bottom:2px;">${t}</span> `);
+                html += `</div>`;
+            }
+
+            if (foundSet.size === 0 && notFoundSet.size === 0) {
+                html = '<p>Búsqueda vacía.</p>';
+            }
+
+            document.getElementById('summaryList').innerHTML = html;
+        }
+
+        function checkTermMatch(term, text) {
+            if (!term || term.length < 2) return false;
+
+            // Misma lógica regex que el resaltador visual
+            if (/^[\w\-\.\s]+$/.test(term)) {
+                const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const patternStr = escapedTerm.split('').map(char => {
+                    return char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                }).join('[\\s\\-\\.]*');
+                const regex = new RegExp(patternStr, 'i'); // Case insensitive check
+                return regex.test(text);
+            } else {
+                return text.toLowerCase().includes(term.toLowerCase());
             }
         }
 
