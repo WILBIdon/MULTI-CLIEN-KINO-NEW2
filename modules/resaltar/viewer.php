@@ -522,8 +522,9 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                             Imprimir Documento
                         </button>
 
-                        <a href="<?= $pdfUrl ?>" download class="btn btn-secondary"
-                            style="width: 100%; text-align: center;">
+                        <a href="<?= $pdfUrl ?>"
+                            download="<?= htmlspecialchars(preg_replace('/[^a-zA-Z0-9_\-]/', '_', $document['numero'])) ?>.pdf"
+                            class="btn btn-secondary" style="width: 100%; text-align: center;">
                             📥 Descargar PDF
                         </a>
                     </div>
