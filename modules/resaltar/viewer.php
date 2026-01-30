@@ -31,9 +31,12 @@ $fileParam = isset($_GET['file']) ? $_GET['file'] : '';
 // Unificar códigos a resaltar
 $termsToHighlight = [];
 
-// 1. Añadir 'term' individual
+// 1. Añadir 'term' individual (ahora soporta múltiples términos separados por espacio/enter)
 if (!empty($searchTermInput)) {
-    $termsToHighlight[] = $searchTermInput;
+    $splitTerms = preg_split('/[\s,\t\n\r]+/', $searchTermInput, -1, PREG_SPLIT_NO_EMPTY);
+    if ($splitTerms) {
+        $termsToHighlight = array_merge($termsToHighlight, $splitTerms);
+    }
 }
 
 // 2. Procesar lista de 'codes' (comma, newline, tab separated)
@@ -498,9 +501,10 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                         <div class="search-form">
                             <form method="GET">
                                 <input type="hidden" name="doc" value="<?= $documentId ?>">
-                                <input type="text" name="term" value="<?= htmlspecialchars($searchTerm) ?>"
-                                    placeholder="Buscar texto...">
-                                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                                <textarea name="term" rows="6"
+                                    style="width: 100%; border-radius: 6px; border: 1px solid #d1d5db; padding: 0.5rem; font-family: monospace;"
+                                    placeholder="Buscar texto (uno por línea)..."><?= htmlspecialchars(implode("\n", $termsToHighlight)) ?></textarea>
+                                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
                                     🔍 Buscar y Resaltar
                                 </button>
                             </form>
