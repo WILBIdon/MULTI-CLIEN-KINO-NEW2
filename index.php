@@ -1461,8 +1461,22 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             });
 
             // Construir URL con parámetro especial "voraz_mode=true"
+            // Limpiar ruta si viene con prefijos duplicados/absolutos
+            // El viewer le añade 'clients/CODE/uploads/', así que solo queremos lo que sigue.
+            // Si filePath empieza con "uploads/", "clients/", etc, lo limpiamos.
+            
+            let cleanPath = filePath;
+            // Remover 'uploads/' al inicio si existe y si el viewer lo va a añadir de nuevo
+            if (cleanPath.startsWith('uploads/')) {
+                 cleanPath = cleanPath.substring(8); // 'uploads/'.length = 8
+            }
+            // Por seguridad, si empieza con '/'
+            if (cleanPath.startsWith('/')) {
+                cleanPath = cleanPath.substring(1);
+            }
+
             const params = new URLSearchParams({
-                file: filePath,
+                file: cleanPath,
                 codes: codesStr,
                 doc_id: docId,
                 voraz_mode: 'true',  // ⭐ Identificador único para búsqueda voraz
