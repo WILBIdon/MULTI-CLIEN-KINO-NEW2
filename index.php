@@ -1321,7 +1321,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                 showBulkResults(result, extractedCodes);
             } catch (error) {
                 document.getElementById('bulkLoading').classList.add('hidden');
-                    alert('Error: ' + error.message);
+                alert('Error: ' + error.message);
             }
         }
 
@@ -1367,17 +1367,14 @@ Se extraerán solo los códigos de la izquierda."></textarea>
 
             // Renderizar documentos (Estilo estándar)
             html += '<div style="display: grid; gap: 1rem;">';
-            
+
             for (const doc of result.documents) {
                 // Obtener TODOS los códigos para el resaltador
                 const docCodes = doc.matched_codes || doc.codes || [];
-                let allCodesStr = '';
-                if (doc.all_codes) {
-                    allCodesStr = doc.all_codes;
-                } else {
-                     const combined = [...new Set([...(doc.matched_codes||[]), ...(doc.codes||[])])];
-                     allCodesStr = combined.join(',');
-                }
+                // ⭐ Unir SOLO los códigos mostrados en la tarjeta (matched) para evitar confusión
+                // El usuario reportó que "agrega códigos que no sabe por qué". 
+                // Al usar docCodes, alineamos el resaltador visual con los badges mostrados.
+                const allCodesStr = docCodes.join(',');
 
                 html += `
                     <div class="result-card" style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 1.25rem; background: white; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
@@ -1412,7 +1409,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                     </div>
                 `;
             }
-            
+
             html += '</div>';
 
             resultsDiv.innerHTML = html;
@@ -1464,11 +1461,11 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             // Limpiar ruta si viene con prefijos duplicados/absolutos
             // El viewer le añade 'clients/CODE/uploads/', así que solo queremos lo que sigue.
             // Si filePath empieza con "uploads/", "clients/", etc, lo limpiamos.
-            
+
             let cleanPath = filePath;
             // Remover 'uploads/' al inicio si existe y si el viewer lo va a añadir de nuevo
             if (cleanPath.startsWith('uploads/')) {
-                 cleanPath = cleanPath.substring(8); // 'uploads/'.length = 8
+                cleanPath = cleanPath.substring(8); // 'uploads/'.length = 8
             }
             // Por seguridad, si empieza con '/'
             if (cleanPath.startsWith('/')) {
