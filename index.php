@@ -16,6 +16,7 @@ header("Expires: 0"); // Proxies.
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/helpers/tenant.php';
 require_once __DIR__ . '/helpers/search_engine.php';
+require_once __DIR__ . '/helpers/csrf_protection.php';
 
 // Verify authentication
 if (!isset($_SESSION['client_code'])) {
@@ -38,6 +39,7 @@ $pageTitle = 'Gestor de Documentos';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?= CsrfProtection::metaTag() ?>
     <title>Gestor de Documentos - KINO TRACE</title>
     <link rel="stylesheet" href="assets/css/styles.css">
     <style>
@@ -732,7 +734,14 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             }
 
             try {
-                const response = await fetch(apiUrl, { method: 'POST', body: formData });
+                const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                const response = await fetch(apiUrl, { 
+                    method: 'POST', 
+                    body: formData,
+                    headers: {
+                        'X-CSRF-TOKEN': token
+                    }
+                });
                 const result = await response.json();
 
                 if (result.success) {
