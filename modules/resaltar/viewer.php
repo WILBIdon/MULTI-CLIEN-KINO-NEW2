@@ -748,11 +748,10 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             // 1. Intentar búsqueda exacta primero (más rápida)
             if (text.includes(term)) return true;
 
-            // 2. Búsqueda flexible "Limpia": Remover separadores de ambos y buscar
-            // Esto soluciona casos donde el PDF tiene "K 609" y buscamos "K-609", o viceversa.
-            // Es mucho más robusto para verificar existencia.
-            const cleanTerm = term.replace(/[\s\-\.]/g, '').toLowerCase();
-            const cleanText = text.replace(/[\s\-\.]/g, '').toLowerCase();
+            // 2. Búsqueda flexible "Limpia": Remover TODO lo que no sea alfanumérico
+            // Esto es crucial para solucionar falsos negativos en el reporte.
+            const cleanTerm = term.replace(/[^a-z0-9]/gi, '');
+            const cleanText = text.replace(/[^a-z0-9]/gi, '');
 
             return cleanText.includes(cleanTerm);
         }

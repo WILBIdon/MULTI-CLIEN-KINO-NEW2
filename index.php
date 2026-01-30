@@ -1484,8 +1484,8 @@ Se extraerán solo los códigos de la izquierda."></textarea>
 
             console.log('🔍 VORAZ: URL completa:', url);
 
-            // Abrir ventana con dimensiones específicas
-            window.open(url, '_blank', 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no');
+            // Abrir en nueva pestaña (sin dimensiones fijas)
+            window.open(url, '_blank');
         }
 
         /**
