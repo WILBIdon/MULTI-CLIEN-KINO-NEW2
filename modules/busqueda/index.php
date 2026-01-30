@@ -519,14 +519,17 @@ COD001
 
             document.getElementById('searchSummary').innerHTML = summaryHtml;
 
-            // Button "Resaltar Todos" (Voracious) - Append separately to ensure visibility
+            // Button "Generar PDF Unificado" (Voracious) - Append separately to ensure visibility
             if (result.documents && result.documents.length > 0) {
                 const btnContainer = document.createElement('div');
                 btnContainer.style.marginTop = '1rem';
+                btnContainer.style.textAlign = 'center';
                 btnContainer.innerHTML = `
-                    <button onclick="highlightAllVoracious()" class="btn btn-warning" style="width: 100%; font-weight: bold; background-color: #f59e0b; border: none; color: white; padding: 0.75rem; font-size: 1.1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                        🚀 Resaltar Todos (Búsqueda Voraz)
-                    </button>
+                     <button onclick='voraz_generateUnifiedPDF(${escapeForJSON(result.documents)}, ${escapeForJSON(searchedCodes)})' 
+                             class="btn btn-primary" 
+                             style="padding: 0.75rem 1.5rem; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
+                        📄 Generar PDF Unificado
+                     </button>
                     <small style="display: block; text-align: center; margin-top: 0.5rem; color: #6b7280;">Genera un único PDF con solo las páginas relevantes</small>
                 `;
                 document.getElementById('searchSummary').appendChild(btnContainer);
@@ -743,14 +746,10 @@ COD001
                                 </svg>
                             </button>
                             ${doc.ruta_archivo ? `
-                            <a href="../resaltar/viewer.php?doc=${doc.id}" class="btn btn-primary btn-icon" title="Ver Documento" target="_blank">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                            </a>
-                            <a href="../resaltar/download.php?doc=${doc.id}" class="btn btn-secondary btn-icon" title="Original" target="_blank">
-                                📄
-                            </a>` : ''}
+                            <a href="../resaltar/viewer.php?doc=${doc.id}" class="btn btn-primary" style="padding: 0.5rem 1rem;" target="_blank">👁️ Ver Documento</a>
+                            <button type="button" class="btn btn-info" style="padding: 0.5rem 1rem; background: #3B82F6; color: white; border: none;" onclick="voraz_generateUnifiedPDF([{id: ${doc.id}, ruta_archivo: '${doc.ruta_archivo}'}], '${doc.codes.join('\\n')}')">
+                                Generar PDF Unificado
+                            </button>` : ''}
                             <button type="button" class="btn btn-secondary btn-icon" title="Eliminar" onclick="deleteDoc(${doc.id})">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -900,6 +899,147 @@ COD001
 
         let isIndexing = false;
         let totalIndexedSession = 0;
+
+        // Helpers
+        function escapeForJSON(data) {
+            return JSON.stringify(data).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
+        async function voraz_generateUnifiedPDF(documents, allCodes) {
+            console.log('🔍 VORAZ: Generando PDF unificado...', {
+                documents: documents.length,
+                codes: (allCodes && allCodes.split) ? allCodes.split('\n').length : 0
+            });
+
+            if (!documents || documents.length === 0) {
+                alert('❌ No hay documentos para unificar');
+                return;
+            }
+
+            // Ensure codes is an array
+            let codesList = [];
+            if (Array.isArray(allCodes)) {
+                codesList = allCodes;
+            } else if (typeof allCodes === 'string') {
+                codesList = allCodes.split('\n').map(c => c.trim()).filter(c => c);
+            }
+
+            if (!codesList || codesList.length === 0) {
+                alert('❌ No hay códigos para resaltar');
+                return;
+            }
+
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'voraz-unified-loading';
+            loadingDiv.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                            background: rgba(0,0,0,0.85); display: flex; align-items: center;
+                            justify-content: center; z-index: 99999; flex-direction: column;">
+                    <div style="background: white; padding: 40px 50px; border-radius: 15px;
+                                text-align: center; max-width: 450px; box-shadow: 0 10px 50px rgba(0,0,0,0.3);">
+                        <div class="voraz-spinner" style="border: 5px solid #f3f3f3;
+                                     border-top: 5px solid #667eea; border-radius: 50%;
+                                     width: 60px; height: 60px; animation: spin 1s linear infinite;
+                                     margin: 0 auto 20px;"></div>
+                        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 20px;">
+                            🔍 Generando PDF Unificado (Búsqueda Voraz)
+                        </h3>
+                        <p style="margin: 0 0 20px 0; color: #666;">
+                            Procesando ${documents.length} documentos con ${codesList.length} códigos
+                        </p>
+                        <div style="width: 100%; height: 25px; background: #eee; border-radius: 12px;
+                                     overflow: hidden;">
+                            <div id="voraz-progress-fill" style="width: 0%; height: 100%;
+                                         background: linear-gradient(90deg, #667eea, #764ba2);
+                                         transition: width 0.5s ease;"></div>
+                        </div>
+                        <p id="voraz-progress-text" style="margin-top: 10px; color: #999; font-size: 14px;">
+                            Iniciando...
+                        </p>
+                    </div>
+                </div>
+                <style>
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                </style>
+            `;
+            document.body.appendChild(loadingDiv);
+
+            let progress = 0;
+            const progressEl = document.getElementById('voraz-progress-fill');
+            const progressText = document.getElementById('voraz-progress-text');
+
+            const progressInterval = setInterval(() => {
+                progress += 5;
+                if (progress <= 90) {
+                    progressEl.style.width = progress + '%';
+                    if (progress < 30) progressText.textContent = 'Cargando documentos...';
+                    else if (progress < 60) progressText.textContent = 'Combinando PDFs...';
+                    else progressText.textContent = 'Finalizando...';
+                }
+            }, 300);
+
+            try {
+                const payload = {
+                    documents: documents,
+                    codes: codesList,
+                    mode: 'voraz'
+                };
+
+                // FIX PATH: Go up one level to access modules/resaltar
+                const response = await fetch('../resaltar/generate_unified.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json; charset=utf-8',
+                        'Accept': 'application/json',
+                        'X-Voraz-Mode': 'true'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const responseText = await response.text();
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (jsonError) {
+                    console.error('Error parseando JSON:', jsonError);
+                    throw new Error(`Respuesta inválida del servidor`);
+                }
+
+                clearInterval(progressInterval);
+                progressEl.style.width = '100%';
+                progressText.textContent = '¡Completado!';
+
+                if (result.success) {
+                    await new Promise(resolve => setTimeout(resolve, 800));
+
+                    const params = new URLSearchParams({
+                        file: result.unified_pdf_path, // Path relative to uploads usually
+                        codes: codesList.join(','),
+                        mode: 'unified',
+                        voraz_mode: 'true'
+                    });
+
+                    // FIX PATH: Go up one level
+                    const url = `../resaltar/viewer.php?${params.toString()}`;
+                    window.open(url, '_blank');
+
+                    document.body.removeChild(loadingDiv);
+
+                } else {
+                    throw new Error(result.error || 'Error desconocido al generar PDF');
+                }
+
+            } catch (error) {
+                clearInterval(progressInterval);
+                console.error('Error completo:', error);
+                alert(`❌ Error al generar PDF unificado:\n\n${error.message}`);
+                const loadingElement = document.getElementById('voraz-unified-loading');
+                if (loadingElement) document.body.removeChild(loadingElement);
+            }
+        }
 
         async function reindexDocuments() {
             if (isIndexing) return;
