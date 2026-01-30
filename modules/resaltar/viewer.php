@@ -745,17 +745,16 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         function checkTermMatch(term, text) {
             if (!term || term.length < 2) return false;
 
-            // Misma lógica regex que el resaltador visual
-            if (/^[\w\-\.\s]+$/.test(term)) {
-                const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const patternStr = escapedTerm.split('').map(char => {
-                    return char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                }).join('[\\s\\-\\.]*');
-                const regex = new RegExp(patternStr, 'i'); // Case insensitive check
-                return regex.test(text);
-            } else {
-                return text.toLowerCase().includes(term.toLowerCase());
-            }
+            // 1. Intentar búsqueda exacta primero (más rápida)
+            if (text.includes(term)) return true;
+
+            // 2. Búsqueda flexible "Limpia": Remover separadores de ambos y buscar
+            // Esto soluciona casos donde el PDF tiene "K 609" y buscamos "K-609", o viceversa.
+            // Es mucho más robusto para verificar existencia.
+            const cleanTerm = term.replace(/[\s\-\.]/g, '').toLowerCase();
+            const cleanText = text.replace(/[\s\-\.]/g, '').toLowerCase();
+
+            return cleanText.includes(cleanTerm);
         }
 
         function createPagePlaceholder(pageNum) {
