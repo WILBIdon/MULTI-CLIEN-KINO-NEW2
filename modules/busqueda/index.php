@@ -1038,7 +1038,7 @@ COD001
                             
                             <!-- Action Buttons -->
                             <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-                                ${pdfUrl ? `<button onclick="openHighlighter('../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(code)}')" class="btn btn-success" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">🖍️ Resaltar</button>` : ''}
+                                ${pdfUrl ? `<button onclick="openHighlighter('../resaltar/viewer.php?doc=${doc.id}&codes=${encodeURIComponent(doc.all_codes || code)}')" class="btn btn-success" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">🖍️ Resaltar</button>` : ''}
                                 ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">📄 PDF</a>` : ''}
                      
                                 <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.85rem; background: #8B5CF6; color: white; border: none;" onclick="editDocumentFromSearch(${index})">

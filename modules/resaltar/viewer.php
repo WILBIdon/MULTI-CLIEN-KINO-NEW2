@@ -24,7 +24,35 @@ $db = open_client_db($clientCode);
 
 // Get parameters
 $documentId = isset($_GET['doc']) ? (int) $_GET['doc'] : 0;
-$searchTerm = isset($_GET['term']) ? trim($_GET['term']) : '';
+$searchTermInput = isset($_GET['term']) ? trim($_GET['term']) : '';
+$codesInput = isset($_GET['codes']) ? $_GET['codes'] : '';
+$fileParam = isset($_GET['file']) ? $_GET['file'] : '';
+
+// Unificar códigos a resaltar
+$termsToHighlight = [];
+
+// 1. Añadir 'term' individual
+if (!empty($searchTermInput)) {
+    $termsToHighlight[] = $searchTermInput;
+}
+
+// 2. Procesar lista de 'codes' (comma, newline, tab separated)
+if (!empty($codesInput)) {
+    // Si es array (url query array), usalo directo. Si es string, split.
+    if (is_array($codesInput)) {
+        $termsToHighlight = array_merge($termsToHighlight, $codesInput);
+    } else {
+        // Soporta comas, saltos de línea, tabs, espacios múltiples
+        $splitCodes = preg_split('/[\s,\t\n\r]+/', $codesInput, -1, PREG_SPLIT_NO_EMPTY);
+        if ($splitCodes) {
+            $termsToHighlight = array_merge($termsToHighlight, $splitCodes);
+        }
+    }
+}
+
+// Limpiar y deducplicar
+$termsToHighlight = array_unique(array_filter(array_map('trim', $termsToHighlight)));
+$searchTerm = implode(' ', $termsToHighlight); // Fallback for basic variable if needed, but we will use JSON in JS.
 $fileParam = isset($_GET['file']) ? $_GET['file'] : '';
 $mode = isset($_GET['mode']) ? $_GET['mode'] : 'single'; // 'single', 'voraz_multi', 'unified'
 $totalDocs = isset($_GET['total']) ? (int) $_GET['total'] : 1;
@@ -720,35 +748,43 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
         function processHighlights(textLayer, pageNum) {
             const marker = new Mark(textLayer);
-            let pageHasMatch = false;
 
-            // Regex approach (same as before for flexible codes)
-            if (/^[\w\-\.]+$/.test(searchTerm) && searchTerm.length >= 3) {
-                const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const patternStr = searchTerm.split('').map(char => {
-                    return char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                }).join('[\\s\\-\\.]*');
+            // Recibir términos desde PHP (inyectados como JSON arriba)
+            const terms = <?= json_encode(array_values($termsToHighlight)) ?>;
 
-                const regex = new RegExp(patternStr, 'gi');
+            if (!terms || terms.length === 0) return;
 
-                marker.markRegExp(regex, {
-                    separateWordSearch: false,
-                    acrossElements: true,
-                    done: (count) => {
-                        if (count > 0) updateMatchStats(count, pageNum);
-                    }
-                });
-            } else {
-                // Normal search
-                marker.mark(searchTerm, {
-                    separateWordSearch: false,
-                    accuracy: 'partially', // slightly more flexible than exactly
-                    caseSensitive: false,
-                    done: (count) => {
-                        if (count > 0) updateMatchStats(count, pageNum);
-                    }
-                });
-            }
+            terms.forEach(term => {
+                if (!term || term.length < 2) return; // Ignorar muy cortos
+
+                // Regex para códigos con separadores flexibles
+                if (/^[\w\-\.]+$/.test(term)) {
+                    const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const patternStr = escapedTerm.split('').map(char => {
+                        return char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    }).join('[\\s\\-\\.]*'); // Permite espacios, puntos o guiones entre caracteres
+
+                    const regex = new RegExp(patternStr, 'gi');
+
+                    marker.markRegExp(regex, {
+                        separateWordSearch: false,
+                        acrossElements: true,
+                        done: (count) => {
+                            if (count > 0) updateMatchStats(count, pageNum);
+                        }
+                    });
+                } else {
+                    // Búsqueda normal exacta
+                    marker.mark(term, {
+                        separateWordSearch: false,
+                        accuracy: 'partially',
+                        caseSensitive: false,
+                        done: (count) => {
+                            if (count > 0) updateMatchStats(count, pageNum);
+                        }
+                    });
+                }
+            });
         }
 
         function updateMatchStats(count, pageNum) {
