@@ -42,8 +42,8 @@ if (!empty($codesInput)) {
     if (is_array($codesInput)) {
         $termsToHighlight = array_merge($termsToHighlight, $codesInput);
     } else {
-        // Soporta comas, saltos de línea, tabs, espacios múltiples
-        $splitCodes = preg_split('/[\s,\t\n\r]+/', $codesInput, -1, PREG_SPLIT_NO_EMPTY);
+        // Soporta comas, saltos de línea, tabs, punto y coma (pero NO espacios, para soportar códigos con espacio)
+        $splitCodes = preg_split('/[,;\t\n\r]+/', $codesInput, -1, PREG_SPLIT_NO_EMPTY);
         if ($splitCodes) {
             $termsToHighlight = array_merge($termsToHighlight, $splitCodes);
         }
@@ -758,7 +758,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 if (!term || term.length < 2) return; // Ignorar muy cortos
 
                 // Regex para códigos con separadores flexibles
-                if (/^[\w\-\.]+$/.test(term)) {
+                if (/^[\w\-\.\s]+$/.test(term)) {
                     const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                     const patternStr = escapedTerm.split('').map(char => {
                         return char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
