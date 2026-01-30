@@ -1347,14 +1347,14 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                 </div>
             `;
 
-            // Botón PDF Unificado
-            html += `
                 <div style="text-align: center; margin-bottom: 2rem;">
-                     <button onclick='voraz_generateUnifiedPDF(${escapeForJSON(result.documents)}, ${escapeForJSON(searchedCodes)})' class="btn btn-primary" style="padding: 0.75rem 1.5rem; font-weight: 600;">
+                     <!-- Botón: Generar PDF Unificado - BLUE -->
+                     <button onclick='voraz_generateUnifiedPDF(${escapeForJSON(result.documents)}, ${escapeForJSON(searchedCodes)})' 
+                             class="btn btn-primary" 
+                             style="padding: 0.75rem 1.5rem; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
                         📄 Generar PDF Unificado
                      </button>
                 </div>
-            `;
 
             // Advertencia de no encontrados
             if (result.not_found && result.not_found.length > 0) {
@@ -1370,11 +1370,12 @@ Se extraerán solo los códigos de la izquierda."></textarea>
 
             for (const doc of result.documents) {
                 // Obtener TODOS los códigos para el resaltador
+                // ⭐ Unir SOLO los códigos mostrados en la tarjeta (matched) para los badges
                 const docCodes = doc.matched_codes || doc.codes || [];
-                // ⭐ Unir SOLO los códigos mostrados en la tarjeta (matched) para evitar confusión
-                // El usuario reportó que "agrega códigos que no sabe por qué". 
-                // Al usar docCodes, alineamos el resaltador visual con los badges mostrados.
-                const allCodesStr = docCodes.join(',');
+
+                // ⭐ Para el botón "Resaltar", el usuario quiere ver TODOS los códigos del doc ("traer los 3 códigos").
+                // Usamos all_codes si existe, si no, fallback a docCodes.
+                const allCodesStr = doc.all_codes || docCodes.join(',');
 
                 html += `
                     <div class="result-card" style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 1.25rem; background: white; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
@@ -1675,8 +1676,9 @@ Se extraerán solo los códigos de la izquierda."></textarea>
          * Abre el viewer con navegación entre múltiples documentos
          * Resalta TODOS los códigos buscados en cada documento
          */
-        function highlightAllCodesInDocs(documents, allCodes) {
+        function voraz_openMultiViewer(documents, allCodes) {
             // Crear estructura de datos para el viewer
+
             const viewerData = {
                 documents: documents.map(d => ({
                     ruta: d.ruta_archivo, // Usar ruta_archivo como espera el viewer
