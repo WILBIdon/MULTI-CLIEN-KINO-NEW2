@@ -94,7 +94,10 @@ class CsrfProtection
             Logger::warning('CSRF attack detected', [
                 'ip' => $_SERVER['REMOTE_ADDR'] ?? 'Unknown',
                 'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown',
-                'endpoint' => $_SERVER['REQUEST_URI'] ?? 'Unknown'
+                'endpoint' => $_SERVER['REQUEST_URI'] ?? 'Unknown',
+                'received_token' => $token ? substr($token, 0, 5) . '...' : 'NULL',
+                'expected_token' => isset($_SESSION[self::TOKEN_NAME]) ? substr($_SESSION[self::TOKEN_NAME], 0, 5) . '...' : 'NOT_SET',
+                'session_status' => session_status()
             ]);
 
             if (defined('PHPUNIT_RUNNING')) {

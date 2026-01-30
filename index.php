@@ -733,6 +733,10 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                 formData.append('file', fileInput.files[0]);
             }
 
+            // CSRF Token in Body (Fallback)
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            formData.append('csrf_token', token);
+
             try {
                 const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
                 const response = await fetch(apiUrl, { 
