@@ -1382,7 +1382,15 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                 const docCodes = doc.matched_codes || doc.codes || [];
 
                 // ⭐ Unir TODOS los códigos del documento para resaltarlos
-                const allCodesStr = docCodes.join(',');
+                // Preferir doc.all_codes si existe (string separado por comas)
+                let allCodesStr = '';
+                if (doc.all_codes) {
+                    allCodesStr = doc.all_codes;
+                } else {
+                    // Unir matched y codes únicos
+                    const combined = [...new Set([...(doc.matched_codes || []), ...(doc.codes || [])])];
+                    allCodesStr = combined.join(',');
+                }
 
                 html += `
                     <div class="voraz-result-card">
