@@ -1476,11 +1476,11 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             }
 
             const params = new URLSearchParams({
-                file: cleanPath,
+                // file: cleanPath, // No enviamos file si tenemos doc ID, para que el viewer resuelva la ruta desde DB
                 codes: codesStr,
-                doc_id: docId,
-                voraz_mode: 'true',  // ⭐ Identificador único para búsqueda voraz
-                highlight_all: 'true' // ⭐ Indica que debe resaltar TODOS
+                doc: docId, // ⭐ Corregido: 'doc' es lo que espera viewer.php
+                voraz_mode: 'true',
+                highlight_all: 'true'
             });
 
             const url = `modules/resaltar/viewer.php?${params.toString()}`;
