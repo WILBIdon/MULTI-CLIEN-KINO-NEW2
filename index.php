@@ -1321,17 +1321,14 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                 showBulkResults(result, extractedCodes);
             } catch (error) {
                 document.getElementById('bulkLoading').classList.add('hidden');
-                alert('Error: ' + error.message);
+                    alert('Error: ' + error.message);
             }
         }
 
         /**
-         * Muestra resultados de búsqueda VORAZ (NO afecta otras búsquedas)
+         * Muestra resultados de búsqueda VORAZ (Limpio y reconstruido)
          */
         function showBulkResults(result, searchedCodes) {
-            const bulkResultsDiv = document.getElementById('bulk-results'); // Corrección: ID consistente
-            // Nota: En el código original el div era 'bulkResults', el usuario pide modificarla.
-            // Para mantener consistencia con el HTML existente, usaré 'bulkResults' pero con el contenido nuevo.
             const resultsDiv = document.getElementById('bulkResults');
 
             if (!result.documents || result.documents.length === 0) {
@@ -1340,86 +1337,83 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                 return;
             }
 
-            const covered = result.covered || []; // Asumiendo que vienen del backend, o usar documents.length si no
-            const notFound = result.not_found || [];
-            // Si el backend no devuelve 'covered', lo calculamos aproximado o usamos totales
             const totalDocs = result.documents.length;
 
-            // Para mantener fidelidad al diseño solicitado, reconstruimos el HTML
+            // Header simplificado
             let html = `
-                <div class="voraz-summary-box">
-                    <h3>📊 Resultados de Búsqueda Voraz Inteligente</h3>
-                    <p><strong>${result.total_covered || 0}/${searchedCodes.length}</strong> códigos encontrados en 
-                    <strong>${totalDocs}</strong> documento(s)</p>
+                <div style="background: #eef2ff; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; border: 1px solid #c7d2fe;">
+                    <h3 style="margin-top:0; color: #4338ca;">Resultados Voraz</h3>
+                    <p style="margin:0; color: #374151;"><strong>${result.total_covered || 0}</strong> códigos encontrados en <strong>${totalDocs}</strong> documentos.</p>
                 </div>
             `;
 
-            // ========== BOTÓN 2: PDF UNIFICADO (una sola vez) ==========
+            // Botón PDF Unificado
             html += `
-                <div class="voraz-unified-container">
-                    <button class="voraz-btn-unified" onclick='voraz_generateUnifiedPDF(${escapeForJSON(result.documents)}, ${escapeForJSON(searchedCodes)})'>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                        </svg>
-                        📄 Generar PDF Unificado con Todos los Resultados
-                    </button>
+                <div style="text-align: center; margin-bottom: 2rem;">
+                     <button onclick='voraz_generateUnifiedPDF(${escapeForJSON(result.documents)}, ${escapeForJSON(searchedCodes)})' class="btn btn-primary" style="padding: 0.75rem 1.5rem; font-weight: 600;">
+                        📄 Generar PDF Unificado
+                     </button>
                 </div>
             `;
 
-            // Códigos no encontrados
-            if (notFound.length > 0) {
+            // Advertencia de no encontrados
+            if (result.not_found && result.not_found.length > 0) {
                 html += `
-                    <div class="voraz-alert-warning">
-                        <strong>⚠️ Códigos no encontrados:</strong><br>
-                        ${notFound.map(c => `<span class="voraz-code-missing">${c}</span>`).join(' ')}
+                    <div class="alert alert-warning" style="margin-bottom: 1.5rem;">
+                        <strong>No encontrados:</strong> ${result.not_found.join(', ')}
                     </div>
                 `;
             }
 
-            // ========== RENDERIZAR CADA DOCUMENTO ==========
+            // Renderizar documentos (Estilo estándar)
+            html += '<div style="display: grid; gap: 1rem;">';
+            
             for (const doc of result.documents) {
+                // Obtener TODOS los códigos para el resaltador
                 const docCodes = doc.matched_codes || doc.codes || [];
-
-                // ⭐ Unir TODOS los códigos del documento para resaltarlos
-                // Preferir doc.all_codes si existe (string separado por comas)
                 let allCodesStr = '';
                 if (doc.all_codes) {
                     allCodesStr = doc.all_codes;
                 } else {
-                    // Unir matched y codes únicos
-                    const combined = [...new Set([...(doc.matched_codes || []), ...(doc.codes || [])])];
-                    allCodesStr = combined.join(',');
+                     const combined = [...new Set([...(doc.matched_codes||[]), ...(doc.codes||[])])];
+                     allCodesStr = combined.join(',');
                 }
 
                 html += `
-                    <div class="voraz-result-card">
-                        <div class="voraz-card-header">
-                            <span class="voraz-badge">${(doc.tipo || 'DOC').toUpperCase()}</span>
-                            <span class="voraz-date">${doc.fecha || ''}</span>
+                    <div class="result-card" style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 1.25rem; background: white; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <div class="result-header" style="display: flex; justify-content: space-between; margin-bottom: 0.75rem;">
+                            <span class="badge badge-primary">${(doc.tipo || 'DOC').toUpperCase()}</span>
+                            <span class="result-meta" style="color: #6b7280; font-size: 0.875rem;">${doc.fecha || ''}</span>
                         </div>
                         
-                        <div class="voraz-card-title">${doc.numero || 'Sin título'}</div>
-                        
-                        <div class="voraz-codes-list">
-                            ${docCodes.map(code => `<span class="voraz-code-tag">${code}</span>`).join('')}
+                        <div class="result-title" style="font-weight: 700; font-size: 1.1rem; color: #111827; margin-bottom: 0.5rem;">
+                            ${doc.numero || 'Sin título'}
                         </div>
                         
-                        <div class="voraz-card-actions">
-                            <!-- ✅ BOTÓN 1: Resalta TODOS los códigos de este documento -->
-                            <button class="voraz-btn-highlight" 
-                                    onclick="voraz_highlightAllCodes('${doc.id}', '${escapeForAttr(doc.ruta_archivo)}', '${allCodesStr}')">
-                                🖍️ Resaltar Todos (${docCodes.length} códigos)
+                        <div style="background: #f9fafb; padding: 0.5rem; border-radius: 4px; border: 1px solid #f3f4f6; margin-bottom: 1rem;">
+                            <small style="color: #6b7280; display: block; margin-bottom: 0.25rem;">Códigos encontrados:</small>
+                            ${docCodes.map(c => `<span class="code-tag" style="display: inline-block; background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; margin-right: 4px; margin-bottom: 4px;">${c}</span>`).join('')}
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.75rem;">
+                            <!-- Botón reconstruido para resaltar TODOS -->
+                            <button onclick="voraz_highlightAllCodes('${doc.id}', '${escapeForAttr(doc.ruta_archivo)}', '${allCodesStr}')" 
+                                    class="btn btn-success" 
+                                    style="background-color: #059669; border: none; color: white; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.875rem; font-weight: 500;">
+                                🖍️ Resaltar (${doc.all_codes ? doc.all_codes.split(',').length : docCodes.length})
                             </button>
                             
-                            <button class="voraz-btn-original" 
-                                    onclick="window.open('clients/${clientCode}/uploads/${doc.ruta_archivo}', '_blank')">
+                            <a href="clients/${clientCode}/uploads/${doc.ruta_archivo}" target="_blank" 
+                               class="btn btn-secondary"
+                               style="background-color: white; border: 1px solid #d1d5db; color: #374151; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-size: 0.875rem;">
                                 📄 Original
-                            </button>
+                            </a>
                         </div>
                     </div>
                 `;
             }
+            
+            html += '</div>';
 
             resultsDiv.innerHTML = html;
             resultsDiv.classList.remove('hidden');
