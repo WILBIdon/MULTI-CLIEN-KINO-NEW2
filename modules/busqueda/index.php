@@ -519,13 +519,19 @@ COD001
 
             document.getElementById('searchSummary').innerHTML = summaryHtml;
 
-            // Button "Generar PDF Unificado" (Voracious) - Append separately to ensure visibility
+            // Store data globally to avoid inline HTML issues
+            window.lastVorazData = {
+                documents: result.documents,
+                codes: searchedCodes
+            };
+
+            // Button "Generar PDF Unificado" (Voracious)
             if (result.documents && result.documents.length > 0) {
                 const btnContainer = document.createElement('div');
                 btnContainer.style.marginTop = '1rem';
                 btnContainer.style.textAlign = 'center';
                 btnContainer.innerHTML = `
-                     <button onclick='voraz_generateUnifiedPDF(${escapeForJSON(result.documents)}, ${escapeForJSON(searchedCodes)})' 
+                     <button onclick="voraz_generateUnifiedFromGlobal()" 
                              class="btn btn-primary" 
                              style="padding: 0.75rem 1.5rem; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
                         📄 Generar PDF Unificado
@@ -533,9 +539,6 @@ COD001
                     <small style="display: block; text-align: center; margin-top: 0.5rem; color: #6b7280;">Genera un único PDF con solo las páginas relevantes</small>
                 `;
                 document.getElementById('searchSummary').appendChild(btnContainer);
-                console.log('Botón Voraz agregado');
-            } else {
-                console.log('No hay documentos para botón Voraz');
             }
 
             if (!result.documents || result.documents.length === 0) {
