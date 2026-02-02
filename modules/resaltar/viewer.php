@@ -522,6 +522,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                                 <span id="doc-counter"><span id="current-doc">1</span>/<?= $totalDocs ?></span>
                                 <button onclick="navigateVorazDoc(1)" id="btn-next-doc" class="nav-btn">
                                     ▶
+                                </button>
                             </div>
                         <?php endif; ?>
 
@@ -625,79 +626,88 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
     </div>
 
     <script>
-        // Initialize PDF.js
+        // Configuración de PDF.js
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
         // --- Configuración Global ---
         const viewerMode = '<?= $mode ?>';
         const isStrictMode = <?= $strictMode ? 'true' : 'false' ?>;
         
-        // Listas de términos limpias
+        // Listas de términos (Hits y Contexto)
         const rawHits = <?= json_encode(array_values($hits)) ?>;
         const rawContext = <?= json_encode(array_values($context)) ?>;
+        
+        // Limpieza básica para listas
         const hits = rawHits.map(String).map(s => s.trim()).filter(s => s.length > 0);
         const context = rawContext.map(String).map(s => s.trim()).filter(s => s.length > 0);
         
-        // Unificación para el control de "Faltantes"
-        // Normalizamos a minúsculas para comparar lo encontrado
-        let allTermsMap = new Map(); // Mapa: "termino_normalizado" => "Termino Original"
+        // Mapa maestro para control de estado
+        // Clave: Texto normalizado (sin espacios/signos), Valor: Texto original
+        let allTermsMap = new Map(); 
         [...hits, ...context].forEach(t => {
+            // Normalización agresiva para coincidir con lo que verá el buscador
             allTermsMap.set(t.toLowerCase().replace(/[^a-z0-9]/g, ''), t);
         });
 
         // Estado del sistema
-        let foundTermsSet = new Set(); // Términos que Mark.js ya encontró
-        let hasScrolledToFirstMatch = false; // Flag para el scroll automático
-        let pagesWithMatches = [];
+        let foundTermsSet = new Set(); // Términos confirmados
+        let hasScrolledToFirstMatch = false; // Flag para evitar saltos locos
         
         const pdfUrl = '<?= addslashes($pdfUrl) ?>';
         const container = document.getElementById('pdfContainer');
         const scale = 1.5;
         let pdfDoc = null;
 
-        // --- Actualizar UI de Estado ---
-        function updateStatusUI() {
+        // --- UI: Actualizar Estado ---
+        function updateStatusUI(scanning = false) {
             const statusDiv = document.getElementById('simpleStatus');
             if (!statusDiv) return;
 
-            // Calculamos qué falta comparando el Mapa original con el Set de encontrados
+            // Calcular faltantes
             let missing = [];
-            
             allTermsMap.forEach((originalTerm, normalizedKey) => {
                 if (!foundTermsSet.has(normalizedKey)) {
                     missing.push(originalTerm);
                 }
             });
 
+            let html = '';
+            
             if (missing.length === 0) {
-                statusDiv.innerHTML = `
-                    <div style="background:#dcfce7; color:#166534; padding:8px; border-radius:6px; text-align:center; margin-top:10px;">
+                html = `
+                    <div style="background:#dcfce7; color:#166534; padding:10px; border-radius:6px; text-align:center; margin-top:10px; border:1px solid #86efac;">
                         ✅ <strong>Completo:</strong> Todos los códigos encontrados.
                     </div>`;
             } else {
-                statusDiv.innerHTML = `
-                    <div style="background:#fee2e2; color:#991b1b; padding:8px; border-radius:6px; margin-top:10px;">
+                const statusText = scanning ? 'Analizando documento...' : 'Búsqueda finalizada';
+                html = `
+                    <div style="background:#fee2e2; color:#991b1b; padding:10px; border-radius:6px; margin-top:10px; border:1px solid #fecaca;">
+                        <div style="margin-bottom:5px; font-size:0.85em; text-transform:uppercase; opacity:0.8;">${statusText}</div>
                         <strong>⚠️ Faltan (${missing.length}):</strong> ${missing.join(', ')}
                     </div>`;
             }
+            statusDiv.innerHTML = html;
         }
 
-        // --- Carga del PDF ---
+        // --- Carga Principal ---
         async function loadPDF() {
             try {
                 pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
                 const numPages = pdfDoc.numPages;
-                container.innerHTML = ''; // Limpiar spinner
+                container.innerHTML = ''; 
 
-                // Inicializar estado visual "Buscando..."
-                updateStatusUI();
+                updateStatusUI(true); // Mostrar estado "Analizando"
 
-                // Crear placeholders
+                // 1. Crear estructuras vacías (Placeholders)
                 for (let pageNum = 1; pageNum <= numPages; pageNum++) {
                     createPagePlaceholder(pageNum);
                 }
 
-                // Lazy Load Observer
+                // 2. Iniciar el "Radar de Fondo" (Busca texto sin renderizar imagen)
+                // Esto es clave para encontrar la página antes de que el usuario baje
+                runBackgroundRadar(numPages);
+
+                // 3. Configurar Lazy Loading visual (para pintar cuando lleguemos)
                 const observer = new IntersectionObserver((entries) => {
                     entries.forEach(entry => {
                         if (entry.isIntersecting) {
@@ -708,24 +718,63 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                             }
                         }
                     });
-                }, { root: null, rootMargin: '600px', threshold: 0.01 }); // Aumentado rootMargin para renderizar antes de llegar
+                }, { root: null, rootMargin: '400px', threshold: 0.05 });
 
                 document.querySelectorAll('.pdf-page-wrapper').forEach(el => observer.observe(el));
 
-                // FORZAR RENDER DE LAS PRIMERAS PÁGINAS PARA ENCONTRAR RÁPIDO EL PRIMER MATCH
-                // Esto ayuda a que el scroll automático funcione casi de inmediato si el dato está al inicio.
-                for(let i=1; i<=Math.min(numPages, 3); i++) {
-                   const el = document.getElementById('page-'+i);
-                   if(el && !el.dataset.rendered) {
-                       renderPage(i, el);
-                       el.dataset.rendered = 'true';
-                   }
-                }
-
             } catch (error) {
-                console.error("Error:", error);
-                container.innerHTML = `<p style='color:red;'>Error: ${error.message}</p>`;
+                console.error("Error PDF:", error);
+                container.innerHTML = `<p style='color:red;'>Error crítico: ${error.message}</p>`;
             }
+        }
+
+        // --- EL RADAR SILENCIOSO (Corrección del problema de Scroll) ---
+        async function runBackgroundRadar(totalDocs) {
+            // Recorremos todas las páginas buscando texto puro (muy rápido)
+            for (let i = 1; i <= totalDocs; i++) {
+                try {
+                    const page = await pdfDoc.getPage(i);
+                    const textContent = await page.getTextContent();
+                    
+                    // Unimos todo el texto de la página y limpiamos
+                    const pageString = textContent.items.map(item => item.str).join('');
+                    const cleanPageString = pageString.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                    // Verificamos si hay coincidencias
+                    let foundOnThisPage = false;
+                    
+                    for (let [key, original] of allTermsMap) {
+                        // Si encontramos el término (y no estaba marcado ya)
+                        if (cleanPageString.includes(key)) {
+                            foundTermsSet.add(key);
+                            foundOnThisPage = true;
+                        }
+                    }
+
+                    // Actualizar UI progresivamente
+                    updateStatusUI(true);
+
+                    // ⭐ LA MAGIA: Si encontramos algo en esta página y es la primera vez...
+                    // SCROLL AUTOMÁTICO HACIA ELLA
+                    if (foundOnThisPage && !hasScrolledToFirstMatch) {
+                        hasScrolledToFirstMatch = true;
+                        const pageEl = document.getElementById('page-' + i);
+                        if (pageEl) {
+                            // Scroll suave hacia la página encontrada
+                            pageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            // Esto forzará al IntersectionObserver a renderizarla visualmente
+                            // y activará mark.js
+                        }
+                    }
+
+                    // Pequeña pausa para no congelar el navegador en docs gigantes
+                    if (i % 5 === 0) await new Promise(r => setTimeout(r, 10));
+
+                } catch (e) {
+                    console.error("Error radar pag " + i, e);
+                }
+            }
+            updateStatusUI(false); // Finalizar estado
         }
 
         function createPagePlaceholder(pageNum) {
@@ -733,28 +782,40 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             wrapper.className = 'pdf-page-wrapper';
             wrapper.id = 'page-' + pageNum;
             wrapper.dataset.pageNum = pageNum;
-            wrapper.style.marginBottom = '20px';
-            wrapper.innerHTML = `<div style="padding:50px; text-align:center; color:#ccc;">Página ${pageNum}</div>`;
+            wrapper.style.minHeight = '800px'; // Altura estimada para que el scroll funcione
+            wrapper.style.position = 'relative';
             
-            const pageLabel = document.createElement('div');
-            pageLabel.className = 'page-number';
-            pageLabel.textContent = `Página ${pageNum}`;
+            // Loader simple visible
+            wrapper.innerHTML = `
+                <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:#9ca3af;">
+                    Cargando Página ${pageNum}...
+                </div>`;
+            
+            const containerDiv = document.createElement('div');
+            containerDiv.style.marginBottom = "20px";
+            containerDiv.appendChild(wrapper);
+            
+            // Número de página pie
+            const footer = document.createElement('div');
+            footer.className = 'page-number';
+            footer.textContent = `Página ${pageNum}`;
+            containerDiv.appendChild(footer);
 
-            const box = document.createElement('div');
-            box.appendChild(wrapper);
-            box.appendChild(pageLabel);
-            container.appendChild(box);
+            container.appendChild(containerDiv);
         }
 
+        // --- Renderizado Visual (Pesado) ---
         async function renderPage(pageNum, wrapper) {
             try {
                 const page = await pdfDoc.getPage(pageNum);
                 const viewport = page.getViewport({ scale });
 
-                wrapper.innerHTML = '';
+                wrapper.innerHTML = ''; // Limpiar loader
                 wrapper.style.width = viewport.width + 'px';
                 wrapper.style.height = viewport.height + 'px';
+                wrapper.style.minHeight = ''; // Quitar altura forzada
 
+                // 1. Canvas (Imagen)
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 canvas.height = viewport.height;
@@ -763,85 +824,50 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
                 await page.render({ canvasContext: ctx, viewport: viewport }).promise;
 
-                // Capa de Texto
-                const textContent = await page.getTextContent();
-                const textLayerDiv = document.createElement('div');
-                textLayerDiv.className = 'text-layer';
-                textLayerDiv.style.width = viewport.width + 'px';
-                textLayerDiv.style.height = viewport.height + 'px';
-                wrapper.appendChild(textLayerDiv);
+                // 2. Capa de Texto (Para selección y Mark.js)
+                const textDiv = document.createElement('div');
+                textDiv.className = 'text-layer';
+                textDiv.style.width = viewport.width + 'px';
+                textDiv.style.height = viewport.height + 'px';
+                wrapper.appendChild(textDiv);
 
+                const textContent = await page.getTextContent();
                 await pdfjsLib.renderTextLayer({
                     textContent: textContent,
-                    container: textLayerDiv,
+                    container: textDiv,
                     viewport: viewport,
                     textDivs: []
                 }).promise;
 
-                // ⭐ LOGICA CORREGIDA DE RESALTADO Y DETECCIÓN ⭐
-                const instance = new Mark(textLayerDiv);
-                
-                // Configuración común para Mark.js
-                const markOptions = {
+                // 3. Resaltado Visual
+                const instance = new Mark(textDiv);
+                const options = {
                     element: "mark",
-                    accuracy: isStrictMode ? "partially" : "partially", 
-                    separateWordSearch: false,
-                    // ESTA ES LA CLAVE: Detectar cuando Mark.js realmente encuentra algo
-                    each: function(elem) {
-                        // 1. Obtener texto real encontrado
-                        const textFound = elem.textContent;
-                        const normalizedFound = textFound.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-                        // 2. Verificar contra nuestra lista de buscados (Fuzzy Check)
-                        //    Iteramos el mapa para ver cuál coincide
-                        for (let [key, val] of allTermsMap) {
-                            if (normalizedFound.includes(key) || key.includes(normalizedFound)) {
-                                foundTermsSet.add(key);
-                            }
-                        }
-
-                        // 3. Actualizar UI de "Faltantes"
-                        updateStatusUI();
-
-                        // 4. SCROLL AUTOMÁTICO AL PRIMER HALLAZGO
-                        if (!hasScrolledToFirstMatch) {
-                            hasScrolledToFirstMatch = true;
-                            setTimeout(() => {
-                                elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                // Resaltar visualmente el hallazgo
-                                elem.style.boxShadow = "0 0 0 4px #facc15"; 
-                                setTimeout(() => elem.style.boxShadow = "none", 2000);
-                            }, 100); // Pequeño delay para asegurar renderizado
-                        }
-                    }
+                    accuracy: "partially",
+                    separateWordSearch: false
                 };
 
-                // Aplicar resaltado
-                if (isStrictMode) {
-                    if (hits.length > 0) instance.mark(hits, { ...markOptions, className: "highlight-hit" });
-                    if (context.length > 0) instance.mark(context, { ...markOptions, className: "highlight-context" });
-                } else {
-                    const allParams = [...hits, ...context];
-                    if (allParams.length > 0) instance.mark(allParams, markOptions);
+                // Aplicar colores
+                if (hits.length > 0) {
+                    instance.mark(hits, { ...options, className: "highlight-hit" });
+                }
+                if (context.length > 0) {
+                    instance.mark(context, { ...options, className: "highlight-context" });
                 }
 
             } catch (err) {
-                console.error(`Page ${pageNum} error:`, err);
+                console.error(`Error render pag ${pageNum}:`, err);
             }
         }
 
-        // Iniciar
-        loadPDF();
-
-        // --- Funciones de Impresión ---
+        // Funciones auxiliares UI
         function showPrintModal() { document.getElementById('printModal').classList.add('active'); }
         function closePrintModal() { document.getElementById('printModal').classList.remove('active'); }
         function printFullDocument() { window.print(); closePrintModal(); }
-        
-        // Voraz Navigation (Simplificado)
+
+        // Navegación Voraz (Legacy)
         let vorazData = JSON.parse(sessionStorage.getItem('voraz_viewer_data') || 'null');
         let currentDocIndex = vorazData ? (vorazData.currentIndex || 0) : 0;
-        
         function navigateVorazDoc(dir) {
             if (!vorazData) return;
             const newIndex = currentDocIndex + dir;
@@ -855,6 +881,9 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 window.location.search = p.toString();
             }
         }
+
+        // Iniciar todo
+        loadPDF();
     </script>
 </body>
 
