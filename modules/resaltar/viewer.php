@@ -526,25 +526,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                         <?php endif; ?>
 
                         <!-- Match Navigation -->
-                        <?php if ($strictMode || !empty($termsToHighlight)): ?>
-                            <div class="voraz-navigation"
-                                style="background: #ffffff; border-color: #ff9f43; flex-direction: column; gap: 10px;">
-                                <h4 style="margin:0; font-size: 0.9rem; color: #d97706;">Navegación de Hallazgos</h4>
-                                <div style="display: flex; gap: 10px; width: 100%;">
-                                    <button onclick="jumpToMatch(-1)" class="nav-btn"
-                                        style="flex: 1; background: #fbbf24; color: #78350f;">
-                                        ⬆ Anterior
-                                    </button>
-                                    <button onclick="jumpToMatch(1)" class="nav-btn"
-                                        style="flex: 1; background: #fbbf24; color: #78350f;">
-                                        ⬇ Siguiente
-                                    </button>
-                                </div>
-                                <div id="match-status" style="font-size: 0.8rem; text-align: center; color: #b45309;">
-                                    Buscando...
-                                </div>
-                            </div>
-                        <?php endif; ?>
+
 
                         <?php if ($mode === 'unified' && $downloadUrl): ?>
                             <div class="unified-download">
@@ -587,16 +569,8 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                         </div>
 
                         <?php if (!empty($searchTerm)): ?>
-                            <div class="match-badge" id="matchBadge">
-                                <span>⌛</span>
-                                <span id="matchText">Calculando...</span>
-                            </div>
-                            <!-- Search Summary Container -->
-                            <div id="searchSummary"
-                                style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb; font-size: 0.85rem; max-height: 300px; overflow-y: auto;">
-                                <p style="margin: 0 0 5px 0; font-weight: bold; color: #6b7280;">Procesando búsqueda...</p>
-                                <div id="summaryList"></div>
-                            </div>
+                            <!-- Simple Status Area -->
+                            <div id="simpleStatus" style="margin-top: 10px; font-size: 0.9rem; font-weight: 600;"></div>
                         <?php endif; ?>
 
                         <button class="btn-print" onclick="showPrintModal()">
@@ -755,124 +729,79 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             }
         }
 
-        // Función de escaneo en segundo plano RECONSTRUIDA
+        // Función RECONSTRUIDA: Auto-scroll y Status Simple
         async function scanAllPagesForSummary() {
-            const summaryDiv = document.getElementById('searchSummary');
-            if (!summaryDiv) return;
+            const statusDiv = document.getElementById('simpleStatus');
+            if (!statusDiv) return;
 
-            // Obtener términos (PHP terms)
+            // Limpiar status
+            statusDiv.innerHTML = '<span style="color:#d97706">Buscando...</span>';
+
             const terms = <?= json_encode(array_values($termsToHighlight)) ?>.map(String).map(s => s.trim()).filter(s => s.length > 0);
             if (!terms || terms.length === 0) {
-                summaryDiv.innerHTML = '<p class="text-muted">Sin términos de búsqueda.</p>';
+                statusDiv.innerHTML = '';
                 return;
             }
 
-            // Normalizar términos para comparación flexible (quitar espacios y símbolos)
+            // Normalizar
             const normalizedTerms = terms.map(t => ({
                 original: t,
                 clean: t.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
             }));
 
-            const foundSet = new Set();
             const notFoundSet = new Set(terms);
+            let firstMatchPage = null;
 
-            // Escanear página por página
-            document.getElementById('summaryList').innerHTML = '<div style="padding:10px; text-align:center;"><div class="spinner" style="width:20px;height:20px;border-width:2px;"></div><span style="font-size:0.8rem; margin-top:5px; display:block;">Analizando documento...</span></div>';
-
+            // Escanear páginas
             for (let i = 1; i <= pdfDoc.numPages; i++) {
                 try {
                     const textContent = await pdfDoc.getPage(i).getTextContent();
-                    // Unir todo el texto de la página en una sola cadena continua
                     const rawPageText = textContent.items.map(s => s.str).join('');
                     const cleanPageText = rawPageText.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
+                    // Check extra con espacios
+                    const rawPageTextSpaces = textContent.items.map(s => s.str).join(' ');
+                    const cleanPageTextSpaces = rawPageTextSpaces.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
                     let pageHasHit = false;
 
-                    // Verificar cada término contra el texto limpio de la página
                     normalizedTerms.forEach(termObj => {
-                        // Si ya lo encontramos, no hace falta buscarlo de nuevo a menos que queramos saber TODAS las páginas (aquí solo buscamos si existe en el doc)
-                        // Para "pagesWithMatches" sí necesitamos saber si está en ESTA página.
-                        const isMatch = cleanPageText.includes(termObj.clean);
-                        
-                        // Check extra: a veces join('') pega palabras. Probamos join(' ') también por si acaso
-                        const rawPageTextSpaces = textContent.items.map(s => s.str).join(' ');
-                        const cleanPageTextSpaces = rawPageTextSpaces.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                        const isMatchSpaces = cleanPageTextSpaces.includes(termObj.clean);
-
-                        if (isMatch || isMatchSpaces) {
-                            foundSet.add(termObj.original);
+                        if (cleanPageText.includes(termObj.clean) || cleanPageTextSpaces.includes(termObj.clean)) {
                             notFoundSet.delete(termObj.original);
-                            
-                            // Si el término es un HIT (no contexto), marcamos la página
-                            if (hits.includes(termObj.original)) {
-                                pageHasHit = true;
-                            }
+                            if (hits.includes(termObj.original)) pageHasHit = true;
                         }
                     });
 
-                    if (pageHasHit && !pagesWithMatches.includes(i)) {
-                        pagesWithMatches.push(i);
+                    // Si encontramos un hit por primera vez, guardar página para scroll
+                    if (pageHasHit && firstMatchPage === null) {
+                        firstMatchPage = i;
+                        // Scroll inmediato al encontrar el primero
+                        const pageEl = document.getElementById('page-' + i);
+                        if(pageEl) {
+                            pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            // Pequeño highlight visual en el borde
+                            pageEl.style.border = "4px solid #facc15";
+                            setTimeout(() => pageEl.style.border = "none", 3000);
+                        }
                     }
 
-                } catch (e) {
-                    console.error("Error scanning page " + i, e);
-                }
+                } catch (e) { console.error(e); }
             }
 
-            // Actualizar UI Final (Tarjeta Reconstruida)
-            let html = '<div style="display:flex; flex-direction:column; gap:8px;">';
-
-            // Barra de progreso visual
-            const total = terms.length;
-            const foundCount = foundSet.size;
-            const percentage = Math.round((foundCount / total) * 100);
-            
-            html += `
-                <div style="margin-bottom:5px;">
-                    <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:2px;">
-                        <strong>Progreso</strong>
-                        <span>${foundCount}/${total}</span>
-                    </div>
-                    <div style="width:100%; height:4px; background:#e5e7eb; border-radius:2px;">
-                        <div style="width:${percentage}%; height:100%; background:${percentage === 100 ? '#22c55e' : '#3b82f6'}; border-radius:2px; transition:width 0.5s;"></div>
-                    </div>
-                </div>
-            `;
-
-            // Encontrados (Compacto)
-            if (foundSet.size > 0) {
-                html += `<div style="font-size:0.8rem;">
-                    <strong style="color:#15803d">✓ Encontrados:</strong>
-                    <div style="margin-top:2px;">`;
-                foundSet.forEach(t => {
-                    html += `<span style="display:inline-block; background:#dcfce7; color:#14532d; border:1px solid #bbf7d0; padding:1px 5px; border-radius:4px; font-size:0.75rem; margin:0 2px 2px 0;">${t}</span>`;
-                });
-                html += `</div></div>`;
-            }
-
-            // No encontrados (Compacto)
-            if (notFoundSet.size > 0) {
-                html += `<div style="font-size:0.8rem; border-top:1px dashed #e5e7eb; padding-top:4px;">
-                    <strong style="color:#b91c1c">✕ Pendientes:</strong>
-                    <div style="margin-top:2px;">`;
-                notFoundSet.forEach(t => {
-                    html += `<span style="display:inline-block; background:#fee2e2; color:#7f1d1d; border:1px solid #fecaca; padding:1px 5px; border-radius:4px; font-size:0.75rem; margin:0 2px 2px 0;">${t}</span>`;
-                });
-                html += `</div></div>`;
-            }
-
-            html += '</div>';
-            document.getElementById('summaryList').innerHTML = html;
-
-            // Update Match Navigation
-            const matchStatus = document.getElementById('match-status');
-            if (matchStatus) {
-                if (pagesWithMatches.length > 0) {
-                    pagesWithMatches.sort((a, b) => a - b);
-                    matchStatus.textContent = `${pagesWithMatches.length} pág. con coincidencias`;
-                } else {
-                    matchStatus.textContent = "Sin hallazgos en hits";
-                }
+            // Actualizar Status Final
+            if (notFoundSet.size === 0) {
+                // Éxito Total
+                statusDiv.innerHTML = `
+                    <div style="background:#dcfce7; color:#166534; padding:8px; border-radius:6px; text-align:center;">
+                        ✅ Todos los códigos encontrados
+                    </div>`;
+            } else {
+                // Faltantes
+                const missingList = Array.from(notFoundSet).join(', ');
+                statusDiv.innerHTML = `
+                    <div style="background:#fee2e2; color:#991b1b; padding:8px; border-radius:6px;">
+                        <strong>⚠️ Faltan:</strong> ${missingList}
+                    </div>`;
             }
         }
 
