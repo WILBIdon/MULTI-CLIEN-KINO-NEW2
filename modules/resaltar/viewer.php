@@ -253,15 +253,16 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         }
 
         /* Highlight Styles */
+        /* Highlight Styles - Adjusted for transparency and green-only preference */
         .highlight-hit {
-            background-color: #ff9f43 !important;
-            /* Orange for hits */
-            box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+            background-color: rgba(34, 197, 94, 0.4) !important; /* Green transparent (Tailwind green-500 equivalent) */
+            border-bottom: 2px solid #166534; /* Darker green underline for emphasis */
+            color: transparent;
         }
 
         .highlight-context {
-            background-color: rgba(50, 255, 50, 0.5) !important;
-            /* Green for context */
+            background-color: rgba(34, 197, 94, 0.2) !important; /* Lighter green transparent */
+            color: transparent;
         }
 
         .page-number {
@@ -754,13 +755,11 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             }
         }
 
-        // Función de escaneo en segundo plano para el reporte Found/Not Found
+        // Función de escaneo en segundo plano RECONSTRUIDA
         async function scanAllPagesForSummary() {
             const summaryDiv = document.getElementById('searchSummary');
             if (!summaryDiv) return;
 
-            // Obtener términos (PHP terms)
-            // Obtener términos (PHP terms)
             // Obtener términos (PHP terms)
             const terms = <?= json_encode(array_values($termsToHighlight)) ?>.map(String).map(s => s.trim()).filter(s => s.length > 0);
             if (!terms || terms.length === 0) {
@@ -768,72 +767,101 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 return;
             }
 
+            // Normalizar términos para comparación flexible (quitar espacios y símbolos)
+            const normalizedTerms = terms.map(t => ({
+                original: t,
+                clean: t.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+            }));
+
             const foundSet = new Set();
             const notFoundSet = new Set(terms);
 
-            // Escanear página por página (solo texto, sin renderizar canvas)
-            document.getElementById('summaryList').innerHTML = '<span style="color:orange">Analizando todo el PDF...</span>';
+            // Escanear página por página
+            document.getElementById('summaryList').innerHTML = '<div style="padding:10px; text-align:center;"><div class="spinner" style="width:20px;height:20px;border-width:2px;"></div><span style="font-size:0.8rem; margin-top:5px; display:block;">Analizando documento...</span></div>';
 
             for (let i = 1; i <= pdfDoc.numPages; i++) {
                 try {
                     const textContent = await pdfDoc.getPage(i).getTextContent();
-                    const pageText = textContent.items.map(s => s.str).join(' '); // Unir con espacios
+                    // Unir todo el texto de la página en una sola cadena continua
+                    const rawPageText = textContent.items.map(s => s.str).join('');
+                    const cleanPageText = rawPageText.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
-                    // Chequear cada término pendiente (solo para reporte found/not found)
-                    // Y detectar si la página tiene algún HIT
                     let pageHasHit = false;
 
-                    // Chequear hits (prioridad)
-                    hits.forEach(term => {
-                        if (checkTermMatch(term, pageText)) {
-                            foundSet.add(term);
-                            pageHasHit = true;
+                    // Verificar cada término contra el texto limpio de la página
+                    normalizedTerms.forEach(termObj => {
+                        // Si ya lo encontramos, no hace falta buscarlo de nuevo a menos que queramos saber TODAS las páginas (aquí solo buscamos si existe en el doc)
+                        // Para "pagesWithMatches" sí necesitamos saber si está en ESTA página.
+                        const isMatch = cleanPageText.includes(termObj.clean);
+                        
+                        // Check extra: a veces join('') pega palabras. Probamos join(' ') también por si acaso
+                        const rawPageTextSpaces = textContent.items.map(s => s.str).join(' ');
+                        const cleanPageTextSpaces = rawPageTextSpaces.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                        const isMatchSpaces = cleanPageTextSpaces.includes(termObj.clean);
+
+                        if (isMatch || isMatchSpaces) {
+                            foundSet.add(termObj.original);
+                            notFoundSet.delete(termObj.original);
+                            
+                            // Si el término es un HIT (no contexto), marcamos la página
+                            if (hits.includes(termObj.original)) {
+                                pageHasHit = true;
+                            }
                         }
                     });
 
-                    if (pageHasHit) {
+                    if (pageHasHit && !pagesWithMatches.includes(i)) {
                         pagesWithMatches.push(i);
                     }
-
-                    // Chequear contexto y actualizar notFoundSet
-                    // (Si ya encontramos un termino en hits, ya está en foundSet, pero 
-                    // si hay terminos en contexto que NO están en hits, chequearlos)
-                    notFoundSet.forEach(term => {
-                        if (checkTermMatch(term, pageText)) {
-                            foundSet.add(term);
-                            notFoundSet.delete(term);
-                        }
-                    });
-
-                    // Si ya encontramos todos, parar temprano
-                    if (notFoundSet.size === 0) break;
 
                 } catch (e) {
                     console.error("Error scanning page " + i, e);
                 }
             }
 
-            // Actualizar UI Final
-            let html = '';
+            // Actualizar UI Final (Tarjeta Reconstruida)
+            let html = '<div style="display:flex; flex-direction:column; gap:8px;">';
 
-            // Encontrados
+            // Barra de progreso visual
+            const total = terms.length;
+            const foundCount = foundSet.size;
+            const percentage = Math.round((foundCount / total) * 100);
+            
+            html += `
+                <div style="margin-bottom:5px;">
+                    <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:2px;">
+                        <strong>Progreso</strong>
+                        <span>${foundCount}/${total}</span>
+                    </div>
+                    <div style="width:100%; height:4px; background:#e5e7eb; border-radius:2px;">
+                        <div style="width:${percentage}%; height:100%; background:${percentage === 100 ? '#22c55e' : '#3b82f6'}; border-radius:2px; transition:width 0.5s;"></div>
+                    </div>
+                </div>
+            `;
+
+            // Encontrados (Compacto)
             if (foundSet.size > 0) {
-                html += `<div style="margin-bottom:8px;"><strong style="color:green">✅ Encontrados (${foundSet.size}):</strong><br>`;
-                foundSet.forEach(t => html += `<span style="background:#dcfce7; color:#166534; padding:1px 4px; border-radius:3px; font-size:0.75rem; margin-right:2px; display:inline-block; margin-bottom:2px;">${t}</span> `);
-                html += `</div>`;
+                html += `<div style="font-size:0.8rem;">
+                    <strong style="color:#15803d">✓ Encontrados:</strong>
+                    <div style="margin-top:2px;">`;
+                foundSet.forEach(t => {
+                    html += `<span style="display:inline-block; background:#dcfce7; color:#14532d; border:1px solid #bbf7d0; padding:1px 5px; border-radius:4px; font-size:0.75rem; margin:0 2px 2px 0;">${t}</span>`;
+                });
+                html += `</div></div>`;
             }
 
-            // No encontrados
+            // No encontrados (Compacto)
             if (notFoundSet.size > 0) {
-                html += `<div><strong style="color:red">❌ No Encontrados (${notFoundSet.size}):</strong><br`;
-                notFoundSet.forEach(t => html += `<span style="background:#fee2e2; color:#991b1b; padding:1px 4px; border-radius:3px; font-size:0.75rem; margin-right:2px; display:inline-block; margin-bottom:2px;">${t}</span> `);
-                html += `</div>`;
+                html += `<div style="font-size:0.8rem; border-top:1px dashed #e5e7eb; padding-top:4px;">
+                    <strong style="color:#b91c1c">✕ Pendientes:</strong>
+                    <div style="margin-top:2px;">`;
+                notFoundSet.forEach(t => {
+                    html += `<span style="display:inline-block; background:#fee2e2; color:#7f1d1d; border:1px solid #fecaca; padding:1px 5px; border-radius:4px; font-size:0.75rem; margin:0 2px 2px 0;">${t}</span>`;
+                });
+                html += `</div></div>`;
             }
 
-            if (foundSet.size === 0 && notFoundSet.size === 0) {
-                html = '<p>Búsqueda vacía.</p>';
-            }
-
+            html += '</div>';
             document.getElementById('summaryList').innerHTML = html;
 
             // Update Match Navigation
@@ -841,9 +869,9 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             if (matchStatus) {
                 if (pagesWithMatches.length > 0) {
                     pagesWithMatches.sort((a, b) => a - b);
-                    matchStatus.textContent = `${pagesWithMatches.length} páginas con hallazgos`;
+                    matchStatus.textContent = `${pagesWithMatches.length} pág. con coincidencias`;
                 } else {
-                    matchStatus.textContent = "Sin hallazgos";
+                    matchStatus.textContent = "Sin hallazgos en hits";
                 }
             }
         }
