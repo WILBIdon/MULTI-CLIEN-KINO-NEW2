@@ -656,8 +656,9 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         // Variables Globales
         const viewerMode = '<?= $mode ?>';
         const isStrictMode = <?= $strictMode ? 'true' : 'false' ?>;
-        const hits = <?= json_encode(array_values($hits)) ?>.map(String);
-        const context = <?= json_encode(array_values($context)) ?>.map(String);
+        // Robust filtering: Cast to string, trim, and remove empty values
+        const hits = <?= json_encode(array_values($hits)) ?>.map(String).map(s => s.trim()).filter(s => s.length > 0);
+        const context = <?= json_encode(array_values($context)) ?>.map(String).map(s => s.trim()).filter(s => s.length > 0);
 
         let vorazData = null;
         let currentDocIndex = 0;
@@ -760,7 +761,8 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
             // Obtener términos (PHP terms)
             // Obtener términos (PHP terms)
-            const terms = <?= json_encode(array_values($termsToHighlight)) ?>.map(String);
+            // Obtener términos (PHP terms)
+            const terms = <?= json_encode(array_values($termsToHighlight)) ?>.map(String).map(s => s.trim()).filter(s => s.length > 0);
             if (!terms || terms.length === 0) {
                 summaryDiv.innerHTML = '<p class="text-muted">Sin términos de búsqueda.</p>';
                 return;
@@ -935,8 +937,30 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                     viewport: viewport
                 }).promise;
 
-                // ⭐ Highlight logic
-                const instance = new Mark(canvas.parentElement);
+                }
+
+                // --- Restore Text Layer for Highlighting ---
+                const textContent = await page.getTextContent();
+                const textLayerDiv = document.createElement('div');
+                textLayerDiv.className = 'text-layer';
+                // Start with same dimensions as viewport
+                textLayerDiv.style.width = viewport.width + 'px';
+                textLayerDiv.style.height = viewport.height + 'px';
+                
+                // Append BEFORE highlighting so Mark.js can find text
+                wrapper.appendChild(textLayerDiv);
+
+                // PDF.js renderTextLayer (newer versions) or manual loop?
+                // Using pdfjs.renderTextLayer is safer/standard
+                await pdfjsLib.renderTextLayer({
+                    textContent: textContent,
+                    container: textLayerDiv,
+                    viewport: viewport,
+                    textDivs: []
+                }).promise;
+
+                // ⭐ Highlight logic (NOW SAFE TO RUN)
+                const instance = new Mark(textLayerDiv);
 
                 // Opción 1: Strict Mode (Dual Color)
                 if (isStrictMode) {
