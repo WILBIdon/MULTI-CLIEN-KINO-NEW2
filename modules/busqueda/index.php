@@ -157,7 +157,6 @@ $pageTitle = 'Gestor de Documentos';
             <?php include __DIR__ . '/../../includes/header.php'; ?>
 
             <div class="page-content">
-                <!-- Stats Bar -->
                 <div class="stats-grid" style="margin-bottom: 1.5rem;">
                     <div class="stat-card">
                         <div class="stat-icon">
@@ -200,7 +199,6 @@ $pageTitle = 'Gestor de Documentos';
                     </div>
                 </div>
 
-                <!-- Tabs -->
                 <div class="card">
                     <div class="tabs" id="mainTabs">
                         <button class="tab active" data-tab="buscar">Buscar</button>
@@ -209,7 +207,6 @@ $pageTitle = 'Gestor de Documentos';
                         <button class="tab" data-tab="codigo">Búsqueda por Código</button>
                     </div>
 
-                    <!-- Tab: Buscar -->
                     <div class="tab-content active" id="tab-buscar">
                         <h3 style="margin-bottom: 1rem;">Búsqueda Inteligente</h3>
                         <p class="text-muted mb-4">Pega aquí tus códigos o un bloque de texto (ej: desde Excel). Solo se
@@ -247,7 +244,6 @@ COD001
                         </div>
                     </div>
 
-                    <!-- Tab: Subir -->
                     <div class="tab-content" id="tab-subir">
                         <h3 style="margin-bottom: 1rem;">Subir Documento</h3>
 
@@ -339,7 +335,6 @@ COD001
                         </form>
                     </div>
 
-                    <!-- Tab: Consultar -->
                     <div class="tab-content" id="tab-consultar">
                         <div class="flex justify-between items-center mb-4">
                             <h3>Lista de Documentos</h3>
@@ -362,7 +357,6 @@ COD001
                             </div>
                         </div>
 
-                        <!-- Búsqueda Full-Text en PDFs -->
                         <div class="summary-box"
                             style="margin-bottom: 1rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(59, 130, 246, 0.1));">
                             <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
@@ -382,7 +376,6 @@ COD001
                                 style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-muted);"></div>
                         </div>
 
-                        <!-- Resultados de búsqueda full-text -->
                         <div id="fulltextResults" class="hidden">
                             <div class="summary-box" style="margin-bottom: 1rem;">
                                 <span id="fulltextSummary"></span>
@@ -417,7 +410,6 @@ COD001
                         </div>
                     </div>
 
-                    <!-- Tab: Búsqueda por Código -->
                     <div class="tab-content" id="tab-codigo">
                         <h3 style="margin-bottom: 1rem;">Búsqueda por Código</h3>
                         <p class="text-muted mb-4">Busca un código específico con autocompletado.</p>
@@ -549,18 +541,14 @@ COD001
             let html = '';
             for (const doc of result.documents) {
                 // Construir ruta del PDF correctamente
-                // Use download.php to resolve path server-side
                 let pdfUrl = '';
                 if (doc.ruta_archivo) {
                     pdfUrl = `../resaltar/download.php?doc=${doc.id}`;
                 }
 
                 // 1. CÓDIGO OFICIAL (Tal cual está en BD)
-                // Mantenemos los guiones para que el usuario vea el código correcto en la pantalla
                 const officialCode = (doc.matched_codes && doc.matched_codes[0]) || (doc.codes && doc.codes[0]) || '';
                 // 2. CÓDIGO LIMPIO (Para el visor)
-                // SOLO quitamos saltos de línea y espacios de los bordes.
-                // Los guiones internos (S-543) SE QUEDAN INTACTOS.
                 const viewerTerm = officialCode.toString().replace(/[\r\n]+/g, '').trim();
 
                 html += `
@@ -626,7 +614,6 @@ COD001
             const editId = document.getElementById('editDocId').value;
             const isEditMode = !!editId;
 
-            // In edit mode, file is optional. in upload mode, it is required.
             if (!isEditMode && !fileInput.files.length) {
                 alert('Selecciona un archivo PDF');
                 return;
@@ -749,10 +736,7 @@ COD001
                                 </svg>
                             </button>
                             ${doc.ruta_archivo ? `
-                            <a href="../resaltar/viewer.php?doc=${doc.id}" class="btn btn-primary" style="padding: 0.5rem 1rem;" target="_blank">👁️ Ver Documento</a>
-                            <button type="button" class="btn btn-info" style="padding: 0.5rem 1rem; background: #3B82F6; color: white; border: none;" onclick="voraz_generateUnifiedPDF([{id: ${doc.id}, ruta_archivo: '${doc.ruta_archivo}'}], '${doc.codes.join('\\n')}')">
-                                Generar PDF Unificado
-                            </button>` : ''}
+                            <a href="../resaltar/download.php?doc=${doc.id}" class="btn btn-secondary" style="padding: 0.5rem 1rem;" target="_blank">📄 Ver pdf original</a>` : ''}
                             <button type="button" class="btn btn-secondary btn-icon" title="Eliminar" onclick="deleteDoc(${doc.id})">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -770,7 +754,6 @@ COD001
                                     📄 Ver PDF Original
                                 </a>
                             </div>
-                            <!-- Vertical List -->
                             <div style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0; background: white; padding: 0.5rem; border: 1px solid #f0f0f0; border-radius: 4px;">
                                 ${doc.codes.map(c => `<div style="font-family: inherit; font-size: 0.9rem; padding: 2px 0; color: #374151; width: 100%; display: block;">${c}</div>`).join('')}
                             </div>
@@ -880,9 +863,6 @@ COD001
                             <span class="result-meta">${doc.fecha} · ${doc.occurrences} coincidencia(s)</span>
                         </div>
                         <div class="result-title">${doc.numero}</div>
-                        <!-- Snippet oculto para usuario final 
-                        ${doc.snippet ? `<div class="result-meta" style="margin-top: 0.5rem; font-style: italic; background: rgba(255,235,59,0.1); padding: 0.5rem; border-radius: 4px;">"${doc.snippet}"</div>` : ''}
-                        -->
                         <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                             <button onclick="openHighlighter('../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(result.query)}')" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</button>
                             ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Original</a>` : ''}
@@ -906,6 +886,14 @@ COD001
         // Helpers
         function escapeForJSON(data) {
             return JSON.stringify(data).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
+        async function voraz_generateUnifiedFromGlobal() {
+            if (!window.lastVorazData || !window.lastVorazData.documents) {
+                alert('No hay resultados disponibles para generar PDF');
+                return;
+            }
+            await voraz_generateUnifiedPDF(window.lastVorazData.documents, window.lastVorazData.codes);
         }
 
         async function voraz_generateUnifiedPDF(documents, allCodes) {
@@ -1179,7 +1167,6 @@ COD001
                                 🏷️ Coincidencia: <span style="font-weight: 600; color: var(--accent-primary);">${doc.codigo_encontrado}</span>
                             </div>
                             
-                            <!-- Action Buttons -->
                             <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
                                 ${pdfUrl ? `<button onclick="openHighlighter('../resaltar/viewer.php?doc=${doc.id}&codes=${encodeURIComponent(code)}')" class="btn btn-success" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">🖍️ Resaltar</button>` : ''}
                                 ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">📄 PDF</a>` : ''}
@@ -1197,8 +1184,6 @@ COD001
                                 </button>
                             </div>
 
-                            <!-- Hidden Codes List -->
-                            <!-- Hidden Codes List -->
                             <div id="codes-list-${doc.id}" class="hidden" style="margin-top: 1rem; background: rgba(0,0,0,0.02); padding: 0.5rem; border-radius: 4px;">
                                 <div style="font-size: 0.8rem; color: #666; margin-bottom: 0.25rem;">Códigos asociados:</div>
                                 <div style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0; background: white; padding: 0.5rem; border: 1px solid #f0f0f0; border-radius: 4px;">
@@ -1377,9 +1362,8 @@ COD001
                 modal.classList.add('hidden');
             }, 3000);
         }
-    </script>
 
-    <!-- Highlighter Loading Modal -->
+    </script>
     <div id="highlighterModal" class="hidden"
         style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;">
         <div
