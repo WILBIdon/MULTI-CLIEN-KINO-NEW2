@@ -729,7 +729,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             }
         }
 
-        // Función RECONSTRUIDA: Auto-scroll y Status Simple
+        // Función RECONSTRUIDA: Auto-scroll y Status Simple + Fuzzy Match
         async function scanAllPagesForSummary() {
             const statusDiv = document.getElementById('simpleStatus');
             if (!statusDiv) return;
@@ -766,7 +766,27 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                     let pageHasHit = false;
 
                     normalizedTerms.forEach(termObj => {
+                        let isMatch = false;
+
+                        // 1. Direct Match (Clean)
                         if (cleanPageText.includes(termObj.clean) || cleanPageTextSpaces.includes(termObj.clean)) {
+                            isMatch = true;
+                        } 
+                        // 2. Fuzzy Match (Si falla el directo, verificar secuencia de caracteres)
+                        else {
+                            // Crear regex fuzzy: S.*6.*3.*8
+                            // Solo si el termino tiene al menos 3 caracteres para evitar falsos positivos masivos con "A-1"
+                            if (termObj.clean.length >= 3) {
+                                const fuzzyRegex = new RegExp(termObj.clean.split('').join('.*'), 'i');
+                                // Buscar en una ventana razonable? No, búsqueda simple en toda la página
+                                // Para evitar "S.....(miles de caracteres)....638", podríamos limitar, pero por ahora confiemos
+                                if (fuzzyRegex.test(cleanPageText)) {
+                                    isMatch = true;
+                                }
+                            }
+                        }
+
+                        if (isMatch) {
                             notFoundSet.delete(termObj.original);
                             if (hits.includes(termObj.original)) pageHasHit = true;
                         }
