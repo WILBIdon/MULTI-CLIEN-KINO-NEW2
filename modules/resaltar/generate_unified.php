@@ -5,6 +5,7 @@ error_reporting(E_ALL);
 
 require_once '../../config.php';
 require_once '../../vendor/autoload.php';
+require_once __DIR__ . '/../../helpers/tenant.php';
 
 use setasign\Fpdi\Tcpdf\Fpdi;
 
@@ -47,22 +48,13 @@ try {
 
     // Combinar todos los PDFs
     foreach ($documents as $doc) {
-        // Resolve file path similar to how JS does it
-        $relativePath = (strpos($doc['ruta_archivo'], '/') !== false)
-            ? $doc['ruta_archivo']
-            : $doc['tipo'] . '/' . $doc['ruta_archivo'];
+        // Use centralized robust path resolution
+        // doc must have keys expected by resolve_pdf_path (id, tipo, fecha, ruta_archivo, numero)
+        $filePath = resolve_pdf_path($clientCode, $doc);
 
-        $filePath = $uploadsDir . $relativePath;
-
-        if (!file_exists($filePath)) {
-            // Try flat structure as fallback
-            $flatPath = $uploadsDir . basename($doc['ruta_archivo']);
-            if (file_exists($flatPath)) {
-                $filePath = $flatPath;
-            } else {
-                error_log("Archivo no encontrado para PDF unificado: " . $filePath);
-                continue;
-            }
+        if (!$filePath || !file_exists($filePath)) {
+            error_log("Archivo no encontrado para PDF unificado: " . ($doc['ruta_archivo'] ?? 'DESCONOCIDO'));
+            continue;
         }
 
         try {

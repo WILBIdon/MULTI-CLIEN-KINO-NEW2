@@ -1347,14 +1347,14 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                 </div>
             `;
 
-                <div style="text-align: center; margin-bottom: 2rem;">
-                     <!-- Botón: Generar PDF Unificado - BLUE -->
-                     <button onclick='voraz_generateUnifiedPDF(${escapeForJSON(result.documents)}, ${escapeForJSON(searchedCodes)})' 
-                             class="btn btn-primary" 
-                             style="padding: 0.75rem 1.5rem; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
-                        📄 Generar PDF Unificado
-                     </button>
-                </div>
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <!-- Botón: Generar PDF Unificado - BLUE -->
+                <button onclick='voraz_generateUnifiedPDF(${escapeForJSON(result.documents)}, ${escapeForJSON(searchedCodes)})'
+                    class="btn btn-primary"
+                    style="padding: 0.75rem 1.5rem; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
+                    📄 Generar PDF Unificado
+                </button>
+            </div>
 
             // Advertencia de no encontrados
             if (result.not_found && result.not_found.length > 0) {
@@ -1395,7 +1395,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                         
                         <div style="display: flex; gap: 0.75rem;">
                             <!-- Botón reconstruido para resaltar TODOS -->
-                            <button onclick="voraz_highlightAllCodes('${doc.id}', '${escapeForAttr(doc.ruta_archivo)}', '${allCodesStr}')" 
+                            <button onclick="voraz_highlightAllCodes('${doc.id}', '${escapeForAttr(doc.ruta_archivo)}', '${allCodesStr}', '${docCodes.join(',')}')" 
                                     class="btn btn-success" 
                                     style="background-color: #059669; border: none; color: white; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.875rem; font-weight: 500;">
                                 🖍️ Resaltar (${doc.all_codes ? doc.all_codes.split(',').length : docCodes.length})
@@ -1440,52 +1440,35 @@ Se extraerán solo los códigos de la izquierda."></textarea>
          * Abre el viewer con TODOS los códigos del documento
          * NO afecta otros botones "Resaltar" de la app
          */
-        function voraz_highlightAllCodes(docId, filePath, codesStr) {
-            if (!filePath) {
-                alert('❌ Ruta de archivo no válida');
-                return;
-            }
+        /**
+         * ⭐ FUNCIÓN EXCLUSIVA PARA BÚSQUEDA VORAZ
+         * Abre el viewer con TODOS los códigos del documento
+         * NO afecta otros botones "Resaltar" de la app
+         */
+        function voraz_highlightAllCodes(docId, filePath, codesStr, matchedCodesStr = '') {
+            // Prioridad absoluta al ID (Soberanía del ID)
+            // Si tenemos ID, no deberíamos depender de filePath para nada crítico,
+            // pero lo enviamos por compatibilidad backward si el viewer lo requiere.
 
-            if (!codesStr) {
-                alert('❌ No hay códigos para resaltar');
-                return;
-            }
+            console.log('🔍 VORAZ: Abriendo resaltador:', { docId, codesStr, matchedCodesStr });
 
-            console.log('🔍 VORAZ: Abriendo resaltador con todos los códigos:', {
-                docId: docId,
-                file: filePath,
-                codes: codesStr,
-                codesCount: codesStr.split(',').length
-            });
-
-            // Construir URL con parámetro especial "voraz_mode=true"
-            // Limpiar ruta si viene con prefijos duplicados/absolutos
-            // El viewer le añade 'clients/CODE/uploads/', así que solo queremos lo que sigue.
-            // Si filePath empieza con "uploads/", "clients/", etc, lo limpiamos.
-
-            let cleanPath = filePath;
-            // Remover 'uploads/' al inicio si existe y si el viewer lo va a añadir de nuevo
-            if (cleanPath.startsWith('uploads/')) {
-                cleanPath = cleanPath.substring(8); // 'uploads/'.length = 8
-            }
-            // Por seguridad, si empieza con '/'
-            if (cleanPath.startsWith('/')) {
-                cleanPath = cleanPath.substring(1);
-            }
-
+            // Construir parámetros
+            // 'term' = Códigos Encontrados (Hits) -> Naranja
+            // 'codes' = Todos los códigos (Contexto) -> Verde (la diferencia se calcula en viewer)
             const params = new URLSearchParams({
-                // file: cleanPath, // No enviamos file si tenemos doc ID, para que el viewer resuelva la ruta desde DB
-                codes: codesStr,
-                doc: docId, // ⭐ Corregido: 'doc' es lo que espera viewer.php
+                doc: docId,
+                codes: codesStr,          // Contexto
+                term: matchedCodesStr,    // Hits
                 voraz_mode: 'true',
-                highlight_all: 'true'
+                strict_mode: 'true'       // Activar lógica de doble color
             });
+
+            // Si por alguna razón no hay ID (caso raro), usamos file
+            if (!docId && filePath) {
+                params.append('file', filePath);
+            }
 
             const url = `modules/resaltar/viewer.php?${params.toString()}`;
-
-            console.log('🔍 VORAZ: URL completa:', url);
-
-            // Abrir en nueva pestaña (sin dimensiones fijas)
             window.open(url, '_blank');
         }
 
@@ -1710,84 +1693,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
          * Genera un PDF unificado combinando todos los documentos
          * y resalta todos los códigos buscados
          */
-        async function generateUnifiedPDF(documents, allCodes) {
-            // Mostrar loading
-            const loadingDiv = document.createElement('div');
-            loadingDiv.id = 'unified-loading';
-            loadingDiv.innerHTML = `
-                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
-                            background: rgba(0,0,0,0.8); display: flex; align-items: center; 
-                            justify-content: center; z-index: 10000;">
-                    <div style="background: white; padding: 30px; border-radius: 12px; text-align: center;">
-                        <div class="spinner"></div>
-                        <h3>Generando PDF Unificado...</h3>
-                        <p>Procesando ${documents.length} documentos</p>
-                        <div id="progress-bar" style="width: 300px; height: 20px; background: #eee; 
-                             border-radius: 10px; overflow: hidden; margin-top: 15px;">
-                            <div id="progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); 
-                                 transition: width 0.3s;"></div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(loadingDiv);
 
-            // Simular progreso
-            const progressFill = loadingDiv.querySelector('#progress-fill');
-            let progress = 10;
-            progressFill.style.width = '10%';
-            const interval = setInterval(() => {
-                progress += 5;
-                if (progress > 90) progress = 90;
-                progressFill.style.width = progress + '%';
-            }, 500);
-
-            try {
-                // Llamar al backend para generar el PDF unificado
-                const response = await fetch('modules/resaltar/generate_unified.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        documents: documents,
-                        codes: allCodes
-                    })
-                });
-
-                const result = await response.json();
-                clearInterval(interval);
-                progressFill.style.width = '100%';
-
-                if (result.success) {
-                    // Abrir el PDF unificado en el viewer
-                    const queryParams = new URLSearchParams({
-                        file: result.unified_pdf_path, // Path relative to uploads expected by logic? 
-                        // Wait, viewer expects 'doc' ID usually. If passing 'file', we need to check viewer logic.
-                        // I will add file param support to viewer.php as requested.
-                        file: result.unified_pdf_path,
-                        codes: allCodes.join(','),
-                        mode: 'unified',
-                        download: result.download_url
-                    });
-
-                    // Small delay to allow UI update
-                    setTimeout(() => {
-                        openHighlighter(`modules/resaltar/viewer.php?${queryParams.toString()}`);
-                        document.body.removeChild(loadingDiv);
-                    }, 500);
-
-                } else {
-                    throw new Error(result.error || 'Error desconocido');
-                }
-
-            } catch (error) {
-                clearInterval(interval);
-                alert('Error al generar PDF unificado: ' + error.message);
-                console.error(error);
-                document.body.removeChild(loadingDiv);
-            }
-        }
     </script>
 
     <!-- Highlighter Loading Modal -->

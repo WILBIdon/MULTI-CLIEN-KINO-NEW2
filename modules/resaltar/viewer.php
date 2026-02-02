@@ -55,9 +55,46 @@ if (!empty($codesInput)) {
 
 // Limpiar y deducplicar
 $termsToHighlight = array_unique(array_filter(array_map('trim', $termsToHighlight)));
-$searchTerm = implode(' ', $termsToHighlight); // Fallback for basic variable if needed, but we will use JSON in JS.
-$fileParam = isset($_GET['file']) ? $_GET['file'] : '';
-$mode = isset($_GET['mode']) ? $_GET['mode'] : (isset($_GET['voraz_mode']) ? 'voraz_multi' : 'single'); // 'single', 'voraz_multi', 'unified'
+$searchTerm = implode(' ', $termsToHighlight); // Fallback
+
+// ⭐ NUEVA LÓGICA STRICT MODE
+$mode = isset($_GET['mode']) ? $_GET['mode'] : (isset($_GET['voraz_mode']) ? 'voraz_multi' : 'single');
+$strictMode = isset($_GET['strict_mode']) && $_GET['strict_mode'] === 'true';
+
+$hits = [];
+$context = [];
+
+if ($strictMode) {
+    // 'term' son los HITS (Naranja)
+    // 'codes' son TODOS (Verde)
+    // Entonces Contexto = Todos - Hits
+
+    // Parsear hits desde 'term'
+    if (!empty($searchTermInput)) {
+        $hits = preg_split('/[\s,\t\n\r]+/', $searchTermInput, -1, PREG_SPLIT_NO_EMPTY);
+    }
+
+    // Parsear todos desde 'codes'
+    $allCodes = [];
+    if (!empty($codesInput)) {
+        $splitCodes = preg_split('/[,;\t\n\r]+/', $codesInput, -1, PREG_SPLIT_NO_EMPTY);
+        if ($splitCodes)
+            $allCodes = $splitCodes;
+    }
+
+    $hits = array_unique(array_filter(array_map('trim', $hits)));
+    $allCodes = array_unique(array_filter(array_map('trim', $allCodes)));
+
+    // Contexto = Todo lo que está en allCodes pero NO en hits
+    $context = array_diff($allCodes, $hits);
+
+    // En strict mode, $termsToHighlight será la unión para propósitos generales,
+    // pero pasaremos hits y context separados a JS.
+} else {
+    // Modo clásico: todo es igual
+    $hits = [];
+    $context = $termsToHighlight;
+}
 $totalDocs = isset($_GET['total']) ? (int) $_GET['total'] : 1;
 $downloadUrl = isset($_GET['download']) ? $_GET['download'] : '';
 
@@ -208,11 +245,23 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         }
 
         .text-layer mark {
-            background: rgba(50, 255, 50, 0.5) !important;
+            background: rgba(50, 255, 50, 0.5);
             color: transparent;
             padding: 2px;
             border-radius: 2px;
             mix-blend-mode: multiply;
+        }
+
+        /* Highlight Styles */
+        .highlight-hit {
+            background-color: #ff9f43 !important;
+            /* Orange for hits */
+            box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .highlight-context {
+            background-color: rgba(50, 255, 50, 0.5) !important;
+            /* Green for context */
         }
 
         .page-number {
@@ -472,7 +521,27 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                                 <span id="doc-counter"><span id="current-doc">1</span>/<?= $totalDocs ?></span>
                                 <button onclick="navigateVorazDoc(1)" id="btn-next-doc" class="nav-btn">
                                     ▶
-                                </button>
+                            </div>
+                        <?php endif; ?>
+
+                        <!-- Match Navigation -->
+                        <?php if ($strictMode || !empty($termsToHighlight)): ?>
+                            <div class="voraz-navigation"
+                                style="background: #ffffff; border-color: #ff9f43; flex-direction: column; gap: 10px;">
+                                <h4 style="margin:0; font-size: 0.9rem; color: #d97706;">Navegación de Hallazgos</h4>
+                                <div style="display: flex; gap: 10px; width: 100%;">
+                                    <button onclick="jumpToMatch(-1)" class="nav-btn"
+                                        style="flex: 1; background: #fbbf24; color: #78350f;">
+                                        ⬆ Anterior
+                                    </button>
+                                    <button onclick="jumpToMatch(1)" class="nav-btn"
+                                        style="flex: 1; background: #fbbf24; color: #78350f;">
+                                        ⬇ Siguiente
+                                    </button>
+                                </div>
+                                <div id="match-status" style="font-size: 0.8rem; text-align: center; color: #b45309;">
+                                    Buscando...
+                                </div>
                             </div>
                         <?php endif; ?>
 
@@ -586,14 +655,19 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
         // Variables Globales
         const viewerMode = '<?= $mode ?>';
+        const isStrictMode = <?= $strictMode ? 'true' : 'false' ?>;
+        const hits = <?= json_encode(array_values($hits)) ?>;
+        const context = <?= json_encode(array_values($context)) ?>;
+
         let vorazData = null;
         let currentDocIndex = 0;
 
         const pdfUrl = '<?= addslashes($pdfUrl) ?>';
-        const searchTerm = '<?= addslashes($searchTerm) ?>';
-        // Note: No matchedPages from PHP anymore
+        // const searchTerm = '<?= addslashes($searchTerm) ?>'; // Deprecated in favor of hits/context
+
         let totalMatchesFound = 0;
-        let pagesWithMatches = [];
+        let pagesWithMatches = []; // List of page numbers with HITS
+        let currentMatchIndex = -1; // Index in pagesWithMatches
 
         const container = document.getElementById('pdfContainer');
         const scale = 1.5;
@@ -702,7 +776,25 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                     const textContent = await pdfDoc.getPage(i).getTextContent();
                     const pageText = textContent.items.map(s => s.str).join(' '); // Unir con espacios
 
-                    // Chequear cada término pendiente
+                    // Chequear cada término pendiente (solo para reporte found/not found)
+                    // Y detectar si la página tiene algún HIT
+                    let pageHasHit = false;
+
+                    // Chequear hits (prioridad)
+                    hits.forEach(term => {
+                        if (checkTermMatch(term, pageText)) {
+                            foundSet.add(term);
+                            pageHasHit = true;
+                        }
+                    });
+
+                    if (pageHasHit) {
+                        pagesWithMatches.push(i);
+                    }
+
+                    // Chequear contexto y actualizar notFoundSet
+                    // (Si ya encontramos un termino en hits, ya está en foundSet, pero 
+                    // si hay terminos en contexto que NO están en hits, chequearlos)
                     notFoundSet.forEach(term => {
                         if (checkTermMatch(term, pageText)) {
                             foundSet.add(term);
@@ -740,6 +832,17 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             }
 
             document.getElementById('summaryList').innerHTML = html;
+
+            // Update Match Navigation
+            const matchStatus = document.getElementById('match-status');
+            if (matchStatus) {
+                if (pagesWithMatches.length > 0) {
+                    pagesWithMatches.sort((a, b) => a - b);
+                    matchStatus.textContent = `${pagesWithMatches.length} páginas con hallazgos`;
+                } else {
+                    matchStatus.textContent = "Sin hallazgos";
+                }
+            }
         }
 
         function checkTermMatch(term, text) {
@@ -748,12 +851,41 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             // 1. Intentar búsqueda exacta primero (más rápida)
             if (text.includes(term)) return true;
 
-            // 2. Búsqueda flexible "Limpia": Remover TODO lo que no sea alfanumérico
-            // Esto es crucial para solucionar falsos negativos en el reporte.
+            // ⭐ Lógica Estricta vs Flexible
+            if (isStrictMode) {
+                // En modo estricto, solo permitimos diferencias de espacios trimming
+                // O quizás una normalización muy suave (minusculas)
+                return text.toLowerCase().includes(term.toLowerCase());
+            }
+
+            // 2. Búsqueda flexible "Limpia"
             const cleanTerm = term.replace(/[^a-z0-9]/gi, '');
             const cleanText = text.replace(/[^a-z0-9]/gi, '');
 
             return cleanText.includes(cleanTerm);
+        }
+
+        function jumpToMatch(direction) {
+            if (pagesWithMatches.length === 0) {
+                alert("No se encontraron coincidencias para navegar.");
+                return;
+            }
+
+            // Encontrar la siguiente página con match relativa al scroll actual
+            // O simplemente iterar el array pagesWithMatches
+
+            currentMatchIndex += direction;
+
+            if (currentMatchIndex < 0) currentMatchIndex = pagesWithMatches.length - 1;
+            if (currentMatchIndex >= pagesWithMatches.length) currentMatchIndex = 0;
+
+            const targetPage = pagesWithMatches[currentMatchIndex];
+            const pageEl = document.getElementById('page-' + targetPage);
+
+            if (pageEl) {
+                pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                document.getElementById('match-status').textContent = `Página ${targetPage} (${currentMatchIndex + 1}/${pagesWithMatches.length})`;
+            }
         }
 
         function createPagePlaceholder(pageNum) {
@@ -802,111 +934,78 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                     viewport: viewport
                 }).promise;
 
-                // Text Layer
-                const textContent = await page.getTextContent();
-                const textLayer = document.createElement('div');
-                textLayer.className = 'text-layer';
-                textLayer.style.width = viewport.width + 'px';
-                textLayer.style.height = viewport.height + 'px';
-                textLayer.style.setProperty('--scale-factor', scale);
+                // ⭐ Highlight logic
+                const instance = new Mark(canvas.parentElement);
 
-                // Populate text layer logic (simplified version of previous loop)
-                textContent.items.forEach(item => {
-                    const span = document.createElement('span');
-                    const tx = item.transform; // [sx, ky, kx, sy, tx, ty]
-                    const fontHeight = Math.sqrt((tx[0] * tx[0]) + (tx[1] * tx[1]));
-                    const scaledFontSize = fontHeight * scale;
-                    const x = tx[4] * scale;
-                    const y = viewport.height - (tx[5] * scale) - scaledFontSize;
-                    const width = item.width * scale;
-
-                    span.textContent = item.str;
-                    span.style.left = x + 'px';
-                    span.style.top = y + 'px';
-                    span.style.fontSize = scaledFontSize + 'px';
-                    span.style.fontFamily = item.fontName || 'sans-serif';
-                    span.style.width = Math.ceil(width) + 'px';
-
-                    textLayer.appendChild(span);
-                });
-
-                wrapper.appendChild(textLayer);
-
-                // Highlight Logic using Mark.js
-                if (searchTerm) {
-                    processHighlights(textLayer, pageNum);
-                }
-
-            } catch (err) {
-                console.error(`Page ${pageNum} Render Error:`, err);
-                wrapper.innerHTML = `<p style="color:red">Error rendering page ${pageNum}</p>`;
-            }
-        }
-
-        function processHighlights(textLayer, pageNum) {
-            const marker = new Mark(textLayer);
-
-            // Recibir términos desde PHP (inyectados como JSON arriba)
-            const terms = <?= json_encode(array_values($termsToHighlight)) ?>;
-
-            if (!terms || terms.length === 0) return;
-
-            terms.forEach(term => {
-                if (!term || term.length < 2) return; // Ignorar muy cortos
-
-                // Regex para códigos con separadores flexibles
-                if (/^[\w\-\.\s]+$/.test(term)) {
-                    const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    const patternStr = escapedTerm.split('').map(char => {
-                        return char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    }).join('[\\s\\-\\.]*'); // Permite espacios, puntos o guiones entre caracteres
-
-                    const regex = new RegExp(patternStr, 'gi');
-
-                    marker.markRegExp(regex, {
-                        separateWordSearch: false,
-                        acrossElements: true,
-                        done: (count) => {
-                            if (count > 0) updateMatchStats(count, pageNum);
-                        }
-                    });
+                // Opción 1: Strict Mode (Dual Color)
+                if (isStrictMode) {
+                    if (hits.length > 0) {
+                        instance.mark(hits, {
+                            element: "mark",
+                            className: "highlight-hit", // Orange
+                            accuracy: "partially",
+                            separateWordSearch: false
+                        });
+                    }
+                    if (context.length > 0) {
+                        instance.mark(context, {
+                            element: "mark",
+                            className: "highlight-context", // Green
+                            accuracy: "partially",
+                            separateWordSearch: false
+                        });
+                    }
                 } else {
-                    // Búsqueda normal exacta
-                    marker.mark(term, {
-                        separateWordSearch: false,
-                        accuracy: 'partially',
-                        caseSensitive: false,
-                        done: (count) => {
-                            if (count > 0) updateMatchStats(count, pageNum);
-                        }
-                    });
+                    // Opción 2: Modo Clásico (Todos Verde/Default)
+                    const allParams = hits.concat(context);
+                    if (allParams.length > 0) {
+                        instance.mark(allParams, {
+                            accuracy: "partially",
+                            separateWordSearch: false
+                        });
+                    }
                 }
+
+
+            // Text Layer
+            const textContent = await page.getTextContent();
+            const textLayer = document.createElement('div');
+            textLayer.className = 'text-layer';
+            textLayer.style.width = viewport.width + 'px';
+            textLayer.style.height = viewport.height + 'px';
+            textLayer.style.setProperty('--scale-factor', scale);
+
+            // Populate text layer logic (simplified version of previous loop)
+            textContent.items.forEach(item => {
+                const span = document.createElement('span');
+                const tx = item.transform; // [sx, ky, kx, sy, tx, ty]
+                const fontHeight = Math.sqrt((tx[0] * tx[0]) + (tx[1] * tx[1]));
+                const scaledFontSize = fontHeight * scale;
+                const x = tx[4] * scale;
+                const y = viewport.height - (tx[5] * scale) - scaledFontSize;
+                const width = item.width * scale;
+
+                span.textContent = item.str;
+                span.style.left = x + 'px';
+                span.style.top = y + 'px';
+                span.style.fontSize = scaledFontSize + 'px';
+                span.style.fontFamily = item.fontName || 'sans-serif';
+                span.style.width = Math.ceil(width) + 'px';
+
+                textLayer.appendChild(span);
             });
+
+            wrapper.appendChild(textLayer);
+
+
+
+        } catch (err) {
+            console.error(`Page ${pageNum} Render Error:`, err);
+            wrapper.innerHTML = `<p style="color:red">Error rendering page ${pageNum}</p>`;
+        }
         }
 
-        function updateMatchStats(count, pageNum) {
-            totalMatchesFound += count;
-            if (!pagesWithMatches.includes(pageNum)) {
-                pagesWithMatches.push(pageNum);
-            }
 
-            // Update UI
-            const badge = document.getElementById('matchBadge');
-            const txt = document.getElementById('matchText');
-            if (badge && txt) {
-                txt.textContent = `${totalMatchesFound} coincidencia(s)`;
-                badge.querySelector('span').textContent = '🎯';
-            }
-
-            // Scroll to first match if this is the first one found
-            if (totalMatchesFound > 0 && totalMatchesFound === count) {
-                // It means this was the first batch of matches found
-                const pageEl = document.getElementById('page-' + pageNum);
-                if (pageEl) {
-                    pageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            }
-        }
 
         // Start
         loadPDF();
