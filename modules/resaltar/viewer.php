@@ -628,269 +628,122 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         // Initialize PDF.js
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-        // Variables Globales
+        // --- Configuración Global ---
         const viewerMode = '<?= $mode ?>';
         const isStrictMode = <?= $strictMode ? 'true' : 'false' ?>;
-        // Robust filtering: Cast to string, trim, and remove empty values
-        const hits = <?= json_encode(array_values($hits)) ?>.map(String).map(s => s.trim()).filter(s => s.length > 0);
-        const context = <?= json_encode(array_values($context)) ?>.map(String).map(s => s.trim()).filter(s => s.length > 0);
+        
+        // Listas de términos limpias
+        const rawHits = <?= json_encode(array_values($hits)) ?>;
+        const rawContext = <?= json_encode(array_values($context)) ?>;
+        const hits = rawHits.map(String).map(s => s.trim()).filter(s => s.length > 0);
+        const context = rawContext.map(String).map(s => s.trim()).filter(s => s.length > 0);
+        
+        // Unificación para el control de "Faltantes"
+        // Normalizamos a minúsculas para comparar lo encontrado
+        let allTermsMap = new Map(); // Mapa: "termino_normalizado" => "Termino Original"
+        [...hits, ...context].forEach(t => {
+            allTermsMap.set(t.toLowerCase().replace(/[^a-z0-9]/g, ''), t);
+        });
 
-        let vorazData = null;
-        let currentDocIndex = 0;
-
+        // Estado del sistema
+        let foundTermsSet = new Set(); // Términos que Mark.js ya encontró
+        let hasScrolledToFirstMatch = false; // Flag para el scroll automático
+        let pagesWithMatches = [];
+        
         const pdfUrl = '<?= addslashes($pdfUrl) ?>';
-        // const searchTerm = '<?= addslashes($searchTerm) ?>'; // Deprecated in favor of hits/context
-
-        let totalMatchesFound = 0;
-        let pagesWithMatches = []; // List of page numbers with HITS
-        let currentMatchIndex = -1; // Index in pagesWithMatches
-
         const container = document.getElementById('pdfContainer');
         const scale = 1.5;
         let pdfDoc = null;
 
-        // --- Voraz Navigation ---
-        if (viewerMode === 'voraz_multi') {
-            const stored = sessionStorage.getItem('voraz_viewer_data');
-            if (stored) {
-                vorazData = JSON.parse(stored);
-                currentDocIndex = vorazData.currentIndex || 0;
-                const currentDocSpan = document.getElementById('current-doc');
-                if (currentDocSpan) currentDocSpan.textContent = currentDocIndex + 1;
+        // --- Actualizar UI de Estado ---
+        function updateStatusUI() {
+            const statusDiv = document.getElementById('simpleStatus');
+            if (!statusDiv) return;
+
+            // Calculamos qué falta comparando el Mapa original con el Set de encontrados
+            let missing = [];
+            
+            allTermsMap.forEach((originalTerm, normalizedKey) => {
+                if (!foundTermsSet.has(normalizedKey)) {
+                    missing.push(originalTerm);
+                }
+            });
+
+            if (missing.length === 0) {
+                statusDiv.innerHTML = `
+                    <div style="background:#dcfce7; color:#166534; padding:8px; border-radius:6px; text-align:center; margin-top:10px;">
+                        ✅ <strong>Completo:</strong> Todos los códigos encontrados.
+                    </div>`;
+            } else {
+                statusDiv.innerHTML = `
+                    <div style="background:#fee2e2; color:#991b1b; padding:8px; border-radius:6px; margin-top:10px;">
+                        <strong>⚠️ Faltan (${missing.length}):</strong> ${missing.join(', ')}
+                    </div>`;
             }
         }
 
-        function navigateVorazDoc(direction) {
-            if (!vorazData) return;
-            const newIndex = currentDocIndex + direction;
-            if (newIndex < 0 || newIndex >= vorazData.documents.length) return;
-
-            currentDocIndex = newIndex;
-            vorazData.currentIndex = currentDocIndex;
-            sessionStorage.setItem('voraz_viewer_data', JSON.stringify(vorazData));
-
-            const doc = vorazData.documents[currentDocIndex];
-            const params = new URLSearchParams(window.location.search);
-            if (doc.id) params.set('doc', doc.id);
-            if (doc.ruta_archivo) params.set('file', doc.ruta_archivo);
-            window.location.search = params.toString();
-        }
-
-        // --- Render Logic with Lazy Load ---
+        // --- Carga del PDF ---
         async function loadPDF() {
             try {
                 pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
                 const numPages = pdfDoc.numPages;
-                container.innerHTML = ''; // Clear loading spinner
+                container.innerHTML = ''; // Limpiar spinner
 
-                // Create placeholders for all pages immediately
+                // Inicializar estado visual "Buscando..."
+                updateStatusUI();
+
+                // Crear placeholders
                 for (let pageNum = 1; pageNum <= numPages; pageNum++) {
                     createPagePlaceholder(pageNum);
                 }
 
-                // Setup Intersection Observer for Lazy Loading
+                // Lazy Load Observer
                 const observer = new IntersectionObserver((entries) => {
                     entries.forEach(entry => {
                         if (entry.isIntersecting) {
                             const pageNum = parseInt(entry.target.dataset.pageNum);
-                            // Render if not already rendered
                             if (!entry.target.dataset.rendered) {
                                 renderPage(pageNum, entry.target);
                                 entry.target.dataset.rendered = 'true';
                             }
                         }
                     });
-                }, {
-                    root: null,
-                    rootMargin: '200px', // Pre-load 200px before appearing
-                    threshold: 0.1
-                });
+                }, { root: null, rootMargin: '600px', threshold: 0.01 }); // Aumentado rootMargin para renderizar antes de llegar
 
-                // Observe all page wrappers
                 document.querySelectorAll('.pdf-page-wrapper').forEach(el => observer.observe(el));
 
-                // If it's a short document (e.g. < 5 pages), force render them all immediately to verify matches faster
-                if (numPages <= 5) {
-                    for (let i = 1; i <= numPages; i++) {
-                        const el = document.getElementById('page-' + i);
-                        if (el && !el.dataset.rendered) {
-                            renderPage(i, el);
-                            el.dataset.rendered = 'true';
-                        }
-                    }
+                // FORZAR RENDER DE LAS PRIMERAS PÁGINAS PARA ENCONTRAR RÁPIDO EL PRIMER MATCH
+                // Esto ayuda a que el scroll automático funcione casi de inmediato si el dato está al inicio.
+                for(let i=1; i<=Math.min(numPages, 3); i++) {
+                   const el = document.getElementById('page-'+i);
+                   if(el && !el.dataset.rendered) {
+                       renderPage(i, el);
+                       el.dataset.rendered = 'true';
+                   }
                 }
 
-                // ⭐ INICIAR ESCANEO DE FONDO PARA RESUMEN
-                scanAllPagesForSummary();
-
             } catch (error) {
-                console.error("PDF Load Error:", error);
-                container.innerHTML = `<p style='color:red;'>Error al cargar PDF: ${error.message}</p>`;
-            }
-        }
-
-        // Función RECONSTRUIDA: Auto-scroll y Status Simple + Fuzzy Match
-        async function scanAllPagesForSummary() {
-            const statusDiv = document.getElementById('simpleStatus');
-            if (!statusDiv) return;
-
-            // Limpiar status
-            statusDiv.innerHTML = '<span style="color:#d97706">Buscando...</span>';
-
-            const terms = <?= json_encode(array_values($termsToHighlight)) ?>.map(String).map(s => s.trim()).filter(s => s.length > 0);
-            if (!terms || terms.length === 0) {
-                statusDiv.innerHTML = '';
-                return;
-            }
-
-            // Normalizar
-            const normalizedTerms = terms.map(t => ({
-                original: t,
-                clean: t.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
-            }));
-
-            const notFoundSet = new Set(terms);
-            let firstMatchPage = null;
-
-            // Escanear páginas
-            for (let i = 1; i <= pdfDoc.numPages; i++) {
-                try {
-                    const textContent = await pdfDoc.getPage(i).getTextContent();
-                    const rawPageText = textContent.items.map(s => s.str).join('');
-                    const cleanPageText = rawPageText.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-
-                    // Check extra con espacios
-                    const rawPageTextSpaces = textContent.items.map(s => s.str).join(' ');
-                    const cleanPageTextSpaces = rawPageTextSpaces.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-
-                    let pageHasHit = false;
-
-                    normalizedTerms.forEach(termObj => {
-                        let isMatch = false;
-
-                        // 1. Direct Match (Clean)
-                        if (cleanPageText.includes(termObj.clean) || cleanPageTextSpaces.includes(termObj.clean)) {
-                            isMatch = true;
-                        } 
-                        // 2. Fuzzy Match (Si falla el directo, verificar secuencia de caracteres)
-                        else {
-                            // Crear regex fuzzy: S.*6.*3.*8
-                            // Solo si el termino tiene al menos 3 caracteres para evitar falsos positivos masivos con "A-1"
-                            if (termObj.clean.length >= 3) {
-                                const fuzzyRegex = new RegExp(termObj.clean.split('').join('.*'), 'i');
-                                // Buscar en una ventana razonable? No, búsqueda simple en toda la página
-                                // Para evitar "S.....(miles de caracteres)....638", podríamos limitar, pero por ahora confiemos
-                                if (fuzzyRegex.test(cleanPageText)) {
-                                    isMatch = true;
-                                }
-                            }
-                        }
-
-                        if (isMatch) {
-                            notFoundSet.delete(termObj.original);
-                            if (hits.includes(termObj.original)) pageHasHit = true;
-                        }
-                    });
-
-                    // Si encontramos un hit por primera vez, guardar página para scroll
-                    if (pageHasHit && firstMatchPage === null) {
-                        firstMatchPage = i;
-                        // Scroll inmediato al encontrar el primero
-                        const pageEl = document.getElementById('page-' + i);
-                        if(pageEl) {
-                            pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            // Pequeño highlight visual en el borde
-                            pageEl.style.border = "4px solid #facc15";
-                            setTimeout(() => pageEl.style.border = "none", 3000);
-                        }
-                    }
-
-                } catch (e) { console.error(e); }
-            }
-
-            // Actualizar Status Final
-            if (notFoundSet.size === 0) {
-                // Éxito Total
-                statusDiv.innerHTML = `
-                    <div style="background:#dcfce7; color:#166534; padding:8px; border-radius:6px; text-align:center;">
-                        ✅ Todos los códigos encontrados
-                    </div>`;
-            } else {
-                // Faltantes
-                const missingList = Array.from(notFoundSet).join(', ');
-                statusDiv.innerHTML = `
-                    <div style="background:#fee2e2; color:#991b1b; padding:8px; border-radius:6px;">
-                        <strong>⚠️ Faltan:</strong> ${missingList}
-                    </div>`;
-            }
-        }
-
-        function checkTermMatch(term, text) {
-            if (!term || term.length < 2) return false;
-
-            // 1. Intentar búsqueda exacta primero (más rápida)
-            if (text.includes(term)) return true;
-
-            // ⭐ Lógica Estricta vs Flexible
-            if (isStrictMode) {
-                // En modo estricto, solo permitimos diferencias de espacios trimming
-                // O quizás una normalización muy suave (minusculas)
-                return text.toLowerCase().includes(term.toLowerCase());
-            }
-
-            // 2. Búsqueda flexible "Limpia"
-            const cleanTerm = term.replace(/[^a-z0-9]/gi, '');
-            const cleanText = text.replace(/[^a-z0-9]/gi, '');
-
-            return cleanText.includes(cleanTerm);
-        }
-
-        function jumpToMatch(direction) {
-            if (pagesWithMatches.length === 0) {
-                alert("No se encontraron coincidencias para navegar.");
-                return;
-            }
-
-            // Encontrar la siguiente página con match relativa al scroll actual
-            // O simplemente iterar el array pagesWithMatches
-
-            currentMatchIndex += direction;
-
-            if (currentMatchIndex < 0) currentMatchIndex = pagesWithMatches.length - 1;
-            if (currentMatchIndex >= pagesWithMatches.length) currentMatchIndex = 0;
-
-            const targetPage = pagesWithMatches[currentMatchIndex];
-            const pageEl = document.getElementById('page-' + targetPage);
-
-            if (pageEl) {
-                pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                document.getElementById('match-status').textContent = `Página ${targetPage} (${currentMatchIndex + 1}/${pagesWithMatches.length})`;
+                console.error("Error:", error);
+                container.innerHTML = `<p style='color:red;'>Error: ${error.message}</p>`;
             }
         }
 
         function createPagePlaceholder(pageNum) {
-            const pageContainer = document.createElement('div');
-
             const wrapper = document.createElement('div');
             wrapper.className = 'pdf-page-wrapper';
             wrapper.id = 'page-' + pageNum;
             wrapper.dataset.pageNum = pageNum;
-            // Initial dummy size, will update on render
             wrapper.style.marginBottom = '20px';
-
-            // Add skeleton loading effect
-            wrapper.innerHTML = `
-                <div style="display:flex; justify-content:center; align-items:center; height:100%; color:#999;">
-                    Cargando página ${pageNum}...
-                </div>`;
-
+            wrapper.innerHTML = `<div style="padding:50px; text-align:center; color:#ccc;">Página ${pageNum}</div>`;
+            
             const pageLabel = document.createElement('div');
             pageLabel.className = 'page-number';
             pageLabel.textContent = `Página ${pageNum}`;
 
-            pageContainer.appendChild(wrapper);
-            pageContainer.appendChild(pageLabel);
-            container.appendChild(pageContainer);
+            const box = document.createElement('div');
+            box.appendChild(wrapper);
+            box.appendChild(pageLabel);
+            container.appendChild(box);
         }
 
         async function renderPage(pageNum, wrapper) {
@@ -898,37 +751,26 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 const page = await pdfDoc.getPage(pageNum);
                 const viewport = page.getViewport({ scale });
 
-                wrapper.innerHTML = ''; // Clear placeholder
+                wrapper.innerHTML = '';
                 wrapper.style.width = viewport.width + 'px';
                 wrapper.style.height = viewport.height + 'px';
 
-                // Canvas
                 const canvas = document.createElement('canvas');
-                const context = canvas.getContext('2d');
+                const ctx = canvas.getContext('2d');
                 canvas.height = viewport.height;
                 canvas.width = viewport.width;
                 wrapper.appendChild(canvas);
 
-                await page.render({
-                    canvasContext: context,
-                    viewport: viewport
-                }).promise;
+                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
 
-
-
-                // --- Restore Text Layer for Highlighting ---
+                // Capa de Texto
                 const textContent = await page.getTextContent();
                 const textLayerDiv = document.createElement('div');
                 textLayerDiv.className = 'text-layer';
-                // Start with same dimensions as viewport
                 textLayerDiv.style.width = viewport.width + 'px';
                 textLayerDiv.style.height = viewport.height + 'px';
-                
-                // Append BEFORE highlighting so Mark.js can find text
                 wrapper.appendChild(textLayerDiv);
 
-                // PDF.js renderTextLayer (newer versions) or manual loop?
-                // Using pdfjs.renderTextLayer is safer/standard
                 await pdfjsLib.renderTextLayer({
                     textContent: textContent,
                     container: textLayerDiv,
@@ -936,99 +778,83 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                     textDivs: []
                 }).promise;
 
-                // ⭐ Highlight logic (NOW SAFE TO RUN)
+                // ⭐ LOGICA CORREGIDA DE RESALTADO Y DETECCIÓN ⭐
                 const instance = new Mark(textLayerDiv);
+                
+                // Configuración común para Mark.js
+                const markOptions = {
+                    element: "mark",
+                    accuracy: isStrictMode ? "partially" : "partially", 
+                    separateWordSearch: false,
+                    // ESTA ES LA CLAVE: Detectar cuando Mark.js realmente encuentra algo
+                    each: function(elem) {
+                        // 1. Obtener texto real encontrado
+                        const textFound = elem.textContent;
+                        const normalizedFound = textFound.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-                // Opción 1: Strict Mode (Dual Color)
+                        // 2. Verificar contra nuestra lista de buscados (Fuzzy Check)
+                        //    Iteramos el mapa para ver cuál coincide
+                        for (let [key, val] of allTermsMap) {
+                            if (normalizedFound.includes(key) || key.includes(normalizedFound)) {
+                                foundTermsSet.add(key);
+                            }
+                        }
+
+                        // 3. Actualizar UI de "Faltantes"
+                        updateStatusUI();
+
+                        // 4. SCROLL AUTOMÁTICO AL PRIMER HALLAZGO
+                        if (!hasScrolledToFirstMatch) {
+                            hasScrolledToFirstMatch = true;
+                            setTimeout(() => {
+                                elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                // Resaltar visualmente el hallazgo
+                                elem.style.boxShadow = "0 0 0 4px #facc15"; 
+                                setTimeout(() => elem.style.boxShadow = "none", 2000);
+                            }, 100); // Pequeño delay para asegurar renderizado
+                        }
+                    }
+                };
+
+                // Aplicar resaltado
                 if (isStrictMode) {
-                    if (hits.length > 0) {
-                        instance.mark(hits, {
-                            element: "mark",
-                            className: "highlight-hit", // Orange
-                            accuracy: "partially",
-                            separateWordSearch: false
-                        });
-                    }
-                    if (context.length > 0) {
-                        instance.mark(context, {
-                            element: "mark",
-                            className: "highlight-context", // Green
-                            accuracy: "partially",
-                            separateWordSearch: false
-                        });
-                    }
+                    if (hits.length > 0) instance.mark(hits, { ...markOptions, className: "highlight-hit" });
+                    if (context.length > 0) instance.mark(context, { ...markOptions, className: "highlight-context" });
                 } else {
-                    // Opción 2: Modo Clásico (Todos Verde/Default)
-                    const allParams = hits.concat(context);
-                    if (allParams.length > 0) {
-                        instance.mark(allParams, {
-                            accuracy: "partially",
-                            separateWordSearch: false
-                        });
-                    }
+                    const allParams = [...hits, ...context];
+                    if (allParams.length > 0) instance.mark(allParams, markOptions);
                 }
 
-
-
-
-
-
             } catch (err) {
-                console.error(`Page ${pageNum} Render Error:`, err);
-                wrapper.innerHTML = `<p style="color:red">Error rendering page ${pageNum}</p>`;
+                console.error(`Page ${pageNum} error:`, err);
             }
         }
 
-
-
-        // Start
+        // Iniciar
         loadPDF();
 
-        // --- Print Logic ---
-        function showPrintModal() {
-            document.getElementById('printModal').classList.add('active');
-        }
-
-        function closePrintModal() {
-            document.getElementById('printModal').classList.remove('active');
-        }
-
-        function printFullDocument() {
-            window.print();
-            closePrintModal();
-        }
-
-        function printHighlightedPages() {
-            // Basic print for now, as hiding pages dynamically in CSS print media 
-            // without re-rendering is tricky with Lazy Loading (unrendered pages are empty).
-            // Strategy: Force render matched pages if not rendered? 
-            // For now, warn user if pages aren't loaded.
-            alert('Imprimiendo: Asegúrate de haber visualizado las páginas resaltadas para que se carguen.');
-
-            // Add a class that hides non-matched pages in print
-            const style = document.createElement('style');
-            style.id = 'print-filter-style';
-
-            let css = '@media print { .pdf-page-wrapper { display: none; } ';
-            if (pagesWithMatches.length > 0) {
-                pagesWithMatches.forEach(p => {
-                    css += `#page-${p} { display: block !important; } `;
-                });
-            } else {
-                // Fallback if no matches found yet
-                css += '.pdf-page-wrapper { display: block !important; }';
+        // --- Funciones de Impresión ---
+        function showPrintModal() { document.getElementById('printModal').classList.add('active'); }
+        function closePrintModal() { document.getElementById('printModal').classList.remove('active'); }
+        function printFullDocument() { window.print(); closePrintModal(); }
+        
+        // Voraz Navigation (Simplificado)
+        let vorazData = JSON.parse(sessionStorage.getItem('voraz_viewer_data') || 'null');
+        let currentDocIndex = vorazData ? (vorazData.currentIndex || 0) : 0;
+        
+        function navigateVorazDoc(dir) {
+            if (!vorazData) return;
+            const newIndex = currentDocIndex + dir;
+            if (newIndex >= 0 && newIndex < vorazData.documents.length) {
+                vorazData.currentIndex = newIndex;
+                sessionStorage.setItem('voraz_viewer_data', JSON.stringify(vorazData));
+                const doc = vorazData.documents[newIndex];
+                const p = new URLSearchParams(window.location.search);
+                if (doc.id) p.set('doc', doc.id);
+                if (doc.ruta_archivo) p.set('file', doc.ruta_archivo);
+                window.location.search = p.toString();
             }
-            css += '}';
-
-            document.head.appendChild(style);
-
-            window.print();
-
-            // Clean up
-            setTimeout(() => document.head.removeChild(style), 1000);
-            closePrintModal();
         }
-
     </script>
 </body>
 
