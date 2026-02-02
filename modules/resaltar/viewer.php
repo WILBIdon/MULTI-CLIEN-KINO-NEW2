@@ -2,11 +2,10 @@
 /**
  * Print-Optimized PDF Viewer with Highlighting
  * * Optimized Version:
- * - NO server-side extraction (too slow on Windows without pdftotext).
- * - Client-side ONLY highlighting.
- * - Lazy Loading for pages.
- * - Radar Logic for auto-scroll.
- * - CSS Blend Modes for marker-style highlighting.
+ * - Client-side ONLY highlighting (Mark.js).
+ * - Lazy Loading with Auto-Scroll Radar.
+ * - Persistent Context Preservation (Hidden Inputs).
+ * - Editable Search List.
  */
 
 session_start();
@@ -28,10 +27,10 @@ $searchTermInput = isset($_GET['term']) ? trim($_GET['term']) : '';
 $codesInput = isset($_GET['codes']) ? $_GET['codes'] : '';
 $fileParam = isset($_GET['file']) ? $_GET['file'] : '';
 
-// Unificar códigos a resaltar
+// --- LÓGICA DE PROCESAMIENTO DE TÉRMINOS ---
 $termsToHighlight = [];
 
-// 1. Añadir 'term' individual
+// 1. Añadir 'term' individual (Input manual del textarea)
 if (!empty($searchTermInput)) {
     $splitTerms = preg_split('/[\s,\t\n\r]+/', $searchTermInput, -1, PREG_SPLIT_NO_EMPTY);
     if ($splitTerms) {
@@ -39,23 +38,27 @@ if (!empty($searchTermInput)) {
     }
 }
 
-// 2. Procesar lista de 'codes'
+// 2. Procesar lista de 'codes' (Contexto del sistema)
+$codesInputStr = '';
 if (!empty($codesInput)) {
     if (is_array($codesInput)) {
         $termsToHighlight = array_merge($termsToHighlight, $codesInput);
+        // Aplanar para el input hidden y preservar en el siguiente submit
+        $codesInputStr = implode(',', $codesInput);
     } else {
         $splitCodes = preg_split('/[,;\t\n\r]+/', $codesInput, -1, PREG_SPLIT_NO_EMPTY);
         if ($splitCodes) {
             $termsToHighlight = array_merge($termsToHighlight, $splitCodes);
         }
+        $codesInputStr = $codesInput;
     }
 }
 
-// Limpiar y deduplicar
+// Limpiar y deduplicar para visualización general en el Textarea
 $termsToHighlight = array_unique(array_filter(array_map('trim', $termsToHighlight)));
-$searchTerm = implode(' ', $termsToHighlight); // Fallback
+$searchTerm = implode(' ', $termsToHighlight); 
 
-// ⭐ STRICT MODE & HITS LOGIC
+// ⭐ STRICT MODE CONFIGURATION
 $mode = isset($_GET['mode']) ? $_GET['mode'] : (isset($_GET['voraz_mode']) ? 'voraz_multi' : 'single');
 $strictMode = isset($_GET['strict_mode']) && $_GET['strict_mode'] === 'true';
 
@@ -63,12 +66,16 @@ $hits = [];
 $context = [];
 
 if ($strictMode) {
-    // 'term' son los HITS (Prioridad)
+    // Definición:
+    // HITS (Naranja/Verde Fuerte) = Lo que el usuario escribe explícitamente en el Textarea ('term').
+    // CONTEXT (Verde Suave) = Lo que viene de 'codes' pero NO está en el textarea.
+
+    // 1. Parsear Hits (Manuales)
     if (!empty($searchTermInput)) {
         $hits = preg_split('/[\s,\t\n\r]+/', $searchTermInput, -1, PREG_SPLIT_NO_EMPTY);
     }
-
-    // 'codes' son TODOS
+    
+    // 2. Parsear Contexto (Sistema)
     $allCodes = [];
     if (!empty($codesInput)) {
         $splitCodes = preg_split('/[,;\t\n\r]+/', $codesInput, -1, PREG_SPLIT_NO_EMPTY);
@@ -78,14 +85,16 @@ if ($strictMode) {
     $hits = array_unique(array_filter(array_map('trim', $hits)));
     $allCodes = array_unique(array_filter(array_map('trim', $allCodes)));
 
-    // Contexto = Todo lo que está en allCodes pero NO en hits
+    // El contexto es todo lo automático, menos lo que ya estamos buscando manualmente
     $context = array_diff($allCodes, $hits);
+
 } else {
-    // Modo clásico: todo es igual
+    // Modo Clásico: Todo lo que está en la lista se busca con la misma prioridad
     $hits = [];
     $context = $termsToHighlight;
 }
 
+// --- GESTIÓN DE DOCUMENTO ---
 $totalDocs = isset($_GET['total']) ? (int) $_GET['total'] : 1;
 $downloadUrl = isset($_GET['download']) ? $_GET['download'] : '';
 
@@ -98,14 +107,11 @@ $pdfPath = null;
 $document = [];
 
 if ($documentId > 0) {
-    // Get document info from DB
     $stmt = $db->prepare('SELECT * FROM documentos WHERE id = ?');
     $stmt->execute([$documentId]);
     $document = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$document) {
-        die('Documento no encontrado');
-    }
+    if (!$document) die('Documento no encontrado');
     $pdfPath = resolve_pdf_path($clientCode, $document);
 } else {
     $pdfPath = $uploadsDir . $fileParam;
@@ -119,10 +125,10 @@ if ($documentId > 0) {
 }
 
 if (!$pdfPath || !file_exists($pdfPath)) {
-    die("Archivo PDF no encontrado.");
+    $available = get_available_folders($clientCode);
+    die("Archivo PDF no encontrado.<br>Ruta: " . htmlspecialchars($pdfPath ?? 'NULL'));
 }
 
-// URLs
 $relativePath = str_replace($uploadsDir, '', $pdfPath);
 $baseUrl = '../../';
 $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
@@ -137,134 +143,96 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mark.js/dist/mark.min.js"></script>
     <style>
-        /* --- ESTILOS VISOR --- */
+        /* --- LAYOUT --- */
         .viewer-container {
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            gap: 1.5rem;
-            min-height: calc(100vh - 200px);
+            display: grid; grid-template-columns: 300px 1fr; gap: 1.5rem; min-height: calc(100vh - 200px);
         }
-        @media (max-width: 900px) {
-            .viewer-container { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 900px) { .viewer-container { grid-template-columns: 1fr; } }
+
         .viewer-sidebar {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg);
-            padding: 1.25rem;
-            height: fit-content;
-            position: sticky;
-            top: 80px;
+            background: var(--bg-secondary); border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg); padding: 1.25rem; height: fit-content;
+            position: sticky; top: 80px; max-height: calc(100vh - 100px); overflow-y: auto;
         }
+
         .viewer-main {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg);
-            padding: 1.5rem;
+            background: var(--bg-secondary); border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg); padding: 1.5rem;
         }
+
+        /* --- PDF LAYERS --- */
         .pdf-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 1rem;
-            min-height: 500px;
+            display: flex; flex-direction: column; align-items: center; gap: 1rem; min-height: 500px;
         }
         .pdf-page-wrapper {
-            position: relative;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            background: white;
-            margin-bottom: 1rem;
+            position: relative; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            background: white; margin-bottom: 1rem;
         }
         .pdf-page-wrapper canvas { display: block; }
 
-        /* --- CAPA DE TEXTO --- */
         .text-layer {
-            position: absolute;
-            left: 0; top: 0; right: 0; bottom: 0;
-            overflow: hidden;
-            opacity: 1;
-            line-height: 1;
-            mix-blend-mode: multiply; /* Permite que el resaltado se fusione con el canvas */
+            position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+            overflow: hidden; opacity: 1; line-height: 1;
+            mix-blend-mode: multiply; /* Fusión para que se vea el texto negro debajo */
         }
-        .text-layer span {
-            position: absolute;
-            white-space: pre;
-            color: transparent;
-            cursor: text;
-        }
+        .text-layer span { position: absolute; white-space: pre; color: transparent; cursor: text; }
 
-        /* --- ESTILOS DE RESALTADO CORREGIDOS --- */
+        /* --- ESTILOS DE RESALTADO (TIPO MARCADOR) --- */
         .text-layer mark {
-            /* 1. Ajuste de Área: Eliminar padding para que sea exacto al texto */
-            padding: 0;
-            margin: 0;
-            border-radius: 0;
-            
-            /* 2. Color y Fusión: Estilo Marcador Real */
-            color: transparent; /* El texto sigue transparente */
-            mix-blend-mode: multiply; /* OSCURECE EL FONDO, NO LO TAPA */
-        }
-
-        /* Estilo para Coincidencias Principales (Hits) - Verde Intenso */
-        .highlight-hit {
-            background-color: #22c55e !important; /* Green-500: Verde fuerte */
-            border-bottom: 1px solid #14532d; /* Pequeño borde para definición */
-        }
-
-        /* Estilo para Contexto - Verde Suave */
-        .highlight-context {
-            background-color: #86efac !important; /* Green-300 */
-        }
-
-        /* Fallback general si no hay clases específicas */
-        mark {
-            background-color: #4ade80;
+            padding: 0; margin: 0; border-radius: 0; color: transparent;
             mix-blend-mode: multiply;
         }
-
-        /* --- ESTILOS UI --- */
-        .page-number {
-            text-align: center; font-size: 0.875rem; color: var(--text-muted); margin-top: 0.5rem;
+        /* Verde Fuerte (Hits Manuales) */
+        .highlight-hit {
+            background-color: rgba(34, 197, 94, 0.5) !important; 
+            border-bottom: 2px solid #15803d;
         }
+        /* Verde Suave (Contexto Automático) */
+        .highlight-context {
+            background-color: rgba(134, 239, 172, 0.4) !important;
+        }
+
+        /* --- UI COMPONENTS --- */
+        .page-number { text-align: center; font-size: 0.875rem; color: var(--text-muted); margin-top: 0.5rem; }
         .doc-info { font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1rem; }
+        
+        .search-form textarea {
+            width: 100%; border-radius: 6px; border: 1px solid #d1d5db;
+            padding: 0.5rem; font-family: monospace; font-size: 0.85rem; resize: vertical;
+            background-color: #fff;
+        }
+        
         .btn-print {
             width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem;
-            padding: 0.875rem; background: var(--accent-primary); color: white; border: none;
-            border-radius: var(--radius-md); font-size: 0.875rem; font-weight: 600; cursor: pointer; margin-bottom: 0.75rem;
+            padding: 0.8rem; background: var(--accent-primary); color: white; border: none;
+            border-radius: var(--radius-md); font-weight: 600; cursor: pointer; margin-bottom: 0.75rem;
         }
         .btn-print:hover { background: var(--accent-primary-hover); }
+
         .voraz-navigation {
-            display: flex; align-items: center; justify-content: center; gap: 20px; padding: 15px;
-            background: #f8f9fa; border-bottom: 2px solid #667eea; margin-bottom: 10px; border-radius: var(--radius-md);
+            display: flex; align-items: center; justify-content: center; gap: 15px; padding: 10px;
+            background: #f8f9fa; border-bottom: 2px solid #667eea; margin-bottom: 15px; border-radius: var(--radius-md);
         }
         .nav-btn {
-            padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;
-        }
-        .unified-download {
-            text-align: center; padding: 15px; background: rgba(240, 147, 251, 0.1); border: 1px solid #f093fb;
-            border-radius: var(--radius-md); margin-bottom: 1rem;
-        }
-        .btn-download-unified {
-            padding: 12px 30px; background: white; color: #f5576c; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; border: 1px solid #f5576c;
+            padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;
         }
 
-        /* Print Modal */
+        /* --- PRINT MODAL --- */
         .print-modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.7); z-index: 10000; align-items: center; justify-content: center;
         }
         .print-modal.active { display: flex; }
         .print-modal-content {
-            background: var(--bg-primary); padding: 2rem; border-radius: var(--radius-lg); max-width: 500px; width: 90%;
+            background: white; padding: 2rem; border-radius: 12px; max-width: 400px; width: 90%; text-align: center;
         }
-        .print-modal-buttons { display: flex; gap: 1rem; margin-top: 1.5rem; }
-        
+        .print-modal-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 1.5rem; }
+
         @media print {
             .viewer-sidebar, .main-header, .app-footer { display: none !important; }
             .viewer-container { display: block !important; }
             .viewer-main { border: none !important; padding: 0 !important; }
             .pdf-page-wrapper { break-after: page; box-shadow: none !important; }
-            /* Forzar impresión de background colors */
             .text-layer mark { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
     </style>
@@ -280,47 +248,67 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             <div class="page-content">
                 <div class="viewer-container">
                     <div class="viewer-sidebar">
+                        
                         <?php if ($mode === 'voraz_multi'): ?>
                             <div class="voraz-navigation">
                                 <button onclick="navigateVorazDoc(-1)" class="nav-btn">◀</button>
-                                <span id="doc-counter"><span id="current-doc">1</span>/<?= $totalDocs ?></span>
+                                <span id="doc-counter">Doc <span id="current-doc">1</span>/<?= $totalDocs ?></span>
                                 <button onclick="navigateVorazDoc(1)" class="nav-btn">▶</button>
                             </div>
                         <?php endif; ?>
 
                         <?php if ($mode === 'unified' && $downloadUrl): ?>
-                            <div class="unified-download">
-                                <a href="<?= htmlspecialchars($downloadUrl) ?>" download class="btn-download-unified">📥 Descargar Unificado</a>
+                            <div style="margin-bottom:1rem; text-align:center;">
+                                <a href="<?= htmlspecialchars($downloadUrl) ?>" download class="btn btn-secondary" style="width:100%;">📥 Descargar Unificado</a>
                             </div>
                         <?php endif; ?>
 
                         <h3>📄 Documento</h3>
                         <div class="doc-info">
-                            <p><strong>Tipo:</strong> <?= strtoupper($document['tipo']) ?></p>
                             <p><strong>Número:</strong> <?= htmlspecialchars($document['numero']) ?></p>
-                            <p><strong>Fecha:</strong> <?= htmlspecialchars($document['fecha']) ?></p>
+                            <p><strong>Tipo:</strong> <?= strtoupper($document['tipo']) ?></p>
                         </div>
 
-                        <div id="simpleStatus"></div>
+                        <div class="search-form">
+                            <form method="GET">
+                                <input type="hidden" name="doc" value="<?= $documentId ?>">
+                                
+                                <input type="hidden" name="codes" value="<?= htmlspecialchars($codesInputStr) ?>">
+                                
+                                <?php if (isset($_GET['voraz_mode'])): ?>
+                                    <input type="hidden" name="voraz_mode" value="true">
+                                <?php endif; ?>
+                                <?php if (isset($_GET['strict_mode'])): ?>
+                                    <input type="hidden" name="strict_mode" value="<?= htmlspecialchars($_GET['strict_mode']) ?>">
+                                <?php endif; ?>
+                                <?php if (isset($_GET['file'])): ?>
+                                    <input type="hidden" name="file" value="<?= htmlspecialchars($_GET['file']) ?>">
+                                <?php endif; ?>
 
-                        <div style="margin-top: 1rem;">
-                            <textarea readonly style="width: 100%; height: 100px; display:none;"><?= htmlspecialchars($searchTerm) ?></textarea>
+                                <label style="font-size:0.85rem; font-weight:600; margin-bottom:5px; display:block;">Lista de Búsqueda (Editable):</label>
+                                <textarea name="term" rows="8" placeholder="Escribe códigos aquí..."><?= htmlspecialchars(implode("\n", $termsToHighlight)) ?></textarea>
+                                
+                                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+                                    🔄 Actualizar / Buscar
+                                </button>
+                            </form>
                         </div>
 
-                        <button class="btn-print" onclick="showPrintModal()">
-                            🖨️ Imprimir Documento
-                        </button>
+                        <div id="simpleStatus" style="margin-top:15px;"></div>
 
-                        <a href="<?= $pdfUrl ?>" download class="btn btn-secondary" style="width: 100%; text-align: center;">
+                        <hr style="margin: 1.5rem 0; border-top:1px solid #eee;">
+
+                        <button class="btn-print" onclick="showPrintModal()">🖨️ Imprimir</button>
+                        <a href="<?= $pdfUrl ?>" download class="btn btn-secondary" style="width: 100%; text-align: center; display:block; padding:0.8rem;">
                             📥 Descargar PDF
                         </a>
                     </div>
 
                     <div class="viewer-main">
                         <div id="pdfContainer" class="pdf-container">
-                            <div class="loading-pages" style="padding: 3rem; text-align: center;">
+                            <div class="loading-pages" style="text-align:center; padding:3rem;">
                                 <div class="spinner"></div>
-                                <p>Iniciando visor inteligente...</p>
+                                <p style="color:#6b7280; margin-top:10px;">Cargando documento inteligente...</p>
                             </div>
                         </div>
                     </div>
@@ -333,8 +321,8 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
     <div class="print-modal" id="printModal">
         <div class="print-modal-content">
-            <h3>📄 Imprimir Documento</h3>
-            <p>Selecciona una opción de impresión:</p>
+            <h3>🖨️ Opciones de Impresión</h3>
+            <p style="color:#666; margin-bottom:20px;">¿Cómo deseas imprimir el documento?</p>
             <div class="print-modal-buttons">
                 <button class="btn btn-primary" onclick="printFullDocument()">Todo el Documento</button>
                 <button class="btn btn-secondary" onclick="closePrintModal()">Cancelar</button>
@@ -343,220 +331,32 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
     </div>
 
     <script>
-        // Configuración de PDF.js
+        // Configuración PDF.js
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-        // --- Configuración Global ---
+        // --- VARS GLOBALES ---
         const viewerMode = '<?= $mode ?>';
         const isStrictMode = <?= $strictMode ? 'true' : 'false' ?>;
         
-        // Listas de términos
-        const rawHits = <?= json_encode(array_values($hits)) ?>;
-        const rawContext = <?= json_encode(array_values($context)) ?>;
-        
-        const hits = rawHits.map(String).map(s => s.trim()).filter(s => s.length > 0);
-        const context = rawContext.map(String).map(s => s.trim()).filter(s => s.length > 0);
-        
-        // Mapa maestro para control de estado
-        let allTermsMap = new Map(); 
-        [...hits, ...context].forEach(t => {
-            allTermsMap.set(t.toLowerCase().replace(/[^a-z0-9]/g, ''), t);
-        });
+        // Listas limpias para JS
+        const hits = <?= json_encode(array_values($hits)) ?>.map(String).map(s => s.trim()).filter(s => s.length > 0);
+        const context = <?= json_encode(array_values($context)) ?>.map(String).map(s => s.trim()).filter(s => s.length > 0);
 
-        // Estado del sistema
-        let foundTermsSet = new Set();
-        let hasScrolledToFirstMatch = false; 
-        
         const pdfUrl = '<?= addslashes($pdfUrl) ?>';
         const container = document.getElementById('pdfContainer');
         const scale = 1.5;
         let pdfDoc = null;
+        
+        // Variables Radar y Scroll
+        let hasScrolledToFirstMatch = false;
 
-        // --- UI: Actualizar Estado ---
-        function updateStatusUI(scanning = false) {
-            const statusDiv = document.getElementById('simpleStatus');
-            if (!statusDiv) return;
-
-            let missing = [];
-            allTermsMap.forEach((originalTerm, normalizedKey) => {
-                if (!foundTermsSet.has(normalizedKey)) {
-                    missing.push(originalTerm);
-                }
-            });
-
-            let html = '';
-            if (missing.length === 0) {
-                html = `
-                    <div style="background:#dcfce7; color:#166534; padding:10px; border-radius:6px; text-align:center; margin-bottom:1rem; border:1px solid #86efac;">
-                        ✅ <strong>Completo:</strong> Todos los códigos encontrados.
-                    </div>`;
-            } else {
-                const statusText = scanning ? 'Analizando documento...' : 'Búsqueda finalizada';
-                html = `
-                    <div style="background:#fee2e2; color:#991b1b; padding:10px; border-radius:6px; margin-bottom:1rem; border:1px solid #fecaca;">
-                        <div style="margin-bottom:5px; font-size:0.85em; text-transform:uppercase; opacity:0.8;">${statusText}</div>
-                        <strong>⚠️ Faltan (${missing.length}):</strong> ${missing.join(', ')}
-                    </div>`;
-            }
-            statusDiv.innerHTML = html;
-        }
-
-        // --- Carga Principal ---
-        async function loadPDF() {
-            try {
-                pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
-                const numPages = pdfDoc.numPages;
-                container.innerHTML = ''; 
-
-                updateStatusUI(true);
-
-                // 1. Crear Placeholders
-                for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-                    createPagePlaceholder(pageNum);
-                }
-
-                // 2. Iniciar Radar de Fondo
-                runBackgroundRadar(numPages);
-
-                // 3. Configurar Lazy Loading
-                const observer = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            const pageNum = parseInt(entry.target.dataset.pageNum);
-                            if (!entry.target.dataset.rendered) {
-                                renderPage(pageNum, entry.target);
-                                entry.target.dataset.rendered = 'true';
-                            }
-                        }
-                    });
-                }, { root: null, rootMargin: '600px', threshold: 0.01 });
-
-                document.querySelectorAll('.pdf-page-wrapper').forEach(el => observer.observe(el));
-
-            } catch (error) {
-                console.error("Error PDF:", error);
-                container.innerHTML = `<p style='color:red;'>Error crítico: ${error.message}</p>`;
-            }
-        }
-
-        // --- RADAR SILENCIOSO (Detecta posición y scroll automático) ---
-        async function runBackgroundRadar(totalDocs) {
-            for (let i = 1; i <= totalDocs; i++) {
-                try {
-                    const page = await pdfDoc.getPage(i);
-                    const textContent = await page.getTextContent();
-                    const pageString = textContent.items.map(item => item.str).join('');
-                    const cleanPageString = pageString.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-                    let foundOnThisPage = false;
-                    for (let [key, original] of allTermsMap) {
-                        if (cleanPageString.includes(key)) {
-                            foundTermsSet.add(key);
-                            foundOnThisPage = true;
-                        }
-                    }
-
-                    updateStatusUI(true);
-
-                    // AUTO SCROLL AL PRIMER HALLAZGO
-                    if (foundOnThisPage && !hasScrolledToFirstMatch) {
-                        hasScrolledToFirstMatch = true;
-                        const pageEl = document.getElementById('page-' + i);
-                        if (pageEl) {
-                            pageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
-                    }
-                    
-                    // Pausa para no bloquear UI
-                    if (i % 10 === 0) await new Promise(r => setTimeout(r, 10));
-
-                } catch (e) { console.error("Error radar", e); }
-            }
-            updateStatusUI(false);
-        }
-
-        function createPagePlaceholder(pageNum) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'pdf-page-wrapper';
-            wrapper.id = 'page-' + pageNum;
-            wrapper.dataset.pageNum = pageNum;
-            wrapper.style.minHeight = '800px'; 
-            wrapper.style.position = 'relative';
-            
-            wrapper.innerHTML = `
-                <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:#9ca3af;">
-                    Cargando Página ${pageNum}...
-                </div>`;
-            
-            const containerDiv = document.createElement('div');
-            containerDiv.style.marginBottom = "20px";
-            containerDiv.appendChild(wrapper);
-            
-            const footer = document.createElement('div');
-            footer.className = 'page-number';
-            footer.textContent = `Página ${pageNum}`;
-            containerDiv.appendChild(footer);
-
-            container.appendChild(containerDiv);
-        }
-
-        // --- Renderizado Visual ---
-        async function renderPage(pageNum, wrapper) {
-            try {
-                const page = await pdfDoc.getPage(pageNum);
-                const viewport = page.getViewport({ scale });
-
-                wrapper.innerHTML = '';
-                wrapper.style.width = viewport.width + 'px';
-                wrapper.style.height = viewport.height + 'px';
-                wrapper.style.minHeight = '';
-
-                // Canvas
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
-                wrapper.appendChild(canvas);
-
-                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-
-                // Texto (Highlight)
-                const textDiv = document.createElement('div');
-                textDiv.className = 'text-layer';
-                textDiv.style.width = viewport.width + 'px';
-                textDiv.style.height = viewport.height + 'px';
-                wrapper.appendChild(textDiv);
-
-                const textContent = await page.getTextContent();
-                await pdfjsLib.renderTextLayer({
-                    textContent: textContent,
-                    container: textDiv,
-                    viewport: viewport,
-                    textDivs: []
-                }).promise;
-
-                // Mark.js
-                const instance = new Mark(textDiv);
-                const options = {
-                    element: "mark",
-                    accuracy: "partially",
-                    separateWordSearch: false
-                };
-
-                if (hits.length > 0) instance.mark(hits, { ...options, className: "highlight-hit" });
-                if (context.length > 0) instance.mark(context, { ...options, className: "highlight-context" });
-
-            } catch (err) { console.error(`Error render pag ${pageNum}:`, err); }
-        }
-
-        // Helpers
-        function showPrintModal() { document.getElementById('printModal').classList.add('active'); }
-        function closePrintModal() { document.getElementById('printModal').classList.remove('active'); }
-        function printFullDocument() { window.print(); closePrintModal(); }
-
-        // Voraz
+        // --- VORAZ NAV ---
         let vorazData = JSON.parse(sessionStorage.getItem('voraz_viewer_data') || 'null');
         let currentDocIndex = vorazData ? (vorazData.currentIndex || 0) : 0;
+        if(vorazData && document.getElementById('current-doc')) {
+             document.getElementById('current-doc').textContent = currentDocIndex + 1;
+        }
+
         function navigateVorazDoc(dir) {
             if (!vorazData) return;
             const newIndex = currentDocIndex + dir;
@@ -571,6 +371,180 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             }
         }
 
+        // --- CARGA DEL PDF ---
+        async function loadPDF() {
+            try {
+                pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
+                const numPages = pdfDoc.numPages;
+                container.innerHTML = '';
+
+                // Crear esqueletos de páginas
+                for (let i = 1; i <= numPages; i++) createPagePlaceholder(i);
+
+                // Configurar Lazy Load
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const pNum = parseInt(entry.target.dataset.pageNum);
+                            if (!entry.target.dataset.rendered) {
+                                renderPage(pNum, entry.target);
+                                entry.target.dataset.rendered = 'true';
+                            }
+                        }
+                    });
+                }, { root: null, rootMargin: '600px', threshold: 0.05 });
+
+                document.querySelectorAll('.pdf-page-wrapper').forEach(el => observer.observe(el));
+
+                // Carga inicial forzada (primeras páginas) para UX rápido
+                for(let i=1; i<=Math.min(numPages, 3); i++) {
+                    const el = document.getElementById('page-'+i);
+                    if(el) { renderPage(i, el); el.dataset.rendered='true'; }
+                }
+
+                // INICIAR RADAR (Búsqueda silenciosa para status y scroll)
+                scanAllPagesForSummary();
+
+            } catch (err) {
+                console.error("Error loadPDF:", err);
+                container.innerHTML = `<p style='color:red; padding:20px;'>Error: ${err.message}</p>`;
+            }
+        }
+
+        // --- RADAR DE FONDO (AUTO-SCROLL) ---
+        async function scanAllPagesForSummary() {
+            const statusDiv = document.getElementById('simpleStatus');
+            if(!statusDiv) return;
+            
+            // Unir todo para el radar: Buscamos Hits y Contexto
+            const termsToFind = [...hits, ...context]; 
+            if(termsToFind.length === 0) {
+                statusDiv.innerHTML = ''; return;
+            }
+
+            statusDiv.innerHTML = '<div style="color:#d97706; font-size:0.9em;">🔎 Analizando documento...</div>';
+            
+            // Mapa para control de "Faltantes"
+            // Normalizamos keys para comparación (sin espacios, minuscula)
+            let missingMap = new Map();
+            termsToFind.forEach(t => missingMap.set(t.replace(/[^a-zA-Z0-9]/g, '').toLowerCase(), t));
+
+            for(let i=1; i<=pdfDoc.numPages; i++) {
+                try {
+                    const page = await pdfDoc.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const rawStr = textContent.items.map(x => x.str).join('');
+                    const cleanStr = rawStr.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
+                    let pageHasMatch = false;
+
+                    // Chequear coincidencias
+                    for (let [key, original] of missingMap) {
+                        if (cleanStr.includes(key)) {
+                            missingMap.delete(key); // ¡Encontrado!
+                            pageHasMatch = true;
+                        }
+                    }
+
+                    // AUTO SCROLL al primer hallazgo relevante
+                    if (pageHasMatch && !hasScrolledToFirstMatch) {
+                        hasScrolledToFirstMatch = true;
+                        const pEl = document.getElementById('page-'+i);
+                        if(pEl) {
+                            pEl.scrollIntoView({ behavior:'smooth', block:'center' });
+                        }
+                    }
+
+                    // Pausa leve para no congelar UI en docs largos
+                    if(i % 5 === 0) await new Promise(r => setTimeout(r, 10));
+
+                } catch(e) { console.error("Radar error pg "+i, e); }
+            }
+
+            // Actualizar UI Final
+            if(missingMap.size === 0) {
+                statusDiv.innerHTML = `
+                    <div style="background:#dcfce7; color:#166534; padding:10px; border-radius:6px; border:1px solid #86efac; font-size:0.9em;">
+                        ✅ <strong>Completo:</strong> Todo encontrado.
+                    </div>`;
+            } else {
+                const missingArr = Array.from(missingMap.values());
+                statusDiv.innerHTML = `
+                    <div style="background:#fee2e2; color:#991b1b; padding:10px; border-radius:6px; border:1px solid #fecaca; font-size:0.9em;">
+                        <strong>⚠️ Faltan (${missingArr.length}):</strong> ${missingArr.join(', ')}
+                    </div>`;
+            }
+        }
+
+        // --- RENDERIZADO VISUAL ---
+        function createPagePlaceholder(pageNum) {
+            const div = document.createElement('div');
+            div.style.marginBottom = "20px";
+            div.innerHTML = `
+                <div id="page-${pageNum}" class="pdf-page-wrapper" data-page-num="${pageNum}" style="min-height:800px; display:flex; align-items:center; justify-content:center; color:#999;">
+                    Cargando pág ${pageNum}...
+                </div>
+                <div class="page-number">Página ${pageNum}</div>
+            `;
+            container.appendChild(div);
+        }
+
+        async function renderPage(pageNum, wrapper) {
+            try {
+                const page = await pdfDoc.getPage(pageNum);
+                const viewport = page.getViewport({ scale });
+
+                wrapper.innerHTML = '';
+                wrapper.style.display = 'block';
+                wrapper.style.width = viewport.width + 'px';
+                wrapper.style.height = viewport.height + 'px';
+
+                // 1. Canvas
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                wrapper.appendChild(canvas);
+
+                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+                // 2. Capa de Texto
+                const textDiv = document.createElement('div');
+                textDiv.className = 'text-layer';
+                textDiv.style.width = viewport.width + 'px';
+                textDiv.style.height = viewport.height + 'px';
+                wrapper.appendChild(textDiv);
+
+                const textContent = await page.getTextContent();
+                await pdfjsLib.renderTextLayer({
+                    textContent: textContent,
+                    container: textDiv,
+                    viewport: viewport,
+                    textDivs: []
+                }).promise;
+
+                // 3. Resaltado (Mark.js)
+                const instance = new Mark(textDiv);
+                const opts = { element: "mark", accuracy: "partially", separateWordSearch: false };
+
+                // Aplicar estilos diferenciados si es strict mode, o genéricos si no
+                if (isStrictMode) {
+                    if (hits.length) instance.mark(hits, { ...opts, className: "highlight-hit" });
+                    if (context.length) instance.mark(context, { ...opts, className: "highlight-context" });
+                } else {
+                    const all = [...hits, ...context];
+                    if (all.length) instance.mark(all, { ...opts, className: "highlight-hit" }); // Usamos verde fuerte por defecto
+                }
+
+            } catch (err) { console.error("Render err pg "+pageNum, err); }
+        }
+
+        // --- PRINT UTILS ---
+        function showPrintModal() { document.getElementById('printModal').classList.add('active'); }
+        function closePrintModal() { document.getElementById('printModal').classList.remove('active'); }
+        function printFullDocument() { window.print(); closePrintModal(); }
+
+        // Start
         loadPDF();
     </script>
 </body>
