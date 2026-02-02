@@ -656,8 +656,8 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         // Variables Globales
         const viewerMode = '<?= $mode ?>';
         const isStrictMode = <?= $strictMode ? 'true' : 'false' ?>;
-        const hits = <?= json_encode(array_values($hits)) ?>;
-        const context = <?= json_encode(array_values($context)) ?>;
+        const hits = <?= json_encode(array_values($hits)) ?>.map(String);
+        const context = <?= json_encode(array_values($context)) ?>.map(String);
 
         let vorazData = null;
         let currentDocIndex = 0;
@@ -759,7 +759,8 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             if (!summaryDiv) return;
 
             // Obtener términos (PHP terms)
-            const terms = <?= json_encode(array_values($termsToHighlight)) ?>;
+            // Obtener términos (PHP terms)
+            const terms = <?= json_encode(array_values($termsToHighlight)) ?>.map(String);
             if (!terms || terms.length === 0) {
                 summaryDiv.innerHTML = '<p class="text-muted">Sin términos de búsqueda.</p>';
                 return;
@@ -967,42 +968,42 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 }
 
 
-            // Text Layer
-            const textContent = await page.getTextContent();
-            const textLayer = document.createElement('div');
-            textLayer.className = 'text-layer';
-            textLayer.style.width = viewport.width + 'px';
-            textLayer.style.height = viewport.height + 'px';
-            textLayer.style.setProperty('--scale-factor', scale);
+                // Text Layer
+                const textContent = await page.getTextContent();
+                const textLayer = document.createElement('div');
+                textLayer.className = 'text-layer';
+                textLayer.style.width = viewport.width + 'px';
+                textLayer.style.height = viewport.height + 'px';
+                textLayer.style.setProperty('--scale-factor', scale);
 
-            // Populate text layer logic (simplified version of previous loop)
-            textContent.items.forEach(item => {
-                const span = document.createElement('span');
-                const tx = item.transform; // [sx, ky, kx, sy, tx, ty]
-                const fontHeight = Math.sqrt((tx[0] * tx[0]) + (tx[1] * tx[1]));
-                const scaledFontSize = fontHeight * scale;
-                const x = tx[4] * scale;
-                const y = viewport.height - (tx[5] * scale) - scaledFontSize;
-                const width = item.width * scale;
+                // Populate text layer logic (simplified version of previous loop)
+                textContent.items.forEach(item => {
+                    const span = document.createElement('span');
+                    const tx = item.transform; // [sx, ky, kx, sy, tx, ty]
+                    const fontHeight = Math.sqrt((tx[0] * tx[0]) + (tx[1] * tx[1]));
+                    const scaledFontSize = fontHeight * scale;
+                    const x = tx[4] * scale;
+                    const y = viewport.height - (tx[5] * scale) - scaledFontSize;
+                    const width = item.width * scale;
 
-                span.textContent = item.str;
-                span.style.left = x + 'px';
-                span.style.top = y + 'px';
-                span.style.fontSize = scaledFontSize + 'px';
-                span.style.fontFamily = item.fontName || 'sans-serif';
-                span.style.width = Math.ceil(width) + 'px';
+                    span.textContent = item.str;
+                    span.style.left = x + 'px';
+                    span.style.top = y + 'px';
+                    span.style.fontSize = scaledFontSize + 'px';
+                    span.style.fontFamily = item.fontName || 'sans-serif';
+                    span.style.width = Math.ceil(width) + 'px';
 
-                textLayer.appendChild(span);
-            });
+                    textLayer.appendChild(span);
+                });
 
-            wrapper.appendChild(textLayer);
+                wrapper.appendChild(textLayer);
 
 
 
-        } catch (err) {
-            console.error(`Page ${pageNum} Render Error:`, err);
-            wrapper.innerHTML = `<p style="color:red">Error rendering page ${pageNum}</p>`;
-        }
+            } catch (err) {
+                console.error(`Page ${pageNum} Render Error:`, err);
+                wrapper.innerHTML = `<p style="color:red">Error rendering page ${pageNum}</p>`;
+            }
         }
 
 
