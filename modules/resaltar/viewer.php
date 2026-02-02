@@ -937,7 +937,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                     viewport: viewport
                 }).promise;
 
-                }
+
 
                 // --- Restore Text Layer for Highlighting ---
                 const textContent = await page.getTextContent();
@@ -992,35 +992,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 }
 
 
-                // Text Layer
-                const textContent = await page.getTextContent();
-                const textLayer = document.createElement('div');
-                textLayer.className = 'text-layer';
-                textLayer.style.width = viewport.width + 'px';
-                textLayer.style.height = viewport.height + 'px';
-                textLayer.style.setProperty('--scale-factor', scale);
 
-                // Populate text layer logic (simplified version of previous loop)
-                textContent.items.forEach(item => {
-                    const span = document.createElement('span');
-                    const tx = item.transform; // [sx, ky, kx, sy, tx, ty]
-                    const fontHeight = Math.sqrt((tx[0] * tx[0]) + (tx[1] * tx[1]));
-                    const scaledFontSize = fontHeight * scale;
-                    const x = tx[4] * scale;
-                    const y = viewport.height - (tx[5] * scale) - scaledFontSize;
-                    const width = item.width * scale;
-
-                    span.textContent = item.str;
-                    span.style.left = x + 'px';
-                    span.style.top = y + 'px';
-                    span.style.fontSize = scaledFontSize + 'px';
-                    span.style.fontFamily = item.fontName || 'sans-serif';
-                    span.style.width = Math.ceil(width) + 'px';
-
-                    textLayer.appendChild(span);
-                });
-
-                wrapper.appendChild(textLayer);
 
 
 
