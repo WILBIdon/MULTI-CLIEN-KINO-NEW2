@@ -56,7 +56,7 @@ if (!empty($codesInput)) {
 
 // Limpiar y deduplicar para visualización general en el Textarea
 $termsToHighlight = array_unique(array_filter(array_map('trim', $termsToHighlight)));
-$searchTerm = implode(' ', $termsToHighlight); 
+$searchTerm = implode(' ', $termsToHighlight);
 
 // ⭐ STRICT MODE CONFIGURATION
 $mode = isset($_GET['mode']) ? $_GET['mode'] : (isset($_GET['voraz_mode']) ? 'voraz_multi' : 'single');
@@ -74,12 +74,13 @@ if ($strictMode) {
     if (!empty($searchTermInput)) {
         $hits = preg_split('/[\s,\t\n\r]+/', $searchTermInput, -1, PREG_SPLIT_NO_EMPTY);
     }
-    
+
     // 2. Parsear Contexto (Sistema)
     $allCodes = [];
     if (!empty($codesInput)) {
         $splitCodes = preg_split('/[,;\t\n\r]+/', $codesInput, -1, PREG_SPLIT_NO_EMPTY);
-        if ($splitCodes) $allCodes = $splitCodes;
+        if ($splitCodes)
+            $allCodes = $splitCodes;
     }
 
     $hits = array_unique(array_filter(array_map('trim', $hits)));
@@ -111,7 +112,8 @@ if ($documentId > 0) {
     $stmt->execute([$documentId]);
     $document = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$document) die('Documento no encontrado');
+    if (!$document)
+        die('Documento no encontrado');
     $pdfPath = resolve_pdf_path($clientCode, $document);
 } else {
     $pdfPath = $uploadsDir . $fileParam;
@@ -135,6 +137,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 ?>
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -145,95 +148,225 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
     <style>
         /* --- LAYOUT --- */
         .viewer-container {
-            display: grid; grid-template-columns: 300px 1fr; gap: 1.5rem; min-height: calc(100vh - 200px);
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 1.5rem;
+            min-height: calc(100vh - 200px);
         }
-        @media (max-width: 900px) { .viewer-container { grid-template-columns: 1fr; } }
+
+        @media (max-width: 900px) {
+            .viewer-container {
+                grid-template-columns: 1fr;
+            }
+        }
 
         .viewer-sidebar {
-            background: var(--bg-secondary); border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg); padding: 1.25rem; height: fit-content;
-            position: sticky; top: 80px; max-height: calc(100vh - 100px); overflow-y: auto;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            height: fit-content;
+            position: sticky;
+            top: 80px;
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
         }
 
         .viewer-main {
-            background: var(--bg-secondary); border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg); padding: 1.5rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
         }
 
         /* --- PDF LAYERS --- */
         .pdf-container {
-            display: flex; flex-direction: column; align-items: center; gap: 1rem; min-height: 500px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            min-height: 500px;
         }
+
         .pdf-page-wrapper {
-            position: relative; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            background: white; margin-bottom: 1rem;
+            position: relative;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            background: white;
+            margin-bottom: 1rem;
         }
-        .pdf-page-wrapper canvas { display: block; }
+
+        .pdf-page-wrapper canvas {
+            display: block;
+        }
 
         .text-layer {
-            position: absolute; left: 0; top: 0; right: 0; bottom: 0;
-            overflow: hidden; opacity: 1; line-height: 1;
-            mix-blend-mode: multiply; /* Fusión para que se vea el texto negro debajo */
+            position: absolute;
+            left: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            overflow: hidden;
+            opacity: 1;
+            line-height: 1;
+            mix-blend-mode: multiply;
+            /* Fusión para que se vea el texto negro debajo */
         }
-        .text-layer span { position: absolute; white-space: pre; color: transparent; cursor: text; }
+
+        .text-layer span {
+            position: absolute;
+            white-space: pre;
+            color: transparent;
+            cursor: text;
+        }
 
         /* --- ESTILOS DE RESALTADO (TIPO MARCADOR) --- */
         .text-layer mark {
-            padding: 0; margin: 0; border-radius: 0; color: transparent;
+            padding: 0;
+            margin: 0;
+            border-radius: 0;
+            color: transparent;
             mix-blend-mode: multiply;
         }
+
         /* Verde Fuerte (Hits Manuales) */
         .highlight-hit {
-            background-color: rgba(34, 197, 94, 0.5) !important; 
+            background-color: rgba(34, 197, 94, 0.5) !important;
             border-bottom: 2px solid #15803d;
         }
+
         /* Verde Suave (Contexto Automático) */
         .highlight-context {
             background-color: rgba(134, 239, 172, 0.4) !important;
         }
 
         /* --- UI COMPONENTS --- */
-        .page-number { text-align: center; font-size: 0.875rem; color: var(--text-muted); margin-top: 0.5rem; }
-        .doc-info { font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1rem; }
-        
+        .page-number {
+            text-align: center;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+
+        .doc-info {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
         .search-form textarea {
-            width: 100%; border-radius: 6px; border: 1px solid #d1d5db;
-            padding: 0.5rem; font-family: monospace; font-size: 0.85rem; resize: vertical;
+            width: 100%;
+            border-radius: 6px;
+            border: 1px solid #d1d5db;
+            padding: 0.5rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+            resize: vertical;
             background-color: #fff;
         }
-        
+
         .btn-print {
-            width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem;
-            padding: 0.8rem; background: var(--accent-primary); color: white; border: none;
-            border-radius: var(--radius-md); font-weight: 600; cursor: pointer; margin-bottom: 0.75rem;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.8rem;
+            background: var(--accent-primary);
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 0.75rem;
         }
-        .btn-print:hover { background: var(--accent-primary-hover); }
+
+        .btn-print:hover {
+            background: var(--accent-primary-hover);
+        }
 
         .voraz-navigation {
-            display: flex; align-items: center; justify-content: center; gap: 15px; padding: 10px;
-            background: #f8f9fa; border-bottom: 2px solid #667eea; margin-bottom: 15px; border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #667eea;
+            margin-bottom: 15px;
+            border-radius: var(--radius-md);
         }
+
         .nav-btn {
-            padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
         }
 
         /* --- PRINT MODAL --- */
         .print-modal {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.7); z-index: 10000; align-items: center; justify-content: center;
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
         }
-        .print-modal.active { display: flex; }
+
+        .print-modal.active {
+            display: flex;
+        }
+
         .print-modal-content {
-            background: white; padding: 2rem; border-radius: 12px; max-width: 400px; width: 90%; text-align: center;
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
         }
-        .print-modal-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 1.5rem; }
+
+        .print-modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 1.5rem;
+        }
 
         @media print {
-            .viewer-sidebar, .main-header, .app-footer { display: none !important; }
-            .viewer-container { display: block !important; }
-            .viewer-main { border: none !important; padding: 0 !important; }
-            .pdf-page-wrapper { break-after: page; box-shadow: none !important; }
-            .text-layer mark { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+            .viewer-sidebar,
+            .main-header,
+            .app-footer,
+            .print-modal {
+                display: none !important;
+            }
+
+            .viewer-container {
+                display: block !important;
+            }
+
+            .viewer-main {
+                border: none !important;
+                padding: 0 !important;
+            }
+
+            .pdf-page-wrapper {
+                break-after: page;
+                box-shadow: none !important;
+            }
+
+            .text-layer mark {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
         }
     </style>
 </head>
@@ -248,7 +381,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             <div class="page-content">
                 <div class="viewer-container">
                     <div class="viewer-sidebar">
-                        
+
                         <?php if ($mode === 'voraz_multi'): ?>
                             <div class="voraz-navigation">
                                 <button onclick="navigateVorazDoc(-1)" class="nav-btn">◀</button>
@@ -259,7 +392,8 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
                         <?php if ($mode === 'unified' && $downloadUrl): ?>
                             <div style="margin-bottom:1rem; text-align:center;">
-                                <a href="<?= htmlspecialchars($downloadUrl) ?>" download class="btn btn-secondary" style="width:100%;">📥 Descargar Unificado</a>
+                                <a href="<?= htmlspecialchars($downloadUrl) ?>" download class="btn btn-secondary"
+                                    style="width:100%;">📥 Descargar Unificado</a>
                             </div>
                         <?php endif; ?>
 
@@ -272,22 +406,26 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                         <div class="search-form">
                             <form method="GET">
                                 <input type="hidden" name="doc" value="<?= $documentId ?>">
-                                
+
                                 <input type="hidden" name="codes" value="<?= htmlspecialchars($codesInputStr) ?>">
-                                
+
                                 <?php if (isset($_GET['voraz_mode'])): ?>
                                     <input type="hidden" name="voraz_mode" value="true">
                                 <?php endif; ?>
                                 <?php if (isset($_GET['strict_mode'])): ?>
-                                    <input type="hidden" name="strict_mode" value="<?= htmlspecialchars($_GET['strict_mode']) ?>">
+                                    <input type="hidden" name="strict_mode"
+                                        value="<?= htmlspecialchars($_GET['strict_mode']) ?>">
                                 <?php endif; ?>
                                 <?php if (isset($_GET['file'])): ?>
                                     <input type="hidden" name="file" value="<?= htmlspecialchars($_GET['file']) ?>">
                                 <?php endif; ?>
 
-                                <label style="font-size:0.85rem; font-weight:600; margin-bottom:5px; display:block;">Lista de Búsqueda (Editable):</label>
-                                <textarea name="term" rows="8" placeholder="Escribe códigos aquí..."><?= htmlspecialchars(implode("\n", $termsToHighlight)) ?></textarea>
-                                
+                                <label
+                                    style="font-size:0.85rem; font-weight:600; margin-bottom:5px; display:block;">Lista
+                                    de Búsqueda (Editable):</label>
+                                <textarea name="term" rows="8"
+                                    placeholder="Escribe códigos aquí..."><?= htmlspecialchars(implode("\n", $termsToHighlight)) ?></textarea>
+
                                 <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
                                     🔄 Actualizar / Buscar
                                 </button>
@@ -299,7 +437,8 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                         <hr style="margin: 1.5rem 0; border-top:1px solid #eee;">
 
                         <button class="btn-print" onclick="showPrintModal()">🖨️ Imprimir</button>
-                        <a href="<?= $pdfUrl ?>" download class="btn btn-secondary" style="width: 100%; text-align: center; display:block; padding:0.8rem;">
+                        <a href="<?= $pdfUrl ?>" download class="btn btn-secondary"
+                            style="width: 100%; text-align: center; display:block; padding:0.8rem;">
                             📥 Descargar PDF
                         </a>
                     </div>
@@ -337,7 +476,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         // --- VARS GLOBALES ---
         const viewerMode = '<?= $mode ?>';
         const isStrictMode = <?= $strictMode ? 'true' : 'false' ?>;
-        
+
         // Listas limpias para JS
         const hits = <?= json_encode(array_values($hits)) ?>.map(String).map(s => s.trim()).filter(s => s.length > 0);
         const context = <?= json_encode(array_values($context)) ?>.map(String).map(s => s.trim()).filter(s => s.length > 0);
@@ -346,15 +485,15 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         const container = document.getElementById('pdfContainer');
         const scale = 1.5;
         let pdfDoc = null;
-        
+
         // Variables Radar y Scroll
         let hasScrolledToFirstMatch = false;
 
         // --- VORAZ NAV ---
         let vorazData = JSON.parse(sessionStorage.getItem('voraz_viewer_data') || 'null');
         let currentDocIndex = vorazData ? (vorazData.currentIndex || 0) : 0;
-        if(vorazData && document.getElementById('current-doc')) {
-             document.getElementById('current-doc').textContent = currentDocIndex + 1;
+        if (vorazData && document.getElementById('current-doc')) {
+            document.getElementById('current-doc').textContent = currentDocIndex + 1;
         }
 
         function navigateVorazDoc(dir) {
@@ -397,9 +536,9 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 document.querySelectorAll('.pdf-page-wrapper').forEach(el => observer.observe(el));
 
                 // Carga inicial forzada (primeras páginas) para UX rápido
-                for(let i=1; i<=Math.min(numPages, 3); i++) {
-                    const el = document.getElementById('page-'+i);
-                    if(el) { renderPage(i, el); el.dataset.rendered='true'; }
+                for (let i = 1; i <= Math.min(numPages, 3); i++) {
+                    const el = document.getElementById('page-' + i);
+                    if (el) { renderPage(i, el); el.dataset.rendered = 'true'; }
                 }
 
                 // INICIAR RADAR (Búsqueda silenciosa para status y scroll)
@@ -414,22 +553,22 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         // --- RADAR DE FONDO (AUTO-SCROLL) ---
         async function scanAllPagesForSummary() {
             const statusDiv = document.getElementById('simpleStatus');
-            if(!statusDiv) return;
-            
+            if (!statusDiv) return;
+
             // Unir todo para el radar: Buscamos Hits y Contexto
-            const termsToFind = [...hits, ...context]; 
-            if(termsToFind.length === 0) {
+            const termsToFind = [...hits, ...context];
+            if (termsToFind.length === 0) {
                 statusDiv.innerHTML = ''; return;
             }
 
             statusDiv.innerHTML = '<div style="color:#d97706; font-size:0.9em;">🔎 Analizando documento...</div>';
-            
+
             // Mapa para control de "Faltantes"
             // Normalizamos keys para comparación (sin espacios, minuscula)
             let missingMap = new Map();
             termsToFind.forEach(t => missingMap.set(t.replace(/[^a-zA-Z0-9]/g, '').toLowerCase(), t));
 
-            for(let i=1; i<=pdfDoc.numPages; i++) {
+            for (let i = 1; i <= pdfDoc.numPages; i++) {
                 try {
                     const page = await pdfDoc.getPage(i);
                     const textContent = await page.getTextContent();
@@ -449,20 +588,20 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                     // AUTO SCROLL al primer hallazgo relevante
                     if (pageHasMatch && !hasScrolledToFirstMatch) {
                         hasScrolledToFirstMatch = true;
-                        const pEl = document.getElementById('page-'+i);
-                        if(pEl) {
-                            pEl.scrollIntoView({ behavior:'smooth', block:'center' });
+                        const pEl = document.getElementById('page-' + i);
+                        if (pEl) {
+                            pEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         }
                     }
 
                     // Pausa leve para no congelar UI en docs largos
-                    if(i % 5 === 0) await new Promise(r => setTimeout(r, 10));
+                    if (i % 5 === 0) await new Promise(r => setTimeout(r, 10));
 
-                } catch(e) { console.error("Radar error pg "+i, e); }
+                } catch (e) { console.error("Radar error pg " + i, e); }
             }
 
             // Actualizar UI Final
-            if(missingMap.size === 0) {
+            if (missingMap.size === 0) {
                 statusDiv.innerHTML = `
                     <div style="background:#dcfce7; color:#166534; padding:10px; border-radius:6px; border:1px solid #86efac; font-size:0.9em;">
                         ✅ <strong>Completo:</strong> Todo encontrado.
@@ -536,7 +675,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                     if (all.length) instance.mark(all, { ...opts, className: "highlight-hit" }); // Usamos verde fuerte por defecto
                 }
 
-            } catch (err) { console.error("Render err pg "+pageNum, err); }
+            } catch (err) { console.error("Render err pg " + pageNum, err); }
         }
 
         // --- PRINT UTILS ---
@@ -548,4 +687,5 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         loadPDF();
     </script>
 </body>
+
 </html>
