@@ -1,6 +1,11 @@
 <?php
 /**
  * Print-Optimized PDF Viewer with Highlighting
+ * * Optimized Version:
+ * - Client-side ONLY highlighting (Mark.js).
+ * - Lazy Loading with Auto-Scroll Radar.
+ * - Persistent Context Preservation (Hidden Inputs).
+ * - Editable Search List.
  */
 
 session_start();
@@ -25,6 +30,7 @@ $fileParam = isset($_GET['file']) ? $_GET['file'] : '';
 // --- LÓGICA DE PROCESAMIENTO DE TÉRMINOS ---
 $termsToHighlight = [];
 
+// 1. Añadir 'term' individual (Input manual del textarea)
 if (!empty($searchTermInput)) {
     $splitTerms = preg_split('/[\s,\t\n\r]+/', $searchTermInput, -1, PREG_SPLIT_NO_EMPTY);
     if ($splitTerms) {
@@ -32,10 +38,12 @@ if (!empty($searchTermInput)) {
     }
 }
 
+// 2. Procesar lista de 'codes' (Contexto del sistema)
 $codesInputStr = '';
 if (!empty($codesInput)) {
     if (is_array($codesInput)) {
         $termsToHighlight = array_merge($termsToHighlight, $codesInput);
+        // Aplanar para el input hidden y preservar en el siguiente submit
         $codesInputStr = implode(',', $codesInput);
     } else {
         $splitCodes = preg_split('/[,;\t\n\r]+/', $codesInput, -1, PREG_SPLIT_NO_EMPTY);
@@ -46,9 +54,11 @@ if (!empty($codesInput)) {
     }
 }
 
+// Limpiar y deduplicar para visualización general en el Textarea
 $termsToHighlight = array_unique(array_filter(array_map('trim', $termsToHighlight)));
 $searchTerm = implode(' ', $termsToHighlight);
 
+// ⭐ STRICT MODE CONFIGURATION
 $mode = isset($_GET['mode']) ? $_GET['mode'] : (isset($_GET['voraz_mode']) ? 'voraz_multi' : 'single');
 $strictMode = isset($_GET['strict_mode']) && $_GET['strict_mode'] === 'true';
 
@@ -56,19 +66,31 @@ $hits = [];
 $context = [];
 
 if ($strictMode) {
+    // Definición:
+    // HITS (Naranja/Verde Fuerte) = Lo que el usuario escribe explícitamente en el Textarea ('term').
+    // CONTEXT (Verde Suave) = Lo que viene de 'codes' pero NO está en el textarea.
+
+    // 1. Parsear Hits (Manuales)
     if (!empty($searchTermInput)) {
         $hits = preg_split('/[\s,\t\n\r]+/', $searchTermInput, -1, PREG_SPLIT_NO_EMPTY);
     }
+
+    // 2. Parsear Contexto (Sistema)
     $allCodes = [];
     if (!empty($codesInput)) {
         $splitCodes = preg_split('/[,;\t\n\r]+/', $codesInput, -1, PREG_SPLIT_NO_EMPTY);
         if ($splitCodes)
             $allCodes = $splitCodes;
     }
+
     $hits = array_unique(array_filter(array_map('trim', $hits)));
     $allCodes = array_unique(array_filter(array_map('trim', $allCodes)));
+
+    // El contexto es todo lo automático, menos lo que ya estamos buscando manualmente
     $context = array_diff($allCodes, $hits);
+
 } else {
+    // Modo Clásico: Todo lo que está en la lista se busca con la misma prioridad
     $hits = [];
     $context = $termsToHighlight;
 }
@@ -89,6 +111,7 @@ if ($documentId > 0) {
     $stmt = $db->prepare('SELECT * FROM documentos WHERE id = ?');
     $stmt->execute([$documentId]);
     $document = $stmt->fetch(PDO::FETCH_ASSOC);
+
     if (!$document)
         die('Documento no encontrado');
     $pdfPath = resolve_pdf_path($clientCode, $document);
@@ -104,7 +127,8 @@ if ($documentId > 0) {
 }
 
 if (!$pdfPath || !file_exists($pdfPath)) {
-    die("Archivo PDF no encontrado.");
+    $available = get_available_folders($clientCode);
+    die("Archivo PDF no encontrado.<br>Ruta: " . htmlspecialchars($pdfPath ?? 'NULL'));
 }
 
 $relativePath = str_replace($uploadsDir, '', $pdfPath);
@@ -122,12 +146,18 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mark.js/dist/mark.min.js"></script>
     <style>
-        /* --- ESTILOS DE PANTALLA --- */
+        /* --- LAYOUT --- */
         .viewer-container {
             display: grid;
             grid-template-columns: 300px 1fr;
             gap: 1.5rem;
             min-height: calc(100vh - 200px);
+        }
+
+        @media (max-width: 900px) {
+            .viewer-container {
+                grid-template-columns: 1fr;
+            }
         }
 
         .viewer-sidebar {
@@ -149,6 +179,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             padding: 1.5rem;
         }
 
+        /* --- PDF LAYERS --- */
         .pdf-container {
             display: flex;
             flex-direction: column;
@@ -164,6 +195,10 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             margin-bottom: 1rem;
         }
 
+        .pdf-page-wrapper canvas {
+            display: block;
+        }
+
         .text-layer {
             position: absolute;
             left: 0;
@@ -174,6 +209,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             opacity: 1;
             line-height: 1;
             mix-blend-mode: multiply;
+            /* Fusión para que se vea el texto negro debajo */
         }
 
         .text-layer span {
@@ -183,17 +219,57 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             cursor: text;
         }
 
+        /* --- ESTILOS DE RESALTADO (TIPO MARCADOR) --- */
+        .text-layer mark {
+            padding: 0;
+            margin: 0;
+            border-radius: 0;
+            color: transparent;
+            mix-blend-mode: multiply;
+        }
+
+        /* Verde Fuerte (Hits Manuales) */
         .highlight-hit {
             background-color: rgba(34, 197, 94, 0.5) !important;
             border-bottom: 2px solid #15803d;
         }
 
+        /* Verde Suave (Contexto Automático) */
         .highlight-context {
             background-color: rgba(134, 239, 172, 0.4) !important;
         }
 
+        /* --- UI COMPONENTS --- */
+        .page-number {
+            text-align: center;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+
+        .doc-info {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .search-form textarea {
+            width: 100%;
+            border-radius: 6px;
+            border: 1px solid #d1d5db;
+            padding: 0.5rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+            resize: vertical;
+            background-color: #fff;
+        }
+
         .btn-print {
             width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
             padding: 0.8rem;
             background: var(--accent-primary);
             color: white;
@@ -204,6 +280,33 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             margin-bottom: 0.75rem;
         }
 
+        .btn-print:hover {
+            background: var(--accent-primary-hover);
+        }
+
+        .voraz-navigation {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #667eea;
+            margin-bottom: 15px;
+            border-radius: var(--radius-md);
+        }
+
+        .nav-btn {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        /* --- PRINT MODAL --- */
         .print-modal {
             display: none;
             position: fixed;
@@ -230,14 +333,23 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             text-align: center;
         }
 
-        /* --- SOLUCIÓN DEFINITIVA DE IMPRESIÓN --- */
+        .print-modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 1.5rem;
+        }
+
         @media print {
+
+            /* Reset de márgenes del navegador */
             @page {
                 margin: 0 !important;
                 size: auto;
             }
 
-            /* Elimina el spinner (bola), sidebar, botones y encabezados */
+            /* ELIMINACIÓN DEL CÍRCULO (SPINNER) Y UI: 
+               Se oculta explícitamente el spinner y la interfaz para evitar basura visual */
             nav,
             .main-header,
             .sidebar,
@@ -258,7 +370,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 visibility: hidden !important;
             }
 
-            /* Resetea contenedores para evitar márgenes y hojas blancas iniciales */
+            /* FLUJO CONTINUO: Evita que contenedores con altura mínima generen hojas blancas */
             body,
             html,
             .dashboard-container,
@@ -274,10 +386,10 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 height: auto !important;
                 overflow: visible !important;
                 position: static !important;
-                background: white !important;
             }
 
-            /* Oculta esqueletos de páginas no cargadas (evita hojas blancas intermedias) */
+            /* SOLUCIÓN A HOJAS BLANCAS INTERMEDIAS: 
+               Solo se imprimen las páginas que JavaScript ya renderizó con éxito */
             .pdf-page-wrapper:not([data-rendered="true"]) {
                 display: none !important;
             }
@@ -289,7 +401,10 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 margin: 0 !important;
                 padding: 0 !important;
                 page-break-after: always !important;
+                /* Fuerza el salto de página correcto */
                 break-after: page !important;
+                color: transparent !important;
+                /* Oculta textos de "Cargando..." */
             }
 
             .page-outer-wrapper:last-child {
@@ -301,18 +416,12 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 box-shadow: none !important;
                 border: none !important;
                 page-break-inside: avoid !important;
-                width: 100% !important;
             }
 
             canvas {
                 width: 100% !important;
                 height: auto !important;
                 display: block !important;
-            }
-
-            .text-layer {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
             }
         }
 
@@ -325,78 +434,257 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 <body>
     <div class="dashboard-container">
         <?php include __DIR__ . '/../../includes/sidebar.php'; ?>
+
         <main class="main-content">
             <?php include __DIR__ . '/../../includes/header.php'; ?>
+
             <div class="page-content">
                 <div class="viewer-container">
                     <div class="viewer-sidebar">
+
+                        <?php if ($mode === 'voraz_multi'): ?>
+                            <div class="voraz-navigation">
+                                <button onclick="navigateVorazDoc(-1)" class="nav-btn">◀</button>
+                                <span id="doc-counter">Doc <span id="current-doc">1</span>/<?= $totalDocs ?></span>
+                                <button onclick="navigateVorazDoc(1)" class="nav-btn">▶</button>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($mode === 'unified' && $downloadUrl): ?>
+                            <div style="margin-bottom:1rem; text-align:center;">
+                                <a href="<?= htmlspecialchars($downloadUrl) ?>" download class="btn btn-secondary"
+                                    style="width:100%;">📥 Descargar Unificado</a>
+                            </div>
+                        <?php endif; ?>
+
                         <h3>📄 Documento</h3>
                         <div class="doc-info">
                             <p><strong>Número:</strong> <?= htmlspecialchars($document['numero']) ?></p>
+                            <p><strong>Tipo:</strong> <?= strtoupper($document['tipo']) ?></p>
                         </div>
+
                         <div class="search-form">
                             <form method="GET">
                                 <input type="hidden" name="doc" value="<?= $documentId ?>">
+
                                 <input type="hidden" name="codes" value="<?= htmlspecialchars($codesInputStr) ?>">
-                                <textarea name="term"
-                                    rows="8"><?= htmlspecialchars(implode("\n", $termsToHighlight)) ?></textarea>
-                                <button type="submit" class="btn btn-primary"
-                                    style="width: 100%; margin-top: 0.5rem;">🔄 Actualizar</button>
+
+                                <?php if (isset($_GET['voraz_mode'])): ?>
+                                    <input type="hidden" name="voraz_mode" value="true">
+                                <?php endif; ?>
+                                <?php if (isset($_GET['strict_mode'])): ?>
+                                    <input type="hidden" name="strict_mode"
+                                        value="<?= htmlspecialchars($_GET['strict_mode']) ?>">
+                                <?php endif; ?>
+                                <?php if (isset($_GET['file'])): ?>
+                                    <input type="hidden" name="file" value="<?= htmlspecialchars($_GET['file']) ?>">
+                                <?php endif; ?>
+
+                                <label
+                                    style="font-size:0.85rem; font-weight:600; margin-bottom:5px; display:block;">Lista
+                                    de Búsqueda (Editable):</label>
+                                <textarea name="term" rows="8"
+                                    placeholder="Escribe códigos aquí..."><?= htmlspecialchars(implode("\n", $termsToHighlight)) ?></textarea>
+
+                                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+                                    🔄 Actualizar / Buscar
+                                </button>
                             </form>
                         </div>
+
                         <div id="simpleStatus" style="margin-top:15px;"></div>
-                        <hr>
+
+                        <hr style="margin: 1.5rem 0; border-top:1px solid #eee;">
+
                         <button class="btn-print" onclick="showPrintModal()">🖨️ Imprimir</button>
+                        <a href="<?= $pdfUrl ?>" download class="btn btn-secondary"
+                            style="width: 100%; text-align: center; display:block; padding:0.8rem;">
+                            📥 Descargar PDF
+                        </a>
                     </div>
+
                     <div class="viewer-main">
                         <div id="pdfContainer" class="pdf-container">
-                            <div class="loading-pages">
+                            <div class="loading-pages" style="text-align:center; padding:3rem;">
                                 <div class="spinner"></div>
-                                <p>Cargando documento...</p>
+                                <p style="color:#6b7280; margin-top:10px;">Cargando documento inteligente...</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+
             <?php include __DIR__ . '/../../includes/footer.php'; ?>
         </main>
     </div>
 
     <div class="print-modal" id="printModal">
         <div class="print-modal-content">
-            <h3>🖨️ Imprimir</h3>
-            <button class="btn btn-primary" onclick="printFullDocument()">Todo el Documento</button>
-            <button class="btn btn-secondary" onclick="closePrintModal()">Cancelar</button>
+            <h3>🖨️ Opciones de Impresión</h3>
+            <p style="color:#666; margin-bottom:20px;">¿Cómo deseas imprimir el documento?</p>
+            <div class="print-modal-buttons">
+                <button class="btn btn-primary" onclick="printFullDocument()">Todo el Documento</button>
+                <button class="btn btn-secondary" onclick="closePrintModal()">Cancelar</button>
+            </div>
         </div>
     </div>
 
     <script>
+        // Configuración PDF.js
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        const hits = <?= json_encode(array_values($hits)) ?>;
-        const context = <?= json_encode(array_values($context)) ?>;
+
+        // --- VARS GLOBALES ---
+        const viewerMode = '<?= $mode ?>';
+        const isStrictMode = <?= $strictMode ? 'true' : 'false' ?>;
+
+        // Listas limpias para JS
+        const hits = <?= json_encode(array_values($hits)) ?>.map(String).map(s => s.trim()).filter(s => s.length > 0);
+        const context = <?= json_encode(array_values($context)) ?>.map(String).map(s => s.trim()).filter(s => s.length > 0);
+
         const pdfUrl = '<?= addslashes($pdfUrl) ?>';
         const container = document.getElementById('pdfContainer');
         const scale = 1.5;
         let pdfDoc = null;
 
-        async function loadPDF() {
-            pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
-            container.innerHTML = '';
-            for (let i = 1; i <= pdfDoc.numPages; i++) createPagePlaceholder(i);
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting && !entry.target.dataset.rendered) {
-                        renderPage(parseInt(entry.target.dataset.pageNum), entry.target);
-                    }
-                });
-            }, { rootMargin: '600px' });
-            document.querySelectorAll('.pdf-page-wrapper').forEach(el => observer.observe(el));
+        // Variables Radar y Scroll
+        let hasScrolledToFirstMatch = false;
+
+        // --- VORAZ NAV ---
+        let vorazData = JSON.parse(sessionStorage.getItem('voraz_viewer_data') || 'null');
+        let currentDocIndex = vorazData ? (vorazData.currentIndex || 0) : 0;
+        if (vorazData && document.getElementById('current-doc')) {
+            document.getElementById('current-doc').textContent = currentDocIndex + 1;
         }
 
+        function navigateVorazDoc(dir) {
+            if (!vorazData) return;
+            const newIndex = currentDocIndex + dir;
+            if (newIndex >= 0 && newIndex < vorazData.documents.length) {
+                vorazData.currentIndex = newIndex;
+                sessionStorage.setItem('voraz_viewer_data', JSON.stringify(vorazData));
+                const doc = vorazData.documents[newIndex];
+                const p = new URLSearchParams(window.location.search);
+                if (doc.id) p.set('doc', doc.id);
+                if (doc.ruta_archivo) p.set('file', doc.ruta_archivo);
+                window.location.search = p.toString();
+            }
+        }
+
+        // --- CARGA DEL PDF ---
+        async function loadPDF() {
+            try {
+                pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
+                const numPages = pdfDoc.numPages;
+                container.innerHTML = '';
+
+                // Crear esqueletos de páginas
+                for (let i = 1; i <= numPages; i++) createPagePlaceholder(i);
+
+                // Configurar Lazy Load
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const pNum = parseInt(entry.target.dataset.pageNum);
+                            if (!entry.target.dataset.rendered) {
+                                renderPage(pNum, entry.target);
+                                entry.target.dataset.rendered = 'true';
+                            }
+                        }
+                    });
+                }, { root: null, rootMargin: '600px', threshold: 0.05 });
+
+                document.querySelectorAll('.pdf-page-wrapper').forEach(el => observer.observe(el));
+
+                // Carga inicial forzada (primeras páginas) para UX rápido
+                for (let i = 1; i <= Math.min(numPages, 3); i++) {
+                    const el = document.getElementById('page-' + i);
+                    if (el) { renderPage(i, el); el.dataset.rendered = 'true'; }
+                }
+
+                // INICIAR RADAR (Búsqueda silenciosa para status y scroll)
+                scanAllPagesForSummary();
+
+            } catch (err) {
+                console.error("Error loadPDF:", err);
+                container.innerHTML = `<p style='color:red; padding:20px;'>Error: ${err.message}</p>`;
+            }
+        }
+
+        // --- RADAR DE FONDO (AUTO-SCROLL) ---
+        async function scanAllPagesForSummary() {
+            const statusDiv = document.getElementById('simpleStatus');
+            if (!statusDiv) return;
+
+            // Unir todo para el radar: Buscamos Hits y Contexto
+            const termsToFind = [...hits, ...context];
+            if (termsToFind.length === 0) {
+                statusDiv.innerHTML = ''; return;
+            }
+
+            statusDiv.innerHTML = '<div style="color:#d97706; font-size:0.9em;">🔎 Analizando documento...</div>';
+
+            // Mapa para control de "Faltantes"
+            // Normalizamos keys para comparación (sin espacios, minuscula)
+            let missingMap = new Map();
+            termsToFind.forEach(t => missingMap.set(t.replace(/[^a-zA-Z0-9]/g, '').toLowerCase(), t));
+
+            for (let i = 1; i <= pdfDoc.numPages; i++) {
+                try {
+                    const page = await pdfDoc.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const rawStr = textContent.items.map(x => x.str).join('');
+                    const cleanStr = rawStr.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
+                    let pageHasMatch = false;
+
+                    // Chequear coincidencias
+                    for (let [key, original] of missingMap) {
+                        if (cleanStr.includes(key)) {
+                            missingMap.delete(key); // ¡Encontrado!
+                            pageHasMatch = true;
+                        }
+                    }
+
+                    // AUTO SCROLL al primer hallazgo relevante
+                    if (pageHasMatch && !hasScrolledToFirstMatch) {
+                        hasScrolledToFirstMatch = true;
+                        const pEl = document.getElementById('page-' + i);
+                        if (pEl) {
+                            pEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }
+
+                    // Pausa leve para no congelar UI en docs largos
+                    if (i % 5 === 0) await new Promise(r => setTimeout(r, 10));
+
+                } catch (e) { console.error("Radar error pg " + i, e); }
+            }
+
+            // Actualizar UI Final
+            if (missingMap.size === 0) {
+                statusDiv.innerHTML = `
+                    <div style="background:#dcfce7; color:#166534; padding:10px; border-radius:6px; border:1px solid #86efac; font-size:0.9em;">
+                        ✅ <strong>Completo:</strong> Todo encontrado.
+                    </div>`;
+            } else {
+                const missingArr = Array.from(missingMap.values());
+                statusDiv.innerHTML = `
+                    <div style="background:#fee2e2; color:#991b1b; padding:10px; border-radius:6px; border:1px solid #fecaca; font-size:0.9em;">
+                        <strong>⚠️ Faltan (${missingArr.length}):</strong> ${missingArr.join(', ')}
+                    </div>`;
+            }
+        }
+
+        // --- RENDERIZADO VISUAL ---
         function createPagePlaceholder(pageNum) {
             const div = document.createElement('div');
-            div.className = "page-outer-wrapper";
-            div.innerHTML = `<div id="page-${pageNum}" class="pdf-page-wrapper" data-page-num="${pageNum}" style="min-height:800px;"></div>`;
+            div.className = "page-outer-wrapper"; // Class for CSS control
+            div.innerHTML = `
+                <div id="page-${pageNum}" class="pdf-page-wrapper" data-page-num="${pageNum}" style="min-height:800px; display:flex; align-items:center; justify-content:center; color:#999;">
+                    Cargando pág ${pageNum}...
+                </div>
+                <div class="page-number">Página ${pageNum}</div>
+            `;
             container.appendChild(div);
         }
 
@@ -404,33 +692,63 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             try {
                 const page = await pdfDoc.getPage(pageNum);
                 const viewport = page.getViewport({ scale });
+
+                wrapper.innerHTML = '';
+                wrapper.style.display = 'block';
                 wrapper.style.width = viewport.width + 'px';
                 wrapper.style.height = viewport.height + 'px';
-                
-                const canvas = document.createElement('canvas');
-                canvas.height = viewport.height; canvas.width = viewport.width;
-                wrapper.appendChild(canvas);
-                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
 
+                // 1. Canvas
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                wrapper.appendChild(canvas);
+
+                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+                // 2. Capa de Texto
                 const textDiv = document.createElement('div');
                 textDiv.className = 'text-layer';
+                textDiv.style.width = viewport.width + 'px';
+                textDiv.style.height = viewport.height + 'px';
                 wrapper.appendChild(textDiv);
+
                 const textContent = await page.getTextContent();
-                await pdfjsLib.renderTextLayer({ textContent, container: textDiv, viewport, textDivs: [] }).promise;
+                await pdfjsLib.renderTextLayer({
+                    textContent: textContent,
+                    container: textDiv,
+                    viewport: viewport,
+                    textDivs: []
+                }).promise;
 
-                const instance = new Mark(textDiv);
-                if (hits.length) instance.mark(hits, { className: "highlight-hit" });
-                if (context.length) instance.mark(context, { className: "highlight-context" });
-
-                // --- MARCA DE FINALIZACIÓN PARA IMPRESIÓN ---
+                // MARCAR COMO RENDERIZADO (Vital para el CSS de impresión)
                 wrapper.setAttribute('data-rendered', 'true');
-                wrapper.style.minHeight = "auto"; 
-            } catch (err) { console.error(err); }
+                wrapper.style.minHeight = "auto";
+                wrapper.style.color = "inherit";
+
+                // 3. Resaltado (Mark.js)
+                const instance = new Mark(textDiv);
+                const opts = { element: "mark", accuracy: "partially", separateWordSearch: false };
+
+                // Aplicar estilos diferenciados si es strict mode, o genéricos si no
+                if (isStrictMode) {
+                    if (hits.length) instance.mark(hits, { ...opts, className: "highlight-hit" });
+                    if (context.length) instance.mark(context, { ...opts, className: "highlight-context" });
+                } else {
+                    const all = [...hits, ...context];
+                    if (all.length) instance.mark(all, { ...opts, className: "highlight-hit" }); // Usamos verde fuerte por defecto
+                }
+
+            } catch (err) { console.error("Render err pg " + pageNum, err); }
         }
 
+        // --- PRINT UTILS ---
         function showPrintModal() { document.getElementById('printModal').classList.add('active'); }
         function closePrintModal() { document.getElementById('printModal').classList.remove('active'); }
         function printFullDocument() { window.print(); closePrintModal(); }
+
+        // Start
         loadPDF();
     </script>
 </body>
