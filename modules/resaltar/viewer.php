@@ -386,6 +386,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 height: auto !important;
                 overflow: visible !important;
                 position: static !important;
+                background: white !important;
             }
 
             /* SOLUCIÓN A HOJAS BLANCAS INTERMEDIAS: 
@@ -401,10 +402,9 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 margin: 0 !important;
                 padding: 0 !important;
                 page-break-after: always !important;
-                /* Fuerza el salto de página correcto */
                 break-after: page !important;
                 color: transparent !important;
-                /* Oculta textos de "Cargando..." */
+                font-size: 0 !important;
             }
 
             .page-outer-wrapper:last-child {
@@ -422,6 +422,18 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 width: 100% !important;
                 height: auto !important;
                 display: block !important;
+            }
+
+            /* PRESERVAR RESALTADOS EN IMPRESIÓN */
+            .text-layer {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .highlight-hit,
+            .highlight-context {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
         }
 
