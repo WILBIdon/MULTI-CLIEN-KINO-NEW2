@@ -341,60 +341,58 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         }
 
         @media print {
-
-            .viewer-sidebar,
-            .main-header,
-            .app-footer,
-            .print-modal,
-            .page-number,
-            .voraz-navigation,
-            .loading-pages,
-            .doc-info {
-                display: none !important;
+            .viewer-sidebar, .main-header, .app-footer, .print-modal, .page-number, .voraz-navigation, .loading-pages, .doc-info { 
+                display: none !important; 
+            }
+            
+            body, html { 
+                margin: 0; padding: 0; background: white; 
             }
 
-            body,
-            html {
-                margin: 0;
-                padding: 0;
-                background: white;
+            .viewer-container { 
+                display: block !important; 
+                height: auto !important; 
+                overflow: visible !important; 
             }
 
-            .viewer-container {
+            .viewer-main { 
+                border: none !important; 
+                padding: 0 !important; 
+                margin: 0 !important; 
+            }
+
+            .pdf-container { 
                 display: block !important;
-                height: auto !important;
-                overflow: visible !important;
+                gap: 0 !important; 
+                margin: 0 !important; 
             }
 
-            .viewer-main {
+            .page-outer-wrapper {
+                margin: 0 !important;
+                padding: 0 !important;
                 border: none !important;
-                padding: 0 !important;
-                margin: 0 !important;
+                display: block !important;
+                break-after: page !important;
+                page-break-after: always !important;
+                break-inside: avoid !important;
             }
 
-            .pdf-container {
-                gap: 0 !important;
-                margin: 0 !important;
-            }
-
-            .pdf-page-wrapper {
-                /* Evitar saltos extra por márgenes */
-                margin: 0 !important;
-                padding: 0 !important;
+            .pdf-page-wrapper { 
+                margin: 0 !important; 
+                padding: 0 !important; 
                 box-shadow: none !important;
                 border: none !important;
-
-                /* Forzar salto limpio DESPUÉS de cada página */
-                break-after: page;
-                page-break-after: always;
-                break-inside: avoid;
+                break-after: auto !important; 
+                page-break-after: auto !important; 
             }
 
-            .text-layer mark {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
+            .text-layer mark { 
+                -webkit-print-color-adjust: exact !important; 
+                print-color-adjust: exact !important; 
             }
         }
+        
+        .page-outer-wrapper { margin-bottom: 2rem; }
     </style>
 </head>
 
@@ -645,7 +643,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         // --- RENDERIZADO VISUAL ---
         function createPagePlaceholder(pageNum) {
             const div = document.createElement('div');
-            div.style.marginBottom = "20px";
+            div.className = "page-outer-wrapper"; // Class for CSS control
             div.innerHTML = `
                 <div id="page-${pageNum}" class="pdf-page-wrapper" data-page-num="${pageNum}" style="min-height:800px; display:flex; align-items:center; justify-content:center; color:#999;">
                     Cargando pág ${pageNum}...
