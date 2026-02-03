@@ -391,6 +391,9 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
             /* SOLUCIÓN A HOJAS BLANCAS INTERMEDIAS: 
                Solo se imprimen las páginas que JavaScript ya renderizó con éxito */
+            .page-outer-wrapper:has(.pdf-page-wrapper:not([data-rendered="true"])) {
+                display: none !important;
+            }
             .pdf-page-wrapper:not([data-rendered="true"]) {
                 display: none !important;
             }
