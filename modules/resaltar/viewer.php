@@ -364,6 +364,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             .btn-print,
             .btn-secondary,
             .loading-pages,
+            .loading-placeholder,
             .spinner {
                 display: none !important;
                 height: 0 !important;
@@ -396,6 +397,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 height: 0 !important;
                 overflow: hidden !important;
             }
+
             .pdf-page-wrapper:not([data-rendered="true"]) {
                 display: none !important;
             }
@@ -695,10 +697,10 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         // --- RENDERIZADO VISUAL ---
         function createPagePlaceholder(pageNum) {
             const div = document.createElement('div');
-            div.className = "page-outer-wrapper"; // Class for CSS control
+            div.className = "page-outer-wrapper print-hide"; // Hidden by default for print
             div.innerHTML = `
-                <div id="page-${pageNum}" class="pdf-page-wrapper" data-page-num="${pageNum}" style="min-height:800px; display:flex; align-items:center; justify-content:center; color:#999;">
-                    Cargando pág ${pageNum}...
+                <div id="page-${pageNum}" class="pdf-page-wrapper" data-page-num="${pageNum}" style="min-height:800px; display:flex; align-items:center; justify-content:center;">
+                    <span class="loading-placeholder" style="color:#999;">Cargando pág ${pageNum}...</span>
                 </div>
                 <div class="page-number">Página ${pageNum}</div>
             `;
@@ -763,52 +765,122 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         // --- PRINT UTILS ---
         function showPrintModal() { document.getElementById('printModal').classList.add('active'); }
         function closePrintModal() { document.getElementById('printModal').classList.remove('active'); }
-        
-        // Función para renderizar TODAS las páginas antes de imprimir
+
+        // Función para renderizar TODAS las páginas e imprimir en ventana limpia
         async function printFullDocument() {
             closePrintModal();
-            
+
             const statusDiv = document.getElementById('simpleStatus');
-            if (statusDiv) {
-                statusDiv.innerHTML = '<div style="color:#d97706; font-size:0.9em;">🖨️ Preparando documento para imprimir...</div>';
-            }
-            
-            // Renderizar todas las páginas que no estén renderizadas
-            const allWrappers = document.querySelectorAll('.pdf-page-wrapper');
-            for (const wrapper of allWrappers) {
-                if (!wrapper.getAttribute('data-rendered') || !wrapper.querySelector('canvas')) {
-                    const pageNum = parseInt(wrapper.dataset.pageNum);
-                    await renderPage(pageNum, wrapper);
-                }
-            }
-            
-            // Marcar outer-wrappers sin páginas renderizadas para ocultarlos
-            document.querySelectorAll('.page-outer-wrapper').forEach(outer => {
-                const inner = outer.querySelector('.pdf-page-wrapper');
-                if (!inner || !inner.getAttribute('data-rendered') || !inner.querySelector('canvas')) {
-                    outer.classList.add('print-hide');
-                } else {
-                    outer.classList.remove('print-hide');
-                }
-            });
-            
-            // Ocultar el div de carga/spinner
+            const totalPages = pdfDoc ? pdfDoc.numPages : 0;
+
+            // Ocultar spinner
             const loadingDiv = document.querySelector('.loading-pages');
-            if (loadingDiv) loadingDiv.style.display = 'none';
-            
-            if (statusDiv) {
-                statusDiv.innerHTML = '<div style="color:#059669; font-size:0.9em;">✅ Listo para imprimir</div>';
+            if (loadingDiv) loadingDiv.remove();
+
+            // Recolectar imágenes de todas las páginas
+            const pageImages = [];
+
+            for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                if (statusDiv) {
+                    statusDiv.innerHTML = `<div style="color:#d97706; font-size:0.9em;">🖨️ Preparando página ${pageNum}/${totalPages}...</div>`;
+                }
+
+                try {
+                    // Renderizar página directamente a un canvas temporal
+                    const page = await pdfDoc.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 2 }); // Mayor escala para mejor calidad de impresión
+
+                    const tempCanvas = document.createElement('canvas');
+                    const ctx = tempCanvas.getContext('2d');
+                    tempCanvas.width = viewport.width;
+                    tempCanvas.height = viewport.height;
+
+                    await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+                    // Obtener el texto para resaltar encima
+                    const textContent = await page.getTextContent();
+
+                    // Dibujar resaltados directamente en el canvas
+                    const allTerms = [...hits, ...context];
+                    if (allTerms.length > 0) {
+                        ctx.globalAlpha = 0.4;
+                        ctx.fillStyle = '#22c55e'; // Verde
+
+                        for (const item of textContent.items) {
+                            const text = item.str.toLowerCase();
+                            for (const term of allTerms) {
+                                if (text.includes(term.toLowerCase())) {
+                                    // Calcular posición del texto
+                                    const tx = viewport.transform;
+                                    const x = tx[0] * item.transform[4] + tx[2] * item.transform[5] + tx[4];
+                                    const y = tx[1] * item.transform[4] + tx[3] * item.transform[5] + tx[5];
+                                    const width = item.width * viewport.scale;
+                                    const height = item.height * viewport.scale || 12;
+
+                                    ctx.fillRect(x, viewport.height - y - height, width, height);
+                                    break;
+                                }
+                            }
+                        }
+                        ctx.globalAlpha = 1.0;
+                    }
+
+                    // Convertir a imagen
+                    pageImages.push(tempCanvas.toDataURL('image/png'));
+
+                } catch (e) {
+                    console.error('Error preparando página', pageNum, e);
+                }
+
+                await new Promise(r => setTimeout(r, 30));
             }
-            
-            await new Promise(r => setTimeout(r, 500));
-            
-            window.print();
-            
-            // Restaurar después de imprimir
+
+            if (statusDiv) {
+                statusDiv.innerHTML = `<div style="color:#059669; font-size:0.9em;">✅ ${pageImages.length} páginas listas. Abriendo impresión...</div>`;
+            }
+
+            // Crear ventana de impresión limpia
+            const printWindow = window.open('', '_blank', 'width=800,height=600');
+            if (!printWindow) {
+                alert('Por favor permite las ventanas emergentes para imprimir.');
+                return;
+            }
+
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Imprimir Documento</title>
+                    <style>
+                        * { margin: 0; padding: 0; box-sizing: border-box; }
+                        body { background: white; }
+                        .page { page-break-after: always; text-align: center; }
+                        .page:last-child { page-break-after: avoid; }
+                        .page img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+                        @media print {
+                            .page { page-break-after: always; }
+                            .page:last-child { page-break-after: avoid; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${pageImages.map((img, i) => `<div class="page"><img src="${img}" alt="Página ${i + 1}"></div>`).join('')}
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+
+            // Esperar a que las imágenes carguen y luego imprimir
+            printWindow.onload = function () {
+                setTimeout(() => {
+                    printWindow.print();
+                    // printWindow.close(); // Descomentar si deseas cerrar automáticamente
+                }, 500);
+            };
+
             setTimeout(() => {
-                if (loadingDiv) loadingDiv.style.display = '';
                 if (statusDiv) statusDiv.innerHTML = '';
-            }, 1000);
+            }, 3000);
         }
 
         // Start
