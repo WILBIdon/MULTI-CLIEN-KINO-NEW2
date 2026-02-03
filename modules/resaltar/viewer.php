@@ -388,13 +388,12 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 padding: 0 !important;
                 border: none !important;
                 display: block !important;
-
-                /* Full Bleed - Safe Height */
+                
+                /* Natural Flow - No artificial height matching */
                 width: 100% !important;
-                height: 99vh !important;
-                /* 99vh evita desbordamiento por redondeo que causa hoja blanca */
-                overflow: hidden !important;
-
+                height: auto !important; 
+                position: relative !important; /* Contexto para text-layer */
+                
                 break-inside: avoid !important;
                 page-break-inside: avoid !important;
                 break-after: page !important;
@@ -414,18 +413,19 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 padding: 0 !important;
                 box-shadow: none !important;
                 border: none !important;
+                position: relative !important;
 
-                /* Full fit */
+                /* Natural Size */
                 width: 100% !important;
-                height: 100% !important;
+                height: auto !important;
             }
 
             /* El Canvas (La imagen del PDF) */
             .pdf-page-wrapper canvas {
                 width: 100% !important;
-                height: 100% !important;
-                object-fit: contain !important;
+                height: auto !important;
                 display: block !important;
+                /* Eliminado object-fit para evitar recortes o espacios */
             }
 
             .text-layer {
