@@ -758,7 +758,35 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         // --- PRINT UTILS ---
         function showPrintModal() { document.getElementById('printModal').classList.add('active'); }
         function closePrintModal() { document.getElementById('printModal').classList.remove('active'); }
-        function printFullDocument() { window.print(); closePrintModal(); }
+        
+        // Función para renderizar TODAS las páginas antes de imprimir
+        async function printFullDocument() {
+            closePrintModal();
+            
+            // Mostrar mensaje de preparación
+            const statusDiv = document.getElementById('simpleStatus');
+            if (statusDiv) {
+                statusDiv.innerHTML = '<div style="color:#d97706; font-size:0.9em;">🖨️ Preparando documento para imprimir...</div>';
+            }
+            
+            // Renderizar todas las páginas que no estén renderizadas
+            const allWrappers = document.querySelectorAll('.pdf-page-wrapper');
+            for (const wrapper of allWrappers) {
+                if (!wrapper.getAttribute('data-rendered')) {
+                    const pageNum = parseInt(wrapper.dataset.pageNum);
+                    await renderPage(pageNum, wrapper);
+                }
+            }
+            
+            // Pequeña pausa para que el navegador procese
+            await new Promise(r => setTimeout(r, 300));
+            
+            if (statusDiv) {
+                statusDiv.innerHTML = '';
+            }
+            
+            window.print();
+        }
 
         // Start
         loadPDF();
