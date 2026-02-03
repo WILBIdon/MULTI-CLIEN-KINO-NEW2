@@ -617,6 +617,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             });
         });
 
+
         // Function to programmatically switch tabs
         function switchTab(tabName) {
             document.querySelectorAll('#mainTabs .tab').forEach(t => t.classList.remove('active'));
@@ -636,6 +637,15 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                 loadDocuments();
             }
         }
+
+        // Initialize tab from URL
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tabParam = urlParams.get('tab');
+            if (tabParam) {
+                switchTab(tabParam);
+            }
+        });
 
 
 

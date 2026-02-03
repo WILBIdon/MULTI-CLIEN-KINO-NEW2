@@ -1,40 +1,43 @@
 <?php
 /**
- * Sistema de Caché de Archivos Simple
- * 
- * Almacena datos cacheados en archivos JSON dentro del directorio del cliente.
- * Soporta TTL (Time To Live).
+ * CacheManager Optimizado
+ * - Recolección de basura (Garbage Collection) automática.
+ * - Bloqueo de archivos para evitar corrupción.
+ * - Estructura segura.
  */
 
 class CacheManager
 {
     private static $cacheDir = null;
+    // Probabilidad de 1 en 50 de ejecutar limpieza en cada escritura (2%)
+    private static $gcProbability = 2;
 
-    /**
-     * Inicializa el directorio de caché para el cliente actual
-     */
     private static function init($clientCode)
     {
         if (self::$cacheDir === null) {
-            self::$cacheDir = CLIENTS_DIR . DIRECTORY_SEPARATOR . $clientCode . DIRECTORY_SEPARATOR . 'cache';
+            // Usar __DIR__ para asegurar ruta absoluta correcta
+            self::$cacheDir = dirname(__DIR__) . '/clients/' . $clientCode . '/cache';
 
             if (!is_dir(self::$cacheDir)) {
-                mkdir(self::$cacheDir, 0777, true);
+                if (!mkdir(self::$cacheDir, 0755, true)) {
+                    return false;
+                }
+                // Proteger carpeta de acceso web
+                file_put_contents(self::$cacheDir . '/.htaccess', "Order Deny,Allow\nDeny from all");
             }
         }
+        return true;
     }
 
-    /**
-     * Define una clave de caché
-     * 
-     * @param string $clientCode Código del cliente
-     * @param string $key Clave única del caché
-     * @param mixed $data Datos a almacenar
-     * @param int $ttl Tiempo de vida en segundos (default 300 = 5 min)
-     */
     public static function set($clientCode, $key, $data, $ttl = 300)
     {
-        self::init($clientCode);
+        if (!self::init($clientCode))
+            return false;
+
+        // Garbage Collector Probabilístico
+        if (rand(1, 100) <= self::$gcProbability) {
+            self::gc($clientCode);
+        }
 
         $filename = self::getFilename($key);
         $payload = [
@@ -42,19 +45,14 @@ class CacheManager
             'data' => $data
         ];
 
-        file_put_contents($filename, json_encode($payload));
+        // LOCK_EX evita que dos procesos escriban a la vez
+        return file_put_contents($filename, json_encode($payload), LOCK_EX) !== false;
     }
 
-    /**
-     * Obtiene datos del caché
-     * 
-     * @param string $clientCode Código del cliente
-     * @param string $key Clave única
-     * @return mixed|null Retorna los datos o null si expiró/no existe
-     */
     public static function get($clientCode, $key)
     {
-        self::init($clientCode);
+        if (!self::init($clientCode))
+            return null;
 
         $filename = self::getFilename($key);
 
@@ -62,45 +60,63 @@ class CacheManager
             return null;
         }
 
-        $content = file_get_contents($filename);
+        // Suprimir errores de lectura si el archivo está siendo escrito
+        $content = @file_get_contents($filename);
+        if (!$content)
+            return null;
+
         $payload = json_decode($content, true);
 
-        if (!$payload || !isset($payload['expiry'])) {
-            return null; // Archivo corrupto
-        }
-
-        if (time() > $payload['expiry']) {
-            unlink($filename); // Eliminar expirado
+        // Si expiró, retornamos null (el GC lo borrará después)
+        if (!$payload || !isset($payload['expiry']) || time() > $payload['expiry']) {
             return null;
         }
 
         return $payload['data'];
     }
 
-    /**
-     * Elimina una clave específica
-     */
     public static function delete($clientCode, $key)
     {
-        self::init($clientCode);
+        if (!self::init($clientCode))
+            return;
         $filename = self::getFilename($key);
+        if (file_exists($filename))
+            @unlink($filename);
+    }
 
-        if (file_exists($filename)) {
-            unlink($filename);
+    public static function clear($clientCode)
+    {
+        if (!self::init($clientCode))
+            return;
+        $files = glob(self::$cacheDir . '/*.cache');
+        foreach ($files as $file) {
+            if (is_file($file))
+                @unlink($file);
         }
     }
 
     /**
-     * Limpia todo el caché de un cliente
+     * Garbage Collector: Borra archivos expirados
      */
-    public static function clear($clientCode)
+    public static function gc($clientCode)
     {
-        self::init($clientCode);
+        if (!self::init($clientCode))
+            return;
 
         $files = glob(self::$cacheDir . '/*.cache');
+        $now = time();
+
         foreach ($files as $file) {
             if (is_file($file)) {
-                unlink($file);
+                // Solo leemos las primeras líneas si el archivo es gigante, 
+                // pero como es JSON, leemos todo por simplicidad.
+                $content = @file_get_contents($file);
+                if ($content) {
+                    $payload = json_decode($content, true);
+                    if (isset($payload['expiry']) && $now > $payload['expiry']) {
+                        @unlink($file);
+                    }
+                }
             }
         }
     }
