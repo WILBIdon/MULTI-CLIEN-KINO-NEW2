@@ -1,3 +1,4 @@
+revisar
 <?php
 /**
  * Print-Optimized PDF Viewer with Highlighting
@@ -341,65 +342,66 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         }
 
         @media print {
-    /* 1. Reset Global */
-    @page { margin: 0 !important; size: auto; }
-    
-    /* 2. Ocultar Interfaz y Elementos de Carga (Solución al círculo/spinner) */
-    nav, .main-header, .sidebar, .viewer-sidebar, .app-footer, 
-    .print-modal, .page-number, .voraz-navigation, .doc-info, 
-    #simpleStatus, .search-form, .btn-print, .btn-secondary,
-    .loading-pages, .spinner { 
-        display: none !important; 
-        height: 0 !important; 
-        visibility: hidden !important;
-    }
+            /* Reset de márgenes del navegador */
+            @page { margin: 0 !important; size: auto; }
+            
+            /* ELIMINACIÓN DEL CÍRCULO (SPINNER) Y UI: 
+               Se oculta explícitamente el spinner y la interfaz para evitar basura visual */
+            nav, .main-header, .sidebar, .viewer-sidebar, .app-footer, 
+            .print-modal, .page-number, .voraz-navigation, .doc-info, 
+            #simpleStatus, .search-form, .btn-print, .btn-secondary,
+            .loading-pages, .spinner { 
+                display: none !important; 
+                height: 0 !important; 
+                visibility: hidden !important;
+            }
 
-    /* 3. Limpieza de contenedores para evitar hojas blancas */
-    body, html, .dashboard-container, .main-content, .page-content, 
-    .viewer-container, .viewer-main, #pdfContainer {
-        display: block !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        width: 100% !important;
-        height: auto !important;
-        overflow: visible !important;
-        position: static !important;
-    }
+            /* FLUJO CONTINUO: Evita que contenedores con altura mínima generen hojas blancas */
+            body, html, .dashboard-container, .main-content, .page-content, 
+            .viewer-container, .viewer-main, #pdfContainer {
+                display: block !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+                position: static !important;
+            }
 
-    /* 4. Solución a Hoja Blanca Intermedia: Ocultar placeholders no cargados */
-    .pdf-page-wrapper:not([data-rendered="true"]) {
-        display: none !important;
-    }
+            /* SOLUCIÓN A HOJAS BLANCAS INTERMEDIAS: 
+               Solo se imprimen las páginas que JavaScript ya renderizó con éxito */
+            .pdf-page-wrapper:not([data-rendered="true"]) {
+                display: none !important;
+            }
 
-    .page-outer-wrapper {
-        display: block !important;
-        position: relative !important;
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        page-break-after: always !important;
-        break-after: page !important;
-    }
+            .page-outer-wrapper {
+                display: block !important;
+                position: relative !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                page-break-after: always !important; /* Fuerza el salto de página correcto */
+                break-after: page !important;
+                color: transparent !important; /* Oculta textos de "Cargando..." */
+            }
 
-    /* Eliminar texto "Cargando pág..." en la impresión */
-    .page-outer-wrapper {
-        color: transparent !important;
-        text-shadow: none !important;
-    }
+            .page-outer-wrapper:last-child {
+                page-break-after: avoid !important;
+            }
 
-    .pdf-page-wrapper {
-        margin: 0 auto !important;
-        box-shadow: none !important;
-        border: none !important;
-        page-break-inside: avoid !important;
-    }
+            .pdf-page-wrapper {
+                margin: 0 auto !important;
+                box-shadow: none !important;
+                border: none !important;
+                page-break-inside: avoid !important;
+            }
 
-    canvas {
-        width: 100% !important;
-        height: auto !important;
-        display: block !important;
-    }
-}
+            canvas {
+                width: 100% !important;
+                height: auto !important;
+                display: block !important;
+            }
+        }        
 
         .page-outer-wrapper {
             margin-bottom: 2rem;
@@ -700,6 +702,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
                 // MARCAR COMO RENDERIZADO (Vital para el CSS de impresión)
                 wrapper.setAttribute('data-rendered', 'true');
+                wrapper.style.minHeight = "auto";
                 wrapper.style.color = "inherit";
 
                 // 3. Resaltado (Mark.js)
