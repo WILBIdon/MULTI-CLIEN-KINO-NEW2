@@ -315,6 +315,31 @@ $pageTitle = 'Gestor de Documentos';
                 width: 100%;
             }
         }
+
+        /* Animaciones para notificaciones */
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
     </style>
 </head>
 
@@ -958,41 +983,92 @@ Se extraerán solo los códigos de la izquierda."></textarea>
 
         async function searchFulltext() {
             const query = fulltextInput.value.trim();
+
+            console.log('[🔍 SEARCH] Iniciando búsqueda fulltext...', { query });
+
             if (query.length < 3) {
-                alert('Ingresa al menos 3 caracteres');
+                console.warn('[⚠️ SEARCH] Query muy corto:', query.length, 'caracteres');
+                showNotification('Ingresa al menos 3 caracteres', 'warning');
                 return;
             }
-
-
-
-            // Validación eliminada a petición del usuario
-            // Ahora permite buscar cualquier término (incluyendo números/códigos)
-
-            // Validación eliminada a petición del usuario
-            // Ahora permite buscar cualquier término (incluyendo números/códigos)
 
             const btn = document.getElementById('fulltextBtn');
             btn.disabled = true;
             btn.textContent = 'Buscando...';
 
             try {
+                console.log('[📡 SEARCH] Haciendo petición a API...', `${apiUrl}?action=fulltext_search`);
+
                 const response = await fetch(`${apiUrl}?action=fulltext_search&query=${encodeURIComponent(query)}`);
+
+                console.log('[📥 SEARCH] Respuesta recibida:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    ok: response.ok
+                });
+
                 const result = await response.json();
+                console.log('[✅ SEARCH] Datos parseados:', result);
 
                 btn.disabled = false;
                 btn.textContent = 'Buscar en Contenido';
 
                 if (result.error) {
-                    alert(result.error);
+                    console.error('[❌ SEARCH] Error en respuesta:', result.error);
+                    showNotification('Error: ' + result.error, 'error');
                     return;
                 }
 
+                console.log('[🎯 SEARCH] Mostrando resultados...');
                 showFulltextResults(result);
             } catch (error) {
+                console.error('[💥 SEARCH] Excepción capturada:', error);
+                console.error('[💥 SEARCH] Stack trace:', error.stack);
+
                 btn.disabled = false;
                 btn.textContent = 'Buscar en Contenido';
-                alert('Error: ' + error.message);
+                showNotification('Error de conexión: ' + error.message, 'error');
             }
+        }
+
+        // Sistema de notificaciones no-bloqueante
+        function showNotification(message, type = 'info') {
+            // Crear o reutilizar contenedor
+            let container = document.getElementById('notification-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'notification-container';
+                container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999;';
+                document.body.appendChild(container);
+            }
+
+            const notification = document.createElement('div');
+            const colors = {
+                info: '#3b82f6',
+                success: '#10b981',
+                warning: '#f59e0b',
+                error: '#ef4444'
+            };
+
+            notification.style.cssText = `
+                background: ${colors[type] || colors.info};
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 8px;
+                margin-bottom: 10px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                animation: slideIn 0.3s ease-out;
+                max-width: 400px;
+            `;
+            notification.textContent = message;
+
+            container.appendChild(notification);
+
+            // Auto-remover después de 5 segundos
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease-in';
+                setTimeout(() => notification.remove(), 300);
+            }, 5000);
         }
 
         function showFulltextResults(result) {
