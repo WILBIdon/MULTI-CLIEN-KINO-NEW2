@@ -341,36 +341,29 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         }
 
         @media print {
-
-            .viewer-sidebar,
-            .main-header,
-            .app-footer,
-            .print-modal,
-            .page-number,
-            .voraz-navigation,
-            .loading-pages,
-            .doc-info {
-                display: none !important;
-            }
-
-            body,
-            html {
+            @page {
                 margin: 0;
-                padding: 0;
-                background: white;
-                height: 100%;
+                size: auto;
             }
 
-            .viewer-container {
-                display: block !important;
-                height: auto !important;
-                overflow: visible !important;
+            .viewer-sidebar, .main-header, .app-footer, .print-modal, .page-number, .voraz-navigation, .loading-pages, .doc-info { 
+                display: none !important; 
+            }
+            
+            body, html { 
+                margin: 0 !important; padding: 0 !important; background: white; height: 100%;
             }
 
-            .pdf-container {
+            .viewer-container { 
+                display: block !important; 
+                height: auto !important; 
+                overflow: visible !important; 
+            }
+
+            .pdf-container { 
                 display: block !important;
-                gap: 0 !important;
-                margin: 0 !important;
+                gap: 0 !important; 
+                margin: 0 !important; 
             }
 
             /* Wrapper Externo (Nuestra clase nueva) */
@@ -378,15 +371,13 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 margin: 0 !important;
                 padding: 0 !important;
                 border: none !important;
-
+                
                 /* Importante: evitar que el contenedor sea más grande que la hoja */
                 width: 100% !important;
-                height: auto !important;
-                max-height: 100vh !important;
-                /* Limite de altura */
-                overflow: hidden !important;
-                /* Cortar cualquier exceso */
-
+                height: auto !important; 
+                max-height: 100vh !important; /* Limite de altura */
+                overflow: hidden !important;  /* Cortar cualquier exceso */
+                
                 break-inside: avoid !important;
                 page-break-inside: avoid !important;
                 break-after: page !important;
@@ -394,12 +385,12 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             }
 
             /* Wrapper Interno (PDF.js) */
-            .pdf-page-wrapper {
-                margin: 0 !important;
-                padding: 0 !important;
+            .pdf-page-wrapper { 
+                margin: 0 !important; 
+                padding: 0 !important; 
                 box-shadow: none !important;
                 border: none !important;
-
+                
                 /* Permitir redimensionamiento fluido */
                 width: 100% !important;
                 height: auto !important;
@@ -408,18 +399,36 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             /* El Canvas (La imagen del PDF) */
             .pdf-page-wrapper canvas {
                 width: 100% !important;
-                height: auto !important;
-                /* Mantener proporción */
-                max-height: 98vh !important;
-                /* Un poco menos del 100% para seguridad */
+                height: auto !important; /* Mantener proporción */
+                max-height: 98vh !important; /* Un poco menos del 100% para seguridad */
                 object-fit: contain !important;
                 display: block !important;
             }
 
-            /* Capa de texto (invisible pero ocupa espacio) */
+            /* Capa de texto (Necesaria para los resaltados) */
             .text-layer {
-                display: none !important;
-                /* Ocultar texto seleccionable al imprimir para evitar desalineación/overflow */
+                display: block !important;
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                overflow: hidden !important;
+                
+                /* Asegurar que el resaltado se imprima */
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            
+            /* Asegurar que el texto sea transparente pero los resaltados no */
+            .text-layer span {
+                opacity: 1 !important; 
+                color: transparent !important;
+            }
+            
+            .text-layer mark {
+                opacity: 1 !important;
+                background-color: rgba(34, 197, 94, 0.5) !important; /* Forzar color */
             }
         }
 
