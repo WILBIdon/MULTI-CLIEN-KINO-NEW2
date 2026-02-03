@@ -341,10 +341,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         }
 
         @media print {
-            @page {
-                margin: 0;
-                size: auto;
-            }
+            /* Dejamos que la impresora maneje los márgenes (Standard behavior) */
 
             .viewer-sidebar,
             .main-header,
@@ -359,10 +356,8 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
             body,
             html {
-                margin: 0 !important;
-                padding: 0 !important;
                 background: white;
-                height: 100%;
+                height: auto;
             }
 
             .viewer-container {
@@ -377,19 +372,16 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 margin: 0 !important;
             }
 
-            /* Wrapper Externo (Nuestra clase nueva) */
             .page-outer-wrapper {
                 margin: 0 !important;
                 padding: 0 !important;
                 border: none !important;
+                display: block !important;
 
-                /* Importante: evitar que el contenedor sea más grande que la hoja */
+                /* Ajustamos al 100% del ÁREA IMPRIMIBLE (dentro de los márgenes de la impresora) */
                 width: 100% !important;
                 height: auto !important;
-                max-height: 100vh !important;
-                /* Limite de altura */
                 overflow: hidden !important;
-                /* Cortar cualquier exceso */
 
                 break-inside: avoid !important;
                 page-break-inside: avoid !important;
@@ -404,30 +396,22 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 margin-bottom: 0 !important;
             }
 
-            /* Wrapper Interno (PDF.js) */
             .pdf-page-wrapper {
                 margin: 0 !important;
                 padding: 0 !important;
                 box-shadow: none !important;
                 border: none !important;
-
-                /* Permitir redimensionamiento fluido */
                 width: 100% !important;
                 height: auto !important;
             }
 
-            /* El Canvas (La imagen del PDF) */
             .pdf-page-wrapper canvas {
                 width: 100% !important;
                 height: auto !important;
-                /* Mantener proporción */
-                max-height: 98vh !important;
-                /* Un poco menos del 100% para seguridad */
                 object-fit: contain !important;
                 display: block !important;
             }
 
-            /* Capa de texto (Necesaria para los resaltados) */
             .text-layer {
                 display: block !important;
                 position: absolute !important;
@@ -436,13 +420,10 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 width: 100% !important;
                 height: 100% !important;
                 overflow: hidden !important;
-
-                /* Asegurar que el resaltado se imprima */
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
 
-            /* Asegurar que el texto sea transparente pero los resaltados no */
             .text-layer span {
                 opacity: 1 !important;
                 color: transparent !important;
@@ -451,7 +432,6 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             .text-layer mark {
                 opacity: 1 !important;
                 background-color: rgba(34, 197, 94, 0.5) !important;
-                /* Forzar color */
             }
         }
 
