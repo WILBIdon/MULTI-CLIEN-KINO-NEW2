@@ -389,9 +389,10 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 border: none !important;
                 display: block !important;
 
-                /* Full Bleed */
+                /* Full Bleed - Safe Height */
                 width: 100% !important;
-                height: 100vh !important;
+                height: 99vh !important;
+                /* 99vh evita desbordamiento por redondeo que causa hoja blanca */
                 overflow: hidden !important;
 
                 break-inside: avoid !important;
