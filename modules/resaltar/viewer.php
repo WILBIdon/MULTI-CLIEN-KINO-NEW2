@@ -359,17 +359,20 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 display: none !important;
             }
 
-            body, html { 
-                margin: 0 !important; 
+            body,
+            html {
+                margin: 0 !important;
                 padding: 0 !important;
-                background: white; 
-                height: 100vh !important; /* Altura completa necesaria para margin 0 */
-                overflow: hidden !important;
+                background: white;
+                height: auto !important;
+                /* Permitir crecer */
+                overflow: visible !important;
+                /* Mostrar todas las páginas */
             }
 
             .viewer-container {
                 display: block !important;
-                height: 100% !important;
+                height: auto !important;
                 overflow: visible !important;
             }
 
