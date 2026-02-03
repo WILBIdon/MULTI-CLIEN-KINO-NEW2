@@ -341,109 +341,65 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         }
 
         @media print {
+    /* 1. Reset Global */
+    @page { margin: 0 !important; size: auto; }
+    
+    /* 2. Ocultar Interfaz y Elementos de Carga (Solución al círculo/spinner) */
+    nav, .main-header, .sidebar, .viewer-sidebar, .app-footer, 
+    .print-modal, .page-number, .voraz-navigation, .doc-info, 
+    #simpleStatus, .search-form, .btn-print, .btn-secondary,
+    .loading-pages, .spinner { 
+        display: none !important; 
+        height: 0 !important; 
+        visibility: hidden !important;
+    }
 
-            /* 1. Reset de página y eliminación de bordes del navegador */
-            @page {
-                margin: 0 !important;
-                size: auto;
-            }
+    /* 3. Limpieza de contenedores para evitar hojas blancas */
+    body, html, .dashboard-container, .main-content, .page-content, 
+    .viewer-container, .viewer-main, #pdfContainer {
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        overflow: visible !important;
+        position: static !important;
+    }
 
-            /* 2. Limpieza de Interfaz: Solo queda el PDF */
-            nav,
-            .main-header,
-            .sidebar,
-            .viewer-sidebar,
-            .app-footer,
-            .print-modal,
-            .page-number,
-            .voraz-navigation,
-            .loading-pages,
-            .doc-info,
-            #simpleStatus,
-            .search-form,
-            .btn-print,
-            .btn-secondary {
-                display: none !important;
-                height: 0 !important;
-                overflow: hidden !important;
-            }
+    /* 4. Solución a Hoja Blanca Intermedia: Ocultar placeholders no cargados */
+    .pdf-page-wrapper:not([data-rendered="true"]) {
+        display: none !important;
+    }
 
-            /* 3. Re-estructuración del Layout para flujo vertical */
-            body,
-            html {
-                background: white !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                width: 100% !important;
-                height: auto !important;
-                overflow: visible !important;
-                display: block !important;
-            }
+    .page-outer-wrapper {
+        display: block !important;
+        position: relative !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        page-break-after: always !important;
+        break-after: page !important;
+    }
 
-            .dashboard-container,
-            .main-content,
-            .page-content,
-            .viewer-container,
-            .viewer-main,
-            #pdfContainer {
-                display: block !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                width: 100% !important;
-                max-width: none !important;
-                border: none !important;
-                box-shadow: none !important;
-                position: static !important;
-            }
+    /* Eliminar texto "Cargando pág..." en la impresión */
+    .page-outer-wrapper {
+        color: transparent !important;
+        text-shadow: none !important;
+    }
 
-            /* 4. Control Estricto de Páginas (Evita hojas en blanco) */
-            .page-outer-wrapper {
-                display: block !important;
-                position: relative !important;
-                width: 100% !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                page-break-after: always !important;
-                /* Salto forzado */
-                break-after: page !important;
-            }
+    .pdf-page-wrapper {
+        margin: 0 auto !important;
+        box-shadow: none !important;
+        border: none !important;
+        page-break-inside: avoid !important;
+    }
 
-            .page-outer-wrapper:last-child {
-                page-break-after: avoid !important;
-                break-after: avoid !important;
-            }
-
-            .pdf-page-wrapper {
-                margin: 0 auto !important;
-                padding: 0 !important;
-                box-shadow: none !important;
-                border: none !important;
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
-                width: 100% !important;
-                height: auto !important;
-            }
-
-            /* 5. Asegurar visibilidad del resaltado */
-            canvas {
-                width: 100% !important;
-                height: auto !important;
-                display: block !important;
-            }
-
-            .text-layer {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                opacity: 1 !important;
-            }
-
-            .text-layer mark {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
-                /* Ayuda visual en B&N */
-            }
-        }
+    canvas {
+        width: 100% !important;
+        height: auto !important;
+        display: block !important;
+    }
+}
 
         .page-outer-wrapper {
             margin-bottom: 2rem;
@@ -741,6 +697,10 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                     viewport: viewport,
                     textDivs: []
                 }).promise;
+
+                // MARCAR COMO RENDERIZADO (Vital para el CSS de impresión)
+                wrapper.setAttribute('data-rendered', 'true');
+                wrapper.style.color = "inherit";
 
                 // 3. Resaltado (Mark.js)
                 const instance = new Mark(textDiv);
