@@ -391,8 +391,10 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
             /* SOLUCIÓN A HOJAS BLANCAS INTERMEDIAS: 
                Solo se imprimen las páginas que JavaScript ya renderizó con éxito */
-            .page-outer-wrapper:has(.pdf-page-wrapper:not([data-rendered="true"])) {
+            .page-outer-wrapper.print-hide {
                 display: none !important;
+                height: 0 !important;
+                overflow: hidden !important;
             }
             .pdf-page-wrapper:not([data-rendered="true"]) {
                 display: none !important;
@@ -766,7 +768,6 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         async function printFullDocument() {
             closePrintModal();
             
-            // Mostrar mensaje de preparación
             const statusDiv = document.getElementById('simpleStatus');
             if (statusDiv) {
                 statusDiv.innerHTML = '<div style="color:#d97706; font-size:0.9em;">🖨️ Preparando documento para imprimir...</div>';
@@ -775,20 +776,39 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             // Renderizar todas las páginas que no estén renderizadas
             const allWrappers = document.querySelectorAll('.pdf-page-wrapper');
             for (const wrapper of allWrappers) {
-                if (!wrapper.getAttribute('data-rendered')) {
+                if (!wrapper.getAttribute('data-rendered') || !wrapper.querySelector('canvas')) {
                     const pageNum = parseInt(wrapper.dataset.pageNum);
                     await renderPage(pageNum, wrapper);
                 }
             }
             
-            // Pequeña pausa para que el navegador procese
-            await new Promise(r => setTimeout(r, 300));
+            // Marcar outer-wrappers sin páginas renderizadas para ocultarlos
+            document.querySelectorAll('.page-outer-wrapper').forEach(outer => {
+                const inner = outer.querySelector('.pdf-page-wrapper');
+                if (!inner || !inner.getAttribute('data-rendered') || !inner.querySelector('canvas')) {
+                    outer.classList.add('print-hide');
+                } else {
+                    outer.classList.remove('print-hide');
+                }
+            });
+            
+            // Ocultar el div de carga/spinner
+            const loadingDiv = document.querySelector('.loading-pages');
+            if (loadingDiv) loadingDiv.style.display = 'none';
             
             if (statusDiv) {
-                statusDiv.innerHTML = '';
+                statusDiv.innerHTML = '<div style="color:#059669; font-size:0.9em;">✅ Listo para imprimir</div>';
             }
             
+            await new Promise(r => setTimeout(r, 500));
+            
             window.print();
+            
+            // Restaurar después de imprimir
+            setTimeout(() => {
+                if (loadingDiv) loadingDiv.style.display = '';
+                if (statusDiv) statusDiv.innerHTML = '';
+            }, 1000);
         }
 
         // Start
