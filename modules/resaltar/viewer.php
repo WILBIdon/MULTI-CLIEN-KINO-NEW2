@@ -341,7 +341,12 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         }
 
         @media print {
-            /* Dejamos que la impresora maneje los márgenes (Standard behavior) */
+
+            /* SOLICITUD FINAL: Cero Márgenes, Cero Headers/Footers */
+            @page {
+                margin: 0;
+                size: auto;
+            }
 
             .viewer-sidebar,
             .main-header,
@@ -354,15 +359,17 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 display: none !important;
             }
 
-            body,
-            html {
-                background: white;
-                height: auto;
+            body, html { 
+                margin: 0 !important; 
+                padding: 0 !important;
+                background: white; 
+                height: 100vh !important; /* Altura completa necesaria para margin 0 */
+                overflow: hidden !important;
             }
 
             .viewer-container {
                 display: block !important;
-                height: auto !important;
+                height: 100% !important;
                 overflow: visible !important;
             }
 
@@ -372,15 +379,16 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 margin: 0 !important;
             }
 
+            /* Wrapper Externo (Nuestra clase nueva) */
             .page-outer-wrapper {
                 margin: 0 !important;
                 padding: 0 !important;
                 border: none !important;
                 display: block !important;
 
-                /* Ajustamos al 100% del ÁREA IMPRIMIBLE (dentro de los márgenes de la impresora) */
+                /* Full Bleed */
                 width: 100% !important;
-                height: auto !important;
+                height: 100vh !important;
                 overflow: hidden !important;
 
                 break-inside: avoid !important;
@@ -396,18 +404,22 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 margin-bottom: 0 !important;
             }
 
+            /* Wrapper Interno (PDF.js) */
             .pdf-page-wrapper {
                 margin: 0 !important;
                 padding: 0 !important;
                 box-shadow: none !important;
                 border: none !important;
+
+                /* Full fit */
                 width: 100% !important;
-                height: auto !important;
+                height: 100% !important;
             }
 
+            /* El Canvas (La imagen del PDF) */
             .pdf-page-wrapper canvas {
                 width: 100% !important;
-                height: auto !important;
+                height: 100% !important;
                 object-fit: contain !important;
                 display: block !important;
             }
