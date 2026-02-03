@@ -342,112 +342,106 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
         @media print {
 
-            /* SOLICITUD FINAL: Cero Márgenes, Cero Headers/Footers */
+            /* 1. Reset de página y eliminación de bordes del navegador */
             @page {
-                margin: 0;
+                margin: 0 !important;
                 size: auto;
             }
 
-            .viewer-sidebar,
+            /* 2. Limpieza de Interfaz: Solo queda el PDF */
+            nav,
             .main-header,
+            .sidebar,
+            .viewer-sidebar,
             .app-footer,
             .print-modal,
             .page-number,
             .voraz-navigation,
             .loading-pages,
-            .doc-info {
+            .doc-info,
+            #simpleStatus,
+            .search-form,
+            .btn-print,
+            .btn-secondary {
                 display: none !important;
+                height: 0 !important;
+                overflow: hidden !important;
             }
 
+            /* 3. Re-estructuración del Layout para flujo vertical */
             body,
             html {
+                background: white !important;
                 margin: 0 !important;
                 padding: 0 !important;
-                background: white;
-                height: auto !important;
-                /* Permitir crecer */
-                overflow: visible !important;
-                /* Mostrar todas las páginas */
-            }
-
-            .viewer-container {
-                display: block !important;
-                height: auto !important;
-                overflow: visible !important;
-            }
-
-            .pdf-container {
-                display: block !important;
-                gap: 0 !important;
-                margin: 0 !important;
-            }
-
-            /* Wrapper Externo (Nuestra clase nueva) */
-            .page-outer-wrapper {
-                margin: 0 !important;
-                padding: 0 !important;
-                border: none !important;
-                display: block !important;
-                
-                /* Natural Flow - No artificial height matching */
                 width: 100% !important;
-                height: auto !important; 
-                position: relative !important; /* Contexto para text-layer */
-                
-                break-inside: avoid !important;
-                page-break-inside: avoid !important;
-                break-after: page !important;
-                page-break-after: always !important;
+                height: auto !important;
+                overflow: visible !important;
+                display: block !important;
             }
 
-            /* FIX: Evitar hoja en blanco al final del documento */
-            .page-outer-wrapper:last-of-type {
-                break-after: auto !important;
-                page-break-after: auto !important;
-                margin-bottom: 0 !important;
-            }
-
-            /* Wrapper Interno (PDF.js) */
-            .pdf-page-wrapper {
+            .dashboard-container,
+            .main-content,
+            .page-content,
+            .viewer-container,
+            .viewer-main,
+            #pdfContainer {
+                display: block !important;
                 margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+                max-width: none !important;
+                border: none !important;
+                box-shadow: none !important;
+                position: static !important;
+            }
+
+            /* 4. Control Estricto de Páginas (Evita hojas en blanco) */
+            .page-outer-wrapper {
+                display: block !important;
+                position: relative !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                page-break-after: always !important;
+                /* Salto forzado */
+                break-after: page !important;
+            }
+
+            .page-outer-wrapper:last-child {
+                page-break-after: avoid !important;
+                break-after: avoid !important;
+            }
+
+            .pdf-page-wrapper {
+                margin: 0 auto !important;
                 padding: 0 !important;
                 box-shadow: none !important;
                 border: none !important;
-                position: relative !important;
-
-                /* Natural Size */
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
                 width: 100% !important;
                 height: auto !important;
             }
 
-            /* El Canvas (La imagen del PDF) */
-            .pdf-page-wrapper canvas {
+            /* 5. Asegurar visibilidad del resaltado */
+            canvas {
                 width: 100% !important;
                 height: auto !important;
                 display: block !important;
-                /* Eliminado object-fit para evitar recortes o espacios */
             }
 
             .text-layer {
-                display: block !important;
-                position: absolute !important;
-                top: 0 !important;
-                left: 0 !important;
-                width: 100% !important;
-                height: 100% !important;
-                overflow: hidden !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
-            }
-
-            .text-layer span {
                 opacity: 1 !important;
-                color: transparent !important;
             }
 
             .text-layer mark {
-                opacity: 1 !important;
-                background-color: rgba(34, 197, 94, 0.5) !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+                /* Ayuda visual en B&N */
             }
         }
 
