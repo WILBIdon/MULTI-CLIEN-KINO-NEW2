@@ -345,22 +345,49 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             .viewer-sidebar,
             .main-header,
             .app-footer,
-            .print-modal {
+            .print-modal,
+            .page-number,
+            .voraz-navigation,
+            .loading-pages,
+            .doc-info {
                 display: none !important;
+            }
+
+            body,
+            html {
+                margin: 0;
+                padding: 0;
+                background: white;
             }
 
             .viewer-container {
                 display: block !important;
+                height: auto !important;
+                overflow: visible !important;
             }
 
             .viewer-main {
                 border: none !important;
                 padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            .pdf-container {
+                gap: 0 !important;
+                margin: 0 !important;
             }
 
             .pdf-page-wrapper {
-                break-after: page;
+                /* Evitar saltos extra por márgenes */
+                margin: 0 !important;
+                padding: 0 !important;
                 box-shadow: none !important;
+                border: none !important;
+
+                /* Forzar salto limpio DESPUÉS de cada página */
+                break-after: page;
+                page-break-after: always;
+                break-inside: avoid;
             }
 
             .text-layer mark {
