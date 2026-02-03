@@ -346,24 +346,35 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 size: auto;
             }
 
-            .viewer-sidebar, .main-header, .app-footer, .print-modal, .page-number, .voraz-navigation, .loading-pages, .doc-info { 
-                display: none !important; 
-            }
-            
-            body, html { 
-                margin: 0 !important; padding: 0 !important; background: white; height: 100%;
-            }
-
-            .viewer-container { 
-                display: block !important; 
-                height: auto !important; 
-                overflow: visible !important; 
+            .viewer-sidebar,
+            .main-header,
+            .app-footer,
+            .print-modal,
+            .page-number,
+            .voraz-navigation,
+            .loading-pages,
+            .doc-info {
+                display: none !important;
             }
 
-            .pdf-container { 
+            body,
+            html {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: white;
+                height: 100%;
+            }
+
+            .viewer-container {
                 display: block !important;
-                gap: 0 !important; 
-                margin: 0 !important; 
+                height: auto !important;
+                overflow: visible !important;
+            }
+
+            .pdf-container {
+                display: block !important;
+                gap: 0 !important;
+                margin: 0 !important;
             }
 
             /* Wrapper Externo (Nuestra clase nueva) */
@@ -371,26 +382,35 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 margin: 0 !important;
                 padding: 0 !important;
                 border: none !important;
-                
+
                 /* Importante: evitar que el contenedor sea más grande que la hoja */
                 width: 100% !important;
-                height: auto !important; 
-                max-height: 100vh !important; /* Limite de altura */
-                overflow: hidden !important;  /* Cortar cualquier exceso */
-                
+                height: auto !important;
+                max-height: 100vh !important;
+                /* Limite de altura */
+                overflow: hidden !important;
+                /* Cortar cualquier exceso */
+
                 break-inside: avoid !important;
                 page-break-inside: avoid !important;
                 break-after: page !important;
                 page-break-after: always !important;
             }
 
+            /* FIX: Evitar hoja en blanco al final del documento */
+            .page-outer-wrapper:last-of-type {
+                break-after: auto !important;
+                page-break-after: auto !important;
+                margin-bottom: 0 !important;
+            }
+
             /* Wrapper Interno (PDF.js) */
-            .pdf-page-wrapper { 
-                margin: 0 !important; 
-                padding: 0 !important; 
+            .pdf-page-wrapper {
+                margin: 0 !important;
+                padding: 0 !important;
                 box-shadow: none !important;
                 border: none !important;
-                
+
                 /* Permitir redimensionamiento fluido */
                 width: 100% !important;
                 height: auto !important;
@@ -399,8 +419,10 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             /* El Canvas (La imagen del PDF) */
             .pdf-page-wrapper canvas {
                 width: 100% !important;
-                height: auto !important; /* Mantener proporción */
-                max-height: 98vh !important; /* Un poco menos del 100% para seguridad */
+                height: auto !important;
+                /* Mantener proporción */
+                max-height: 98vh !important;
+                /* Un poco menos del 100% para seguridad */
                 object-fit: contain !important;
                 display: block !important;
             }
@@ -414,21 +436,22 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 width: 100% !important;
                 height: 100% !important;
                 overflow: hidden !important;
-                
+
                 /* Asegurar que el resaltado se imprima */
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
-            
+
             /* Asegurar que el texto sea transparente pero los resaltados no */
             .text-layer span {
-                opacity: 1 !important; 
+                opacity: 1 !important;
                 color: transparent !important;
             }
-            
+
             .text-layer mark {
                 opacity: 1 !important;
-                background-color: rgba(34, 197, 94, 0.5) !important; /* Forzar color */
+                background-color: rgba(34, 197, 94, 0.5) !important;
+                /* Forzar color */
             }
         }
 
