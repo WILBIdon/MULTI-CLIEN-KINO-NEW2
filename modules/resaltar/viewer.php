@@ -1,4 +1,3 @@
-revisar
 <?php
 /**
  * Print-Optimized PDF Viewer with Highlighting
@@ -342,23 +341,44 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         }
 
         @media print {
+
             /* Reset de márgenes del navegador */
-            @page { margin: 0 !important; size: auto; }
-            
+            @page {
+                margin: 0 !important;
+                size: auto;
+            }
+
             /* ELIMINACIÓN DEL CÍRCULO (SPINNER) Y UI: 
                Se oculta explícitamente el spinner y la interfaz para evitar basura visual */
-            nav, .main-header, .sidebar, .viewer-sidebar, .app-footer, 
-            .print-modal, .page-number, .voraz-navigation, .doc-info, 
-            #simpleStatus, .search-form, .btn-print, .btn-secondary,
-            .loading-pages, .spinner { 
-                display: none !important; 
-                height: 0 !important; 
+            nav,
+            .main-header,
+            .sidebar,
+            .viewer-sidebar,
+            .app-footer,
+            .print-modal,
+            .page-number,
+            .voraz-navigation,
+            .doc-info,
+            #simpleStatus,
+            .search-form,
+            .btn-print,
+            .btn-secondary,
+            .loading-pages,
+            .spinner {
+                display: none !important;
+                height: 0 !important;
                 visibility: hidden !important;
             }
 
             /* FLUJO CONTINUO: Evita que contenedores con altura mínima generen hojas blancas */
-            body, html, .dashboard-container, .main-content, .page-content, 
-            .viewer-container, .viewer-main, #pdfContainer {
+            body,
+            html,
+            .dashboard-container,
+            .main-content,
+            .page-content,
+            .viewer-container,
+            .viewer-main,
+            #pdfContainer {
                 display: block !important;
                 margin: 0 !important;
                 padding: 0 !important;
@@ -380,9 +400,11 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 width: 100% !important;
                 margin: 0 !important;
                 padding: 0 !important;
-                page-break-after: always !important; /* Fuerza el salto de página correcto */
+                page-break-after: always !important;
+                /* Fuerza el salto de página correcto */
                 break-after: page !important;
-                color: transparent !important; /* Oculta textos de "Cargando..." */
+                color: transparent !important;
+                /* Oculta textos de "Cargando..." */
             }
 
             .page-outer-wrapper:last-child {
@@ -401,7 +423,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 height: auto !important;
                 display: block !important;
             }
-        }        
+        }
 
         .page-outer-wrapper {
             margin-bottom: 2rem;
