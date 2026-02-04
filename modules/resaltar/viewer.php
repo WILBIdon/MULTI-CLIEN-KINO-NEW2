@@ -229,15 +229,14 @@ $docIdForOcr = $documentId; // For OCR fallback
             mix-blend-mode: multiply;
         }
 
-        /* Verde Fuerte (Hits Manuales) */
+        /* Verde Bosque (Hits Manuales) */
         .highlight-hit {
-            background-color: rgba(34, 197, 94, 0.5) !important;
-            border-bottom: 2px solid #15803d;
+            background-color: rgba(22, 101, 52, 0.55) !important;
         }
 
-        /* Verde Suave (Contexto Automático) */
+        /* Verde Bosque Suave (Contexto Automático) */
         .highlight-context {
-            background-color: rgba(134, 239, 172, 0.4) !important;
+            background-color: rgba(22, 101, 52, 0.4) !important;
         }
 
         /* --- UI COMPONENTS --- */
@@ -813,7 +812,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                     <style>
                         @keyframes ocr-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
                     </style>
-                    <div style="width:60px;height:60px;border:4px solid rgba(255,255,255,0.2);border-top:4px solid #22c55e;border-radius:50%;animation:ocr-spin 1s linear infinite;margin:0 auto 20px;"></div>
+                    <div style="width:60px;height:60px;border:4px solid rgba(255,255,255,0.2);border-top:4px solid #166534;border-radius:50%;animation:ocr-spin 1s linear infinite;margin:0 auto 20px;"></div>
                     <div style="font-size:18px;font-weight:bold;">Analizando documento...</div>
                     <div style="font-size:13px;opacity:0.7;margin-top:10px;">Extrayendo texto con OCR</div>
                 `;
@@ -836,7 +835,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                         position: absolute;
                         top: 10px;
                         right: 10px;
-                        background: #16a34a;
+                        background: #166534;
                         color: white;
                         padding: 8px 15px;
                         border-radius: 8px;
@@ -881,7 +880,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                                     top: ${hl.y * scaleY}px;
                                     width: ${hl.w * scaleX}px;
                                     height: ${hl.h * scaleY}px;
-                                    background: rgba(34, 197, 94, 0.45);
+                                    background: rgba(22, 101, 52, 0.55);
                                     border: none;
                                     border-radius: 2px;
                                 `;
