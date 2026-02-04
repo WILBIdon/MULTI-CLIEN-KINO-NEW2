@@ -790,8 +790,15 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                     // Switch to Consultar tab and reload documents
                     switchTab('consultar');
                     loadDocuments();
+                } else if (result.warning) {
+                    // Handle duplicate file warning
+                    const existingDoc = result.existing_doc;
+                    const docName = existingDoc ? existingDoc.numero : 'otro documento';
+                    alert(`⚠️ Archivo duplicado\n\nEste archivo PDF ya fue subido anteriormente.\n\nDocumento existente: "${docName}"\n\nSi necesitas asociar nuevos códigos, edita el documento existente desde la pestaña "Consultar".`);
+                } else if (result.error) {
+                    alert('Error: ' + result.error);
                 } else {
-                    alert('Error: ' + (result.error || 'Error desconocido'));
+                    alert('Error: Respuesta inesperada del servidor');
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
