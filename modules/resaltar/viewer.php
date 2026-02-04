@@ -799,8 +799,8 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                     ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
 
                     // Renderizar página PDF
-                    await page.render({ 
-                        canvasContext: ctx, 
+                    await page.render({
+                        canvasContext: ctx,
                         viewport: viewport,
                         background: 'white'
                     }).promise;
@@ -811,8 +811,8 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
                     // Dibujar resaltados sobre el canvas
                     if (allTerms.length > 0) {
-                        ctx.globalAlpha = 0.45;
-                        ctx.fillStyle = '#22c55e'; // Verde resaltador
+                        ctx.globalAlpha = 0.55;
+                        ctx.fillStyle = '#0d6939'; // Verde oscuro para escala de grises
 
                         for (const item of textContent.items) {
                             const itemText = item.str.toLowerCase();
@@ -864,7 +864,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             }
 
             // Generar HTML limpio para impresión
-            const pagesHTML = pageImages.map((img, i) => 
+            const pagesHTML = pageImages.map((img, i) =>
                 `<div class="print-page">
                     <img src="${img.data}" alt="Página ${i + 1}">
                 </div>`
@@ -876,58 +876,33 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
     <meta charset="UTF-8">
     <title>Imprimir - ${document.title || 'Documento PDF'}</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        html, body {
-            background: #fff;
-            font-family: sans-serif;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { background: #fff; }
         .print-page {
-            page-break-after: always;
-            page-break-inside: avoid;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
+            display: block;
+            text-align: center;
             background: #fff;
-        }
-        .print-page:last-child {
-            page-break-after: auto;
         }
         .print-page img {
             max-width: 100%;
             height: auto;
-            display: block;
+            display: inline-block;
         }
-        /* Estilos para pantalla - vista previa */
         @media screen {
-            body {
-                background: #f3f4f6;
-                padding: 20px;
-            }
-            .print-page {
-                background: #fff;
-                margin-bottom: 20px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            }
+            body { background: #e5e7eb; padding: 15px; }
+            .print-page { margin-bottom: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
         }
-        /* Estilos para impresión - limpio */
         @media print {
-            @page {
-                margin: 0.5cm;
-                size: auto;
-            }
-            body {
-                background: #fff !important;
-            }
+            @page { margin: 5mm; size: auto; }
+            html, body { background: #fff !important; }
             .print-page {
-                margin: 0;
-                padding: 0;
-                box-shadow: none;
-                border: none;
+                page-break-inside: avoid;
+                page-break-after: always;
+                margin: 0; padding: 0;
+                box-shadow: none; border: none;
             }
+            .print-page:last-of-type { page-break-after: avoid; }
+            .print-page img { max-width: 100%; height: auto; }
         }
     </style>
 </head>
