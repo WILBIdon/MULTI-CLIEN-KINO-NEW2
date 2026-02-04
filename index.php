@@ -1268,16 +1268,6 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                 }
 
                 document.getElementById('singleCodeList').innerHTML = result.documents.map(doc => {
-                    // Construir ruta del PDF correctamente
-                    let pdfUrl = '';
-                    if (doc.ruta_archivo) {
-                        if (doc.ruta_archivo.includes('/')) {
-                            pdfUrl = `../../clients/${clientCode}/uploads/${doc.ruta_archivo}`;
-                        } else {
-                            pdfUrl = `../../clients/${clientCode}/uploads/${doc.tipo}/${doc.ruta_archivo}`;
-                        }
-                    }
-
                     return `
                         <div class="result-card">
                             <div class="result-header">
@@ -1286,9 +1276,8 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                             </div>
                             <div class="result-title">${doc.numero}</div>
                             <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                                <a href="modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(result.query)}" class="btn btn-primary" style="padding: 0.5rem 1rem;">👁️ Ver Documento</a>
-                                ${pdfUrl ? `<button onclick="openHighlighter('modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(code)}')" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</button>` : ''}
-                                ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>` : ''}
+                                <button onclick="openHighlighter('modules/resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(code)}')" class="btn btn-success" style="padding: 0.5rem 1rem; background: #038802;">🖍️ Resaltar</button>
+                                <a href="modules/resaltar/download.php?doc=${doc.id}" target="_blank" class="btn btn-secondary" style="padding: 0.5rem 1rem;">📄 Ver PDF</a>
                             </div>
                         </div>
                     `;
