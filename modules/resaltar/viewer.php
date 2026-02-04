@@ -134,6 +134,7 @@ if (!$pdfPath || !file_exists($pdfPath)) {
 $relativePath = str_replace($uploadsDir, '', $pdfPath);
 $baseUrl = '../../';
 $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
+$docIdForOcr = $documentId; // For OCR fallback
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -726,32 +727,76 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
                 wrapper.appendChild(textDiv);
 
                 const textContent = await page.getTextContent();
-                await pdfjsLib.renderTextLayer({
-                    textContent: textContent,
-                    container: textDiv,
-                    viewport: viewport,
-                    textDivs: []
-                }).promise;
+                const hasText = textContent.items && textContent.items.length > 0;
 
                 // MARCAR COMO RENDERIZADO (Vital para el CSS de impresión)
                 wrapper.setAttribute('data-rendered', 'true');
                 wrapper.style.minHeight = "auto";
                 wrapper.style.color = "inherit";
 
-                // 3. Resaltado (Mark.js)
-                const instance = new Mark(textDiv);
-                const opts = { element: "mark", accuracy: "partially", separateWordSearch: false };
+                if (hasText) {
+                    // ✅ CAMINO 1: PDF tiene texto embebido - usar Mark.js (LÓGICA ORIGINAL)
+                    await pdfjsLib.renderTextLayer({
+                        textContent: textContent,
+                        container: textDiv,
+                        viewport: viewport,
+                        textDivs: []
+                    }).promise;
 
-                // Aplicar estilos diferenciados si es strict mode, o genéricos si no
-                if (isStrictMode) {
-                    if (hits.length) instance.mark(hits, { ...opts, className: "highlight-hit" });
-                    if (context.length) instance.mark(context, { ...opts, className: "highlight-context" });
+                    // 3. Resaltado (Mark.js)
+                    const instance = new Mark(textDiv);
+                    const opts = { element: "mark", accuracy: "partially", separateWordSearch: false };
+
+                    // Aplicar estilos diferenciados si es strict mode, o genéricos si no
+                    if (isStrictMode) {
+                        if (hits.length) instance.mark(hits, { ...opts, className: "highlight-hit" });
+                        if (context.length) instance.mark(context, { ...opts, className: "highlight-context" });
+                    } else {
+                        const all = [...hits, ...context];
+                        if (all.length) instance.mark(all, { ...opts, className: "highlight-hit" });
+                    }
                 } else {
-                    const all = [...hits, ...context];
-                    if (all.length) instance.mark(all, { ...opts, className: "highlight-hit" }); // Usamos verde fuerte por defecto
+                    // ✅ CAMINO 2: PDF escaneado (sin texto) - usar fallback OCR
+                    const allTerms = [...hits, ...context];
+                    if (allTerms.length > 0) {
+                        console.log(`Página ${pageNum}: Sin texto embebido, usando fallback OCR...`);
+                        await applyOcrHighlight(wrapper, textDiv, pageNum, allTerms);
+                    }
                 }
 
             } catch (err) { console.error("Render err pg " + pageNum, err); }
+        }
+        
+        // Fallback OCR: solo se usa para documentos escaneados (sin texto embebido)
+        async function applyOcrHighlight(wrapper, textDiv, pageNum, allTerms) {
+            try {
+                const docId = <?= $docIdForOcr ?>;
+                const termsStr = encodeURIComponent(allTerms.join(','));
+                const response = await fetch(`ocr_text.php?doc=${docId}&page=${pageNum}&terms=${termsStr}`);
+                const result = await response.json();
+                
+                if (result.success && result.matches && result.matches.length > 0) {
+                    // Agregar texto OCR para Mark.js
+                    const textSpan = document.createElement('span');
+                    textSpan.textContent = result.text || '';
+                    textSpan.style.cssText = 'position:absolute;top:0;left:0;opacity:0.01;font-size:12px;white-space:pre-wrap;width:100%;height:100%;overflow:hidden;';
+                    textDiv.appendChild(textSpan);
+                    
+                    // Aplicar Mark.js al texto OCR
+                    const instance = new Mark(textDiv);
+                    instance.mark(allTerms, { element: "mark", accuracy: "partially", className: "highlight-hit" });
+                    
+                    // Mostrar indicador de que se usó OCR
+                    const ocrBadge = document.createElement('div');
+                    ocrBadge.innerHTML = '🔍 OCR';
+                    ocrBadge.style.cssText = 'position:absolute;top:5px;right:5px;background:#16a34a;color:white;padding:2px 8px;border-radius:4px;font-size:10px;z-index:10;';
+                    wrapper.appendChild(ocrBadge);
+                    
+                    console.log(`OCR: ${result.match_count} coincidencias en página ${pageNum}`);
+                }
+            } catch (e) {
+                console.warn(`OCR fallback error en página ${pageNum}:`, e);
+            }
         }
 
         // --- NUEVA FUNCIÓN DE IMPRESIÓN LIMPIA ---
