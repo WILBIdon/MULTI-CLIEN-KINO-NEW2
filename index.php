@@ -792,7 +792,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                     loadDocuments();
                 } else if (result.warning) {
                     // Handle duplicate file warning
-                    alert('Nombre duplicado: Por favor, renombra el archivo o elige uno diferente.');
+                    alert('El documento PDF que quieres subir ya existe en la base de datos.');
                 } else if (result.error) {
                     alert('Error: ' + result.error);
                 } else {
