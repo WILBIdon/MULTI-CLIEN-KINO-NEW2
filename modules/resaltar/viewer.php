@@ -515,7 +515,7 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
 
                         <hr style="margin: 1.5rem 0; border-top:1px solid #eee;">
 
-                        <button class="btn-print" onclick="showPrintModal()">🖨️ Imprimir</button>
+                        <button class="btn-print" onclick="printCleanDocument()">🖨️ Imprimir PDF</button>
                         <a href="<?= $pdfUrl ?>" download class="btn btn-secondary"
                             style="width: 100%; text-align: center; display:block; padding:0.8rem;">
                             📥 Descargar PDF
@@ -537,16 +537,8 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
         </main>
     </div>
 
-    <div class="print-modal" id="printModal">
-        <div class="print-modal-content">
-            <h3>🖨️ Opciones de Impresión</h3>
-            <p style="color:#666; margin-bottom:20px;">¿Cómo deseas imprimir el documento?</p>
-            <div class="print-modal-buttons">
-                <button class="btn btn-primary" onclick="printFullDocument()">Todo el Documento</button>
-                <button class="btn btn-secondary" onclick="closePrintModal()">Cancelar</button>
-            </div>
-        </div>
-    </div>
+
+    <!-- Modal de impresión eliminado - ahora se usa impresión directa -->
 
     <script>
         // Configuración PDF.js
@@ -762,125 +754,220 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
             } catch (err) { console.error("Render err pg " + pageNum, err); }
         }
 
-        // --- PRINT UTILS ---
-        function showPrintModal() { document.getElementById('printModal').classList.add('active'); }
-        function closePrintModal() { document.getElementById('printModal').classList.remove('active'); }
-
-        // Función para renderizar TODAS las páginas e imprimir en ventana limpia
-        async function printFullDocument() {
-            closePrintModal();
-
+        // --- NUEVA FUNCIÓN DE IMPRESIÓN LIMPIA ---
+        async function printCleanDocument() {
             const statusDiv = document.getElementById('simpleStatus');
             const totalPages = pdfDoc ? pdfDoc.numPages : 0;
 
-            // Ocultar spinner
-            const loadingDiv = document.querySelector('.loading-pages');
-            if (loadingDiv) loadingDiv.remove();
+            if (totalPages === 0) {
+                alert('El documento aún no se ha cargado completamente.');
+                return;
+            }
+
+            // Mostrar progreso
+            if (statusDiv) {
+                statusDiv.innerHTML = `<div style="background:#fef3c7; color:#92400e; padding:10px; border-radius:6px; font-size:0.9em;">
+                    🖨️ <strong>Preparando impresión...</strong> Por favor espera.
+                </div>`;
+            }
 
             // Recolectar imágenes de todas las páginas
             const pageImages = [];
 
             for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                // Actualizar progreso
                 if (statusDiv) {
-                    statusDiv.innerHTML = `<div style="color:#d97706; font-size:0.9em;">🖨️ Preparando página ${pageNum}/${totalPages}...</div>`;
+                    statusDiv.innerHTML = `<div style="background:#fef3c7; color:#92400e; padding:10px; border-radius:6px; font-size:0.9em;">
+                        🖨️ <strong>Preparando página ${pageNum} de ${totalPages}...</strong>
+                    </div>`;
                 }
 
                 try {
-                    // Renderizar página directamente a un canvas temporal
                     const page = await pdfDoc.getPage(pageNum);
-                    const viewport = page.getViewport({ scale: 2 }); // Mayor escala para mejor calidad de impresión
+                    // Escala alta para mejor calidad de impresión
+                    const printScale = 2.5;
+                    const viewport = page.getViewport({ scale: printScale });
 
+                    // Crear canvas temporal
                     const tempCanvas = document.createElement('canvas');
                     const ctx = tempCanvas.getContext('2d');
                     tempCanvas.width = viewport.width;
                     tempCanvas.height = viewport.height;
 
-                    await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                    // Fondo blanco explícito
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
 
-                    // Obtener el texto para resaltar encima
+                    // Renderizar página PDF
+                    await page.render({ 
+                        canvasContext: ctx, 
+                        viewport: viewport,
+                        background: 'white'
+                    }).promise;
+
+                    // Obtener contenido de texto para resaltados
                     const textContent = await page.getTextContent();
-
-                    // Dibujar resaltados directamente en el canvas
                     const allTerms = [...hits, ...context];
+
+                    // Dibujar resaltados sobre el canvas
                     if (allTerms.length > 0) {
-                        ctx.globalAlpha = 0.4;
-                        ctx.fillStyle = '#22c55e'; // Verde
+                        ctx.globalAlpha = 0.45;
+                        ctx.fillStyle = '#22c55e'; // Verde resaltador
 
                         for (const item of textContent.items) {
-                            const text = item.str.toLowerCase();
+                            const itemText = item.str.toLowerCase();
                             for (const term of allTerms) {
-                                if (text.includes(term.toLowerCase())) {
-                                    // Calcular posición del texto
-                                    const tx = viewport.transform;
-                                    const x = tx[0] * item.transform[4] + tx[2] * item.transform[5] + tx[4];
-                                    const y = tx[1] * item.transform[4] + tx[3] * item.transform[5] + tx[5];
-                                    const width = item.width * viewport.scale;
-                                    const height = item.height * viewport.scale || 12;
+                                if (term && itemText.includes(term.toLowerCase())) {
+                                    // Calcular posición usando la matriz de transformación
+                                    const tx = item.transform;
+                                    const x = tx[4] * printScale;
+                                    const y = viewport.height - (tx[5] * printScale);
+                                    const width = (item.width || 50) * printScale;
+                                    const height = (item.height || 12) * printScale;
 
-                                    ctx.fillRect(x, viewport.height - y - height, width, height);
-                                    break;
+                                    ctx.fillRect(x, y - height, width, height);
+                                    break; // Solo un resaltado por item
                                 }
                             }
                         }
                         ctx.globalAlpha = 1.0;
                     }
 
-                    // Convertir a imagen
-                    pageImages.push(tempCanvas.toDataURL('image/png'));
+                    // Convertir a imagen PNG de alta calidad
+                    pageImages.push({
+                        data: tempCanvas.toDataURL('image/png', 1.0),
+                        width: viewport.width,
+                        height: viewport.height
+                    });
 
                 } catch (e) {
                     console.error('Error preparando página', pageNum, e);
                 }
 
-                await new Promise(r => setTimeout(r, 30));
+                // Pequeña pausa para no bloquear el UI
+                await new Promise(r => setTimeout(r, 20));
             }
 
+            // Finalizar preparación
             if (statusDiv) {
-                statusDiv.innerHTML = `<div style="color:#059669; font-size:0.9em;">✅ ${pageImages.length} páginas listas. Abriendo impresión...</div>`;
+                statusDiv.innerHTML = `<div style="background:#d1fae5; color:#065f46; padding:10px; border-radius:6px; font-size:0.9em;">
+                    ✅ <strong>${pageImages.length} páginas listas.</strong> Abriendo ventana de impresión...
+                </div>`;
             }
 
-            // Crear ventana de impresión limpia
-            const printWindow = window.open('', '_blank', 'width=800,height=600');
+            // Crear ventana de impresión completamente limpia
+            const printWindow = window.open('', '_blank', 'width=900,height=700');
             if (!printWindow) {
-                alert('Por favor permite las ventanas emergentes para imprimir.');
+                alert('Por favor permite las ventanas emergentes para imprimir el documento.');
+                if (statusDiv) statusDiv.innerHTML = '';
                 return;
             }
 
-            printWindow.document.write(`
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Imprimir Documento</title>
-                    <style>
-                        * { margin: 0; padding: 0; box-sizing: border-box; }
-                        body { background: white; }
-                        .page { page-break-after: always; text-align: center; }
-                        .page:last-child { page-break-after: avoid; }
-                        .page img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-                        @media print {
-                            .page { page-break-after: always; }
-                            .page:last-child { page-break-after: avoid; }
+            // Generar HTML limpio para impresión
+            const pagesHTML = pageImages.map((img, i) => 
+                `<div class="print-page">
+                    <img src="${img.data}" alt="Página ${i + 1}">
+                </div>`
+            ).join('\n');
+
+            printWindow.document.write(`<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Imprimir - ${document.title || 'Documento PDF'}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            background: #fff;
+            font-family: sans-serif;
+        }
+        .print-page {
+            page-break-after: always;
+            page-break-inside: avoid;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            background: #fff;
+        }
+        .print-page:last-child {
+            page-break-after: auto;
+        }
+        .print-page img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+        /* Estilos para pantalla - vista previa */
+        @media screen {
+            body {
+                background: #f3f4f6;
+                padding: 20px;
+            }
+            .print-page {
+                background: #fff;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }
+        }
+        /* Estilos para impresión - limpio */
+        @media print {
+            @page {
+                margin: 0.5cm;
+                size: auto;
+            }
+            body {
+                background: #fff !important;
+            }
+            .print-page {
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+                border: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    ${pagesHTML}
+    <script>
+        // Auto-imprimir después de cargar todas las imágenes
+        let imagesLoaded = 0;
+        const images = document.querySelectorAll('img');
+        const totalImages = images.length;
+        
+        if (totalImages === 0) {
+            setTimeout(() => window.print(), 300);
+        } else {
+            images.forEach(img => {
+                if (img.complete) {
+                    imagesLoaded++;
+                    if (imagesLoaded === totalImages) {
+                        setTimeout(() => window.print(), 300);
+                    }
+                } else {
+                    img.onload = img.onerror = () => {
+                        imagesLoaded++;
+                        if (imagesLoaded === totalImages) {
+                            setTimeout(() => window.print(), 300);
                         }
-                    </style>
-                </head>
-                <body>
-                    ${pageImages.map((img, i) => `<div class="page"><img src="${img}" alt="Página ${i + 1}"></div>`).join('')}
-                </body>
-                </html>
-            `);
+                    };
+                }
+            });
+        }
+    <\/script>
+</body>
+</html>`);
+
             printWindow.document.close();
 
-            // Esperar a que las imágenes carguen y luego imprimir
-            printWindow.onload = function () {
-                setTimeout(() => {
-                    printWindow.print();
-                    // printWindow.close(); // Descomentar si deseas cerrar automáticamente
-                }, 500);
-            };
-
+            // Limpiar mensaje de estado después de un tiempo
             setTimeout(() => {
                 if (statusDiv) statusDiv.innerHTML = '';
-            }, 3000);
+            }, 4000);
         }
 
         // Start
