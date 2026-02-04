@@ -776,23 +776,74 @@ $docIdForOcr = $documentId; // For OCR fallback
                 const result = await response.json();
                 
                 if (result.success && result.matches && result.matches.length > 0) {
-                    // Agregar texto OCR para Mark.js
+                    // Crear panel de resultados OCR visible
+                    const ocrPanel = document.createElement('div');
+                    ocrPanel.className = 'ocr-results-panel';
+                    ocrPanel.style.cssText = `
+                        position: absolute;
+                        top: 10px;
+                        left: 10px;
+                        right: 10px;
+                        background: linear-gradient(135deg, rgba(22, 163, 74, 0.95), rgba(5, 150, 105, 0.95));
+                        color: white;
+                        padding: 15px;
+                        border-radius: 10px;
+                        z-index: 100;
+                        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+                        font-family: system-ui, sans-serif;
+                    `;
+                    
+                    // Agrupar matches por término
+                    const matchCounts = {};
+                    for (const m of result.matches) {
+                        matchCounts[m.term] = (matchCounts[m.term] || 0) + 1;
+                    }
+                    
+                    let matchesHtml = Object.entries(matchCounts).map(([term, count]) => 
+                        `<span style="background:rgba(255,255,255,0.2);padding:3px 8px;border-radius:4px;margin:2px;display:inline-block;">
+                            <strong>${term}</strong> (${count}x)
+                        </span>`
+                    ).join(' ');
+                    
+                    ocrPanel.innerHTML = `
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                            <span style="font-size:24px;">🔍</span>
+                            <div>
+                                <div style="font-weight:bold;font-size:14px;">OCR encontró ${result.match_count} coincidencia(s)</div>
+                                <div style="font-size:11px;opacity:0.8;">Documento escaneado - texto extraído via OCR</div>
+                            </div>
+                        </div>
+                        <div style="font-size:12px;">${matchesHtml}</div>
+                    `;
+                    
+                    wrapper.appendChild(ocrPanel);
+                    
+                    // También agregar el texto para Mark.js (por si acaso funciona en algunos navegadores)
                     const textSpan = document.createElement('span');
                     textSpan.textContent = result.text || '';
                     textSpan.style.cssText = 'position:absolute;top:0;left:0;opacity:0.01;font-size:12px;white-space:pre-wrap;width:100%;height:100%;overflow:hidden;';
                     textDiv.appendChild(textSpan);
                     
-                    // Aplicar Mark.js al texto OCR
                     const instance = new Mark(textDiv);
                     instance.mark(allTerms, { element: "mark", accuracy: "partially", className: "highlight-hit" });
                     
-                    // Mostrar indicador de que se usó OCR
-                    const ocrBadge = document.createElement('div');
-                    ocrBadge.innerHTML = '🔍 OCR';
-                    ocrBadge.style.cssText = 'position:absolute;top:5px;right:5px;background:#16a34a;color:white;padding:2px 8px;border-radius:4px;font-size:10px;z-index:10;';
-                    wrapper.appendChild(ocrBadge);
-                    
                     console.log(`OCR: ${result.match_count} coincidencias en página ${pageNum}`);
+                } else if (result.success && result.match_count === 0) {
+                    // No hay coincidencias pero OCR funcionó
+                    const ocrInfo = document.createElement('div');
+                    ocrInfo.style.cssText = `
+                        position: absolute;
+                        top: 10px;
+                        right: 10px;
+                        background: rgba(239, 68, 68, 0.9);
+                        color: white;
+                        padding: 8px 12px;
+                        border-radius: 6px;
+                        font-size: 11px;
+                        z-index: 100;
+                    `;
+                    ocrInfo.innerHTML = '🔍 OCR: Sin coincidencias';
+                    wrapper.appendChild(ocrInfo);
                 }
             } catch (e) {
                 console.warn(`OCR fallback error en página ${pageNum}:`, e);
