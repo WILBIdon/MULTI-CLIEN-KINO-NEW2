@@ -283,6 +283,150 @@ function extract_with_ocr(string $pdfPath): string
     return trim($text);
 }
 
+/**
+ * Extrae texto con coordenadas usando Tesseract OCR con formato HOCR.
+ * Convierte una página específica del PDF a imagen y aplica OCR.
+ * 
+ * @param string $pdfPath Ruta al archivo PDF.
+ * @param int $pageNum Número de página (1-indexed).
+ * @return array Array con: ['success', 'text', 'words' => [{text, x, y, w, h}], 'image_width', 'image_height']
+ */
+function extract_with_ocr_coordinates(string $pdfPath, int $pageNum = 1): array
+{
+    $tesseractPath = find_tesseract();
+    if (!$tesseractPath) {
+        return ['success' => false, 'error' => 'Tesseract no disponible', 'words' => []];
+    }
+
+    $pdftoppmPath = find_pdftoppm();
+    if (!$pdftoppmPath) {
+        return ['success' => false, 'error' => 'pdftoppm no disponible', 'words' => []];
+    }
+
+    $tempDir = sys_get_temp_dir() . '/ocr_coords_' . uniqid();
+    if (!mkdir($tempDir, 0777, true)) {
+        return ['success' => false, 'error' => 'No se pudo crear directorio temporal', 'words' => []];
+    }
+
+    $result = ['success' => false, 'text' => '', 'words' => [], 'image_width' => 0, 'image_height' => 0];
+
+    try {
+        // 1. Convertir solo la página específica a imagen
+        $escapedPdf = escapeshellarg($pdfPath);
+        $imagePrefix = $tempDir . '/page';
+        $escapedPrefix = escapeshellarg($imagePrefix);
+
+        // -f y -l para especificar página, -r para resolución (150 DPI)
+        $cmdConvert = "$pdftoppmPath -png -r 150 -f $pageNum -l $pageNum $escapedPdf $escapedPrefix";
+        exec($cmdConvert, $output, $returnCode);
+
+        // Buscar la imagen generada
+        $images = glob($tempDir . '/*.png');
+        if (empty($images)) {
+            throw new Exception("No se pudo convertir la página $pageNum a imagen");
+        }
+
+        $imagePath = $images[0];
+
+        // Obtener dimensiones de la imagen
+        $imageInfo = getimagesize($imagePath);
+        if ($imageInfo) {
+            $result['image_width'] = $imageInfo[0];
+            $result['image_height'] = $imageInfo[1];
+        }
+
+        // 2. Ejecutar Tesseract con formato HOCR para obtener coordenadas
+        $hocrOutput = $tempDir . '/output';
+        $escapedImage = escapeshellarg($imagePath);
+        $escapedHocr = escapeshellarg($hocrOutput);
+
+        // tesseract imagen salida hocr -l spa
+        $cmdOcr = "$tesseractPath $escapedImage $escapedHocr -l spa hocr";
+        exec($cmdOcr, $ocrOutput, $ocrReturnCode);
+
+        $hocrFile = $hocrOutput . '.hocr';
+        if (!file_exists($hocrFile)) {
+            throw new Exception("Tesseract no generó archivo HOCR");
+        }
+
+        // 3. Parsear HOCR para extraer palabras con coordenadas
+        $hocrContent = file_get_contents($hocrFile);
+        $result['words'] = parse_hocr_words($hocrContent);
+
+        // También extraer texto plano
+        $textOutput = $tempDir . '/text';
+        $cmdText = "$tesseractPath $escapedImage " . escapeshellarg($textOutput) . " -l spa";
+        exec($cmdText);
+        $textFile = $textOutput . '.txt';
+        if (file_exists($textFile)) {
+            $result['text'] = file_get_contents($textFile);
+        }
+
+        $result['success'] = true;
+
+    } catch (Exception $e) {
+        $result['error'] = $e->getMessage();
+        if (class_exists('Logger')) {
+            Logger::error('OCR coordinates error', ['error' => $e->getMessage()]);
+        }
+    } finally {
+        // Limpieza
+        $files = glob("$tempDir/*");
+        if ($files) {
+            array_map('unlink', $files);
+        }
+        if (is_dir($tempDir)) {
+            rmdir($tempDir);
+        }
+    }
+
+    return $result;
+}
+
+/**
+ * Parsea contenido HOCR y extrae palabras con sus bounding boxes.
+ * El formato HOCR tiene elementos span class="ocrx_word" con title="bbox x1 y1 x2 y2"
+ * 
+ * @param string $hocrContent Contenido del archivo HOCR.
+ * @return array Array de palabras: [{text, x, y, w, h}]
+ */
+function parse_hocr_words(string $hocrContent): array
+{
+    $words = [];
+
+    // Buscar todos los elementos ocrx_word con su bbox
+    // Patrón: <span class='ocrx_word' ... title='bbox X1 Y1 X2 Y2; ...' ...>TEXTO</span>
+    $pattern = "/<span[^>]*class=['\"]ocrx_word['\"][^>]*title=['\"]([^'\"]*)['\"][^>]*>([^<]*)<\/span>/i";
+
+    if (preg_match_all($pattern, $hocrContent, $matches, PREG_SET_ORDER)) {
+        foreach ($matches as $match) {
+            $title = $match[1];
+            $text = trim(strip_tags($match[2]));
+
+            if (empty($text))
+                continue;
+
+            // Extraer bbox del title: "bbox 100 200 300 250; ..."
+            if (preg_match('/bbox\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/', $title, $bboxMatch)) {
+                $x1 = (int) $bboxMatch[1];
+                $y1 = (int) $bboxMatch[2];
+                $x2 = (int) $bboxMatch[3];
+                $y2 = (int) $bboxMatch[4];
+
+                $words[] = [
+                    'text' => $text,
+                    'x' => $x1,
+                    'y' => $y1,
+                    'w' => $x2 - $x1,
+                    'h' => $y2 - $y1
+                ];
+            }
+        }
+    }
+
+    return $words;
+}
+
 function find_tesseract(): ?string
 {
     if (PHP_OS_FAMILY === 'Windows') {

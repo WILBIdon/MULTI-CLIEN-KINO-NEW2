@@ -830,7 +830,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                 if (loadingModal) loadingModal.remove();
                 
                 if (result.success && result.matches && result.matches.length > 0) {
-                    // Solo mostrar badge pequeño con resultado
+                    // Mostrar badge pequeño con resultado
                     const ocrBadge = document.createElement('div');
                     ocrBadge.style.cssText = `
                         position: absolute;
@@ -848,6 +848,51 @@ $docIdForOcr = $documentId; // For OCR fallback
                     `;
                     ocrBadge.innerHTML = `✅ OCR: ${result.match_count} encontrado(s)`;
                     wrapper.appendChild(ocrBadge);
+                    
+                    // Dibujar rectángulos de resaltado si tenemos coordenadas
+                    if (result.highlights && result.highlights.length > 0 && result.image_width > 0) {
+                        // Obtener canvas para calcular escala
+                        const canvas = wrapper.querySelector('canvas');
+                        if (canvas) {
+                            const canvasWidth = canvas.width;
+                            const canvasHeight = canvas.height;
+                            const scaleX = canvasWidth / result.image_width;
+                            const scaleY = canvasHeight / result.image_height;
+                            
+                            // Crear overlay para los rectángulos
+                            const overlay = document.createElement('div');
+                            overlay.className = 'ocr-highlights-overlay';
+                            overlay.style.cssText = `
+                                position: absolute;
+                                top: 0;
+                                left: 0;
+                                width: ${canvasWidth}px;
+                                height: ${canvasHeight}px;
+                                pointer-events: none;
+                                z-index: 5;
+                            `;
+                            
+                            // Dibujar cada rectángulo de resaltado
+                            for (const hl of result.highlights) {
+                                const rect = document.createElement('div');
+                                rect.style.cssText = `
+                                    position: absolute;
+                                    left: ${hl.x * scaleX}px;
+                                    top: ${hl.y * scaleY}px;
+                                    width: ${hl.w * scaleX}px;
+                                    height: ${hl.h * scaleY}px;
+                                    background: rgba(250, 204, 21, 0.4);
+                                    border: 2px solid #facc15;
+                                    border-radius: 3px;
+                                    box-shadow: 0 0 8px rgba(250, 204, 21, 0.6);
+                                `;
+                                rect.title = hl.term;
+                                overlay.appendChild(rect);
+                            }
+                            
+                            wrapper.appendChild(overlay);
+                        }
+                    }
                     
                     console.log(`OCR: ${result.match_count} coincidencias en página ${pageNum}`);
                 }
