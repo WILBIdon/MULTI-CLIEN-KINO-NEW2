@@ -4,6 +4,8 @@
  * 
  * SOLO se llama cuando PDF.js no encuentra texto en una página.
  * Usa Tesseract OCR con HOCR para extraer texto Y coordenadas.
+ * 
+ * OPTIMIZACIÓN: Cache de resultados OCR para evitar re-procesamiento.
  */
 
 ini_set('display_errors', 0);
@@ -14,6 +16,7 @@ session_start();
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../helpers/tenant.php';
 require_once __DIR__ . '/../../helpers/pdf_extractor.php';
+require_once __DIR__ . '/../../helpers/cache_manager.php';
 
 header('Content-Type: application/json');
 
@@ -40,6 +43,54 @@ try {
         exit;
     }
 
+    // ============================================
+    // OPTIMIZACIÓN: Verificar cache antes de OCR
+    // ============================================
+    $cacheKey = "ocr_doc{$documentId}_p{$pageNum}";
+    $cachedOcr = CacheManager::get($clientCode, $cacheKey);
+
+    if ($cachedOcr && !empty($cachedOcr['words'])) {
+        // Usar datos cacheados - aplicar búsqueda de términos
+        $matches = [];
+        $highlights = [];
+
+        foreach ($cachedOcr['words'] as $word) {
+            foreach ($terms as $term) {
+                if (mb_stripos($word['text'], $term, 0, 'UTF-8') !== false) {
+                    $matches[] = [
+                        'term' => $term,
+                        'word' => $word['text'],
+                        'x' => $word['x'],
+                        'y' => $word['y'],
+                        'w' => $word['w'],
+                        'h' => $word['h']
+                    ];
+                    $highlights[] = [
+                        'x' => $word['x'],
+                        'y' => $word['y'],
+                        'w' => $word['w'],
+                        'h' => $word['h'],
+                        'term' => $term
+                    ];
+                }
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'matches' => $matches,
+            'match_count' => count($matches),
+            'highlights' => $highlights,
+            'image_width' => $cachedOcr['image_width'] ?? 0,
+            'image_height' => $cachedOcr['image_height'] ?? 0,
+            'text' => $cachedOcr['text'] ?? '',
+            'terms_searched' => $terms,
+            'source' => 'cache' // Indica que vino del cache
+        ]);
+        exit;
+    }
+    // ============================================
+
     // Resolve PDF path
     $uploadsDir = CLIENTS_DIR . "/{$clientCode}/uploads/";
     $pdfPath = null;
@@ -64,11 +115,25 @@ try {
     // Usar nueva función con coordenadas
     if (function_exists('extract_with_ocr_coordinates')) {
         $ocrResult = extract_with_ocr_coordinates($pdfPath, $pageNum);
+
+        // ============================================
+        // OPTIMIZACIÓN: Guardar resultado en cache (7 días)
+        // ============================================
+        if ($ocrResult['success'] && !empty($ocrResult['words'])) {
+            CacheManager::set($clientCode, $cacheKey, [
+                'words' => $ocrResult['words'],
+                'text' => $ocrResult['text'] ?? '',
+                'image_width' => $ocrResult['image_width'] ?? 0,
+                'image_height' => $ocrResult['image_height'] ?? 0
+            ], 604800); // 7 días
+        }
+        // ============================================
     } else {
         // Fallback a función anterior sin coordenadas
         $text = extract_text_from_pdf($pdfPath);
         $ocrResult = ['success' => !empty($text), 'text' => $text, 'words' => []];
     }
+
 
     if (!$ocrResult['success'] || empty($ocrResult['words'])) {
         // OCR falló o no hay palabras - intentar extracción simple
