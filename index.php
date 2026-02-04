@@ -792,9 +792,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                     loadDocuments();
                 } else if (result.warning) {
                     // Handle duplicate file warning
-                    const existingDoc = result.existing_doc;
-                    const docName = existingDoc ? existingDoc.numero : 'otro documento';
-                    alert(`⚠️ Archivo duplicado\n\nEste archivo PDF ya fue subido anteriormente.\n\nDocumento existente: "${docName}"\n\nSi necesitas asociar nuevos códigos, edita el documento existente desde la pestaña "Consultar".`);
+                    alert('Documento PDF duplicado: Este ya existe en la base de datos.');
                 } else if (result.error) {
                     alert('Error: ' + result.error);
                 } else {
