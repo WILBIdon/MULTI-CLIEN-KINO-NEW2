@@ -391,14 +391,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 <body>
     <div class="container">
-        <div class="header">
-            <h1>📤 Subir Documento</h1>
-            <div class="nav-links">
-                <a href="../trazabilidad/dashboard.php">🏠 Dashboard</a>
-                <a href="../busqueda/">🔍 Buscar</a>
-                <a href="../../logout.php">Salir</a>
-            </div>
-        </div>
+        <!-- Header eliminado - la navegación está en el sidebar principal -->
 
         <?php if ($message): ?>
             <div class="message">
