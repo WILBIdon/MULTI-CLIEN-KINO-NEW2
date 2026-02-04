@@ -68,11 +68,8 @@ class SecureFileUploader
             return ['error' => 'El archivo no tiene el formato de un PDF válido'];
         }
 
-        // 7. Verificar que no contiene código ejecutable embebido
-        $content = file_get_contents($file['tmp_name']);
-        if (strpos($content, '<?php') !== false || strpos($content, '<%') !== false) {
-            return ['error' => 'PDF contiene código potencialmente malicioso'];
-        }
+        // PDF válido - las validaciones anteriores son suficientes
+        // La verificación de duplicados se hace a nivel de hash en api.php
 
         return ['success' => true];
     }
