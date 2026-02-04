@@ -877,32 +877,69 @@ $pdfUrl = $baseUrl . 'clients/' . $clientCode . '/uploads/' . $relativePath;
     <title>Imprimir - ${document.title || 'Documento PDF'}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { background: #fff; }
+        html, body { 
+            background: #fff; 
+            width: 100%; 
+            height: 100%;
+        }
         .print-page {
-            display: block;
-            text-align: center;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             background: #fff;
+            overflow: hidden;
         }
         .print-page img {
             max-width: 100%;
+            max-height: 100%;
+            width: auto;
             height: auto;
-            display: inline-block;
+            object-fit: contain;
         }
         @media screen {
-            body { background: #e5e7eb; padding: 15px; }
-            .print-page { margin-bottom: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+            body { background: #e5e7eb; padding: 10px; }
+            .print-page { 
+                height: auto;
+                margin-bottom: 10px; 
+                box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+                aspect-ratio: 8.5 / 11;
+            }
         }
         @media print {
-            @page { margin: 5mm; size: auto; }
-            html, body { background: #fff !important; }
-            .print-page {
-                page-break-inside: avoid;
-                page-break-after: always;
-                margin: 0; padding: 0;
-                box-shadow: none; border: none;
+            @page { 
+                margin: 0; 
+                padding: 0;
+                size: letter;
             }
-            .print-page:last-of-type { page-break-after: avoid; }
-            .print-page img { max-width: 100%; height: auto; }
+            html, body { 
+                background: #fff !important;
+                width: 100% !important;
+                height: 100% !important;
+            }
+            .print-page {
+                width: 100vw;
+                height: 100vh;
+                page-break-after: always;
+                page-break-inside: avoid;
+                break-after: page;
+                break-inside: avoid;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+                border: none;
+                overflow: hidden;
+            }
+            .print-page:last-of-type { 
+                page-break-after: auto;
+                break-after: auto;
+            }
+            .print-page img { 
+                max-width: 100vw !important;
+                max-height: 100vh !important;
+                object-fit: contain !important;
+            }
         }
     </style>
 </head>
