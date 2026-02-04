@@ -644,10 +644,31 @@ $docIdForOcr = $documentId; // For OCR fallback
                 try {
                     const page = await pdfDoc.getPage(i);
                     const textContent = await page.getTextContent();
-                    const rawStr = textContent.items.map(x => x.str).join('');
-                    const cleanStr = rawStr.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-
+                    const hasText = textContent.items && textContent.items.length > 0;
+                    
                     let pageHasMatch = false;
+                    let cleanStr = '';
+                    
+                    if (hasText) {
+                        // CAMINO 1: PDF con texto embebido
+                        const rawStr = textContent.items.map(x => x.str).join('');
+                        cleanStr = rawStr.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                    } else if (missingMap.size > 0) {
+                        // CAMINO 2: PDF escaneado - usar OCR para el radar
+                        try {
+                            const docId = <?= $docIdForOcr ?>;
+                            const termsArr = Array.from(missingMap.values());
+                            const termsStr = encodeURIComponent(termsArr.join(','));
+                            const ocrResp = await fetch(`ocr_text.php?doc=${docId}&page=${i}&terms=${termsStr}`);
+                            const ocrResult = await ocrResp.json();
+                            
+                            if (ocrResult.success && ocrResult.text) {
+                                cleanStr = ocrResult.text.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                            }
+                        } catch (ocrErr) {
+                            console.warn('OCR radar error pg ' + i, ocrErr);
+                        }
+                    }
 
                     // Chequear coincidencias
                     for (let [key, original] of missingMap) {
