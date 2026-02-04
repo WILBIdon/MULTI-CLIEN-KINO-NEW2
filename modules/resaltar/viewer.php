@@ -812,12 +812,23 @@ $docIdForOcr = $documentId; // For OCR fallback
                         z-index: 100;
                         box-shadow: 0 4px 15px rgba(0,0,0,0.3);
                         font-family: system-ui, sans-serif;
+                        max-height: 200px;
+                        overflow-y: auto;
                     `;
                     
-                    // Agrupar matches por término
+                    // Agrupar matches por término y obtener contextos
                     const matchCounts = {};
+                    const contexts = [];
                     for (const m of result.matches) {
                         matchCounts[m.term] = (matchCounts[m.term] || 0) + 1;
+                        if (m.context && contexts.length < 3) { // Máximo 3 contextos
+                            // Resaltar el término dentro del contexto
+                            const highlighted = m.context.replace(
+                                new RegExp(`(${m.term})`, 'gi'), 
+                                '<mark style="background:#facc15;color:#000;padding:1px 3px;border-radius:2px;">$1</mark>'
+                            );
+                            contexts.push(highlighted);
+                        }
                     }
                     
                     let matchesHtml = Object.entries(matchCounts).map(([term, count]) => 
@@ -825,6 +836,13 @@ $docIdForOcr = $documentId; // For OCR fallback
                             <strong>${term}</strong> (${count}x)
                         </span>`
                     ).join(' ');
+                    
+                    let contextHtml = contexts.length > 0 ? `
+                        <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.3);">
+                            <div style="font-size:10px;opacity:0.7;margin-bottom:5px;">📄 Texto encontrado:</div>
+                            ${contexts.map(c => `<div style="background:rgba(255,255,255,0.15);padding:8px;border-radius:6px;margin:4px 0;font-size:11px;line-height:1.4;">...${c}...</div>`).join('')}
+                        </div>
+                    ` : '';
                     
                     ocrPanel.innerHTML = `
                         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
@@ -835,6 +853,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                             </div>
                         </div>
                         <div style="font-size:12px;">${matchesHtml}</div>
+                        ${contextHtml}
                     `;
                     
                     wrapper.appendChild(ocrPanel);
