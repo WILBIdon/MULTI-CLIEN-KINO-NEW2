@@ -974,6 +974,25 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             window.open(apiUrl + '?action=export_csv&tipo=' + tipo, '_blank');
         }
 
+        // ============ Toggle Codes Row ============
+        function toggleTableCodes(event, docId) {
+            event.preventDefault();
+            const codesRow = document.getElementById('codes-row-' + docId);
+            const btn = document.getElementById('btn-codes-' + docId);
+
+            if (codesRow.classList.contains('hidden')) {
+                codesRow.classList.remove('hidden');
+                btn.textContent = 'Ocultar Códigos';
+                btn.classList.add('btn-primary');
+                btn.classList.remove('btn-secondary');
+            } else {
+                codesRow.classList.add('hidden');
+                btn.textContent = 'Ver Códigos';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            }
+        }
+
         // ============ Full-Text Search in PDFs ============
         const fulltextInput = document.getElementById('fulltextSearch');
 
