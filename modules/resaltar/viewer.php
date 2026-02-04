@@ -800,19 +800,22 @@ $docIdForOcr = $documentId; // For OCR fallback
                     top: 50%;
                     left: 50%;
                     transform: translate(-50%, -50%);
-                    background: rgba(0,0,0,0.85);
+                    background: rgba(0,0,0,0.9);
                     color: white;
-                    padding: 30px 50px;
-                    border-radius: 15px;
+                    padding: 40px 60px;
+                    border-radius: 20px;
                     z-index: 9999;
                     text-align: center;
                     font-family: system-ui, sans-serif;
-                    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+                    box-shadow: 0 15px 50px rgba(0,0,0,0.6);
                 `;
                 loadingModal.innerHTML = `
-                    <div style="font-size:40px;margin-bottom:15px;">🔍</div>
-                    <div style="font-size:16px;font-weight:bold;">Analizando documento...</div>
-                    <div style="font-size:12px;opacity:0.7;margin-top:8px;">Extrayendo texto con OCR</div>
+                    <style>
+                        @keyframes ocr-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                    </style>
+                    <div style="width:60px;height:60px;border:4px solid rgba(255,255,255,0.2);border-top:4px solid #22c55e;border-radius:50%;animation:ocr-spin 1s linear infinite;margin:0 auto 20px;"></div>
+                    <div style="font-size:18px;font-weight:bold;">Analizando documento...</div>
+                    <div style="font-size:13px;opacity:0.7;margin-top:10px;">Extrayendo texto con OCR</div>
                 `;
                 document.body.appendChild(loadingModal);
             }
