@@ -790,102 +790,67 @@ $docIdForOcr = $documentId; // For OCR fallback
         
         // Fallback OCR: solo se usa para documentos escaneados (sin texto embebido)
         async function applyOcrHighlight(wrapper, textDiv, pageNum, allTerms) {
+            // Mostrar modal de "Analizando..."
+            let loadingModal = document.getElementById('ocr-loading-modal');
+            if (!loadingModal) {
+                loadingModal = document.createElement('div');
+                loadingModal.id = 'ocr-loading-modal';
+                loadingModal.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: rgba(0,0,0,0.85);
+                    color: white;
+                    padding: 30px 50px;
+                    border-radius: 15px;
+                    z-index: 9999;
+                    text-align: center;
+                    font-family: system-ui, sans-serif;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+                `;
+                loadingModal.innerHTML = `
+                    <div style="font-size:40px;margin-bottom:15px;">🔍</div>
+                    <div style="font-size:16px;font-weight:bold;">Analizando documento...</div>
+                    <div style="font-size:12px;opacity:0.7;margin-top:8px;">Extrayendo texto con OCR</div>
+                `;
+                document.body.appendChild(loadingModal);
+            }
+            
             try {
                 const docId = <?= $docIdForOcr ?>;
                 const termsStr = encodeURIComponent(allTerms.join(','));
                 const response = await fetch(`ocr_text.php?doc=${docId}&page=${pageNum}&terms=${termsStr}`);
                 const result = await response.json();
                 
+                // Ocultar modal
+                if (loadingModal) loadingModal.remove();
+                
                 if (result.success && result.matches && result.matches.length > 0) {
-                    // Crear panel de resultados OCR visible
-                    const ocrPanel = document.createElement('div');
-                    ocrPanel.className = 'ocr-results-panel';
-                    ocrPanel.style.cssText = `
+                    // Solo mostrar badge pequeño con resultado
+                    const ocrBadge = document.createElement('div');
+                    ocrBadge.style.cssText = `
                         position: absolute;
                         top: 10px;
-                        left: 10px;
                         right: 10px;
-                        background: linear-gradient(135deg, rgba(22, 163, 74, 0.95), rgba(5, 150, 105, 0.95));
+                        background: #16a34a;
                         color: white;
-                        padding: 15px;
-                        border-radius: 10px;
+                        padding: 8px 15px;
+                        border-radius: 8px;
                         z-index: 100;
-                        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
                         font-family: system-ui, sans-serif;
-                        max-height: 200px;
-                        overflow-y: auto;
+                        font-size: 13px;
+                        font-weight: bold;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
                     `;
-                    
-                    // Agrupar matches por término y obtener contextos
-                    const matchCounts = {};
-                    const contexts = [];
-                    for (const m of result.matches) {
-                        matchCounts[m.term] = (matchCounts[m.term] || 0) + 1;
-                        if (m.context && contexts.length < 3) { // Máximo 3 contextos
-                            // Resaltar el término dentro del contexto
-                            const highlighted = m.context.replace(
-                                new RegExp(`(${m.term})`, 'gi'), 
-                                '<mark style="background:#facc15;color:#000;padding:1px 3px;border-radius:2px;">$1</mark>'
-                            );
-                            contexts.push(highlighted);
-                        }
-                    }
-                    
-                    let matchesHtml = Object.entries(matchCounts).map(([term, count]) => 
-                        `<span style="background:rgba(255,255,255,0.2);padding:3px 8px;border-radius:4px;margin:2px;display:inline-block;">
-                            <strong>${term}</strong> (${count}x)
-                        </span>`
-                    ).join(' ');
-                    
-                    let contextHtml = contexts.length > 0 ? `
-                        <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.3);">
-                            <div style="font-size:10px;opacity:0.7;margin-bottom:5px;">📄 Texto encontrado:</div>
-                            ${contexts.map(c => `<div style="background:rgba(255,255,255,0.15);padding:8px;border-radius:6px;margin:4px 0;font-size:11px;line-height:1.4;">...${c}...</div>`).join('')}
-                        </div>
-                    ` : '';
-                    
-                    ocrPanel.innerHTML = `
-                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                            <span style="font-size:24px;">🔍</span>
-                            <div>
-                                <div style="font-weight:bold;font-size:14px;">OCR encontró ${result.match_count} coincidencia(s)</div>
-                                <div style="font-size:11px;opacity:0.8;">Documento escaneado - texto extraído via OCR</div>
-                            </div>
-                        </div>
-                        <div style="font-size:12px;">${matchesHtml}</div>
-                        ${contextHtml}
-                    `;
-                    
-                    wrapper.appendChild(ocrPanel);
-                    
-                    // También agregar el texto para Mark.js (por si acaso funciona en algunos navegadores)
-                    const textSpan = document.createElement('span');
-                    textSpan.textContent = result.text || '';
-                    textSpan.style.cssText = 'position:absolute;top:0;left:0;opacity:0.01;font-size:12px;white-space:pre-wrap;width:100%;height:100%;overflow:hidden;';
-                    textDiv.appendChild(textSpan);
-                    
-                    const instance = new Mark(textDiv);
-                    instance.mark(allTerms, { element: "mark", accuracy: "partially", className: "highlight-hit" });
+                    ocrBadge.innerHTML = `✅ OCR: ${result.match_count} encontrado(s)`;
+                    wrapper.appendChild(ocrBadge);
                     
                     console.log(`OCR: ${result.match_count} coincidencias en página ${pageNum}`);
-                } else if (result.success && result.match_count === 0) {
-                    // No hay coincidencias pero OCR funcionó
-                    const ocrInfo = document.createElement('div');
-                    ocrInfo.style.cssText = `
-                        position: absolute;
-                        top: 10px;
-                        right: 10px;
-                        background: rgba(239, 68, 68, 0.9);
-                        color: white;
-                        padding: 8px 12px;
-                        border-radius: 6px;
-                        font-size: 11px;
-                        z-index: 100;
-                    `;
-                    ocrInfo.innerHTML = '🔍 OCR: Sin coincidencias';
-                    wrapper.appendChild(ocrInfo);
                 }
             } catch (e) {
+                // Ocultar modal en caso de error
+                if (loadingModal) loadingModal.remove();
                 console.warn(`OCR fallback error en página ${pageNum}:`, e);
             }
         }
@@ -962,7 +927,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                                     const height = (item.height || 12) * printScale;
 
                                     ctx.fillRect(x, y - height, width, height);
-                                    break; // Solo un resaltado por item
+                         break; // Solo un resaltado por item
                                 }
                             }
                         }
