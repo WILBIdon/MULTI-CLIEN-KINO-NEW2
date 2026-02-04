@@ -28,8 +28,8 @@ $code = $_SESSION['client_code'];
 $db = open_client_db($code);
 $stats = get_search_stats($db);
 
-// For sidebar
-$currentModule = 'gestor';
+// For sidebar - Nueva estructura
+$currentSection = 'voraz';
 $baseUrl = './';
 $pageTitle = 'Gestor de Documentos';
 ?>
@@ -395,18 +395,11 @@ $pageTitle = 'Gestor de Documentos';
                     </div>
                 </div>
 
-                <!-- Tabs -->
+                <!-- Secciones (sin tabs, controladas desde sidebar) -->
                 <div class="card">
-                    <div class="tabs" id="mainTabs">
-                        <button class="tab active" data-tab="voraz">🎯 Búsqueda Voraz</button>
-                        <button class="tab" data-tab="subir">Subir</button>
-                        <button class="tab" data-tab="consultar">Consultar</button>
-                        <button class="tab" data-tab="codigo">Búsqueda por Código</button>
-                    </div>
 
-                    <!-- Tab: Buscar -->
-                    <!-- Tab: Búsqueda Voraz -->
-                    <div class="tab-content active" id="tab-voraz">
+                    <!-- Sección: Búsqueda Voraz -->
+                    <div class="section-content active" id="section-voraz">
                         <h3 style="margin-bottom: 1rem;">🎯 Búsqueda Voraz Inteligente</h3>
                         <p class="text-muted mb-4">Pega un bloque de texto con códigos. El sistema extraerá
                             automáticamente la primera columna y buscará esos códigos.</p>
@@ -452,8 +445,8 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                         </div>
                     </div>
 
-                    <!-- Tab: Subir -->
-                    <div class="tab-content" id="tab-subir">
+                    <!-- Sección: Subir -->
+                    <div class="section-content" id="section-subir">
                         <h3 style="margin-bottom: 1rem;">Subir Documento</h3>
 
                         <form id="uploadForm">
@@ -521,8 +514,8 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                         </form>
                     </div>
 
-                    <!-- Tab: Consultar -->
-                    <div class="tab-content" id="tab-consultar">
+                    <!-- Sección: Consultar -->
+                    <div class="section-content" id="section-consultar">
                         <div class="flex justify-between items-center mb-4">
                             <h3>Lista de Documentos</h3>
                             <div class="flex gap-2">
@@ -600,8 +593,8 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                         </div>
                     </div>
 
-                    <!-- Tab: Búsqueda por Código -->
-                    <div class="tab-content" id="tab-codigo">
+                    <!-- Sección: Búsqueda por Código -->
+                    <div class="section-content" id="section-codigo">
                         <h3 style="margin-bottom: 1rem;">Búsqueda por Código</h3>
                         <p class="text-muted mb-4">Busca un código específico con autocompletado.</p>
 
@@ -616,6 +609,14 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                             <div id="singleCodeList" class="results-list"></div>
                         </div>
                     </div>
+
+                    <!-- Sección: Backup -->
+                    <div class="section-content" id="section-backup">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <p>Cargando backup...</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -628,50 +629,27 @@ Se extraerán solo los códigos de la izquierda."></textarea>
         const clientCode = '<?= $code ?>';
         let currentPage = 1;
 
-        // ============ Tabs ============
-        document.querySelectorAll('#mainTabs .tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('#mainTabs .tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+        // ============ Sections (controlled from sidebar) ============
+        // La función switchSection está definida en sidebar.php
+        // Este código mantiene compatibilidad con el antiguo sistema
 
-                if (tab.dataset.tab === 'consultar') {
-                    loadDocuments();
-                }
-            });
-        });
-
-
-        // Function to programmatically switch tabs
+        // Función de compatibilidad para código que usaba switchTab
         function switchTab(tabName) {
-            document.querySelectorAll('#mainTabs .tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
-            const targetTab = document.querySelector(`#mainTabs .tab[data-tab="${tabName}"]`);
-            if (targetTab) {
-                targetTab.classList.add('active');
-            }
-
-            const targetContent = document.getElementById('tab-' + tabName);
-            if (targetContent) {
-                targetContent.classList.add('active');
-            }
-
-            if (tabName === 'consultar') {
-                loadDocuments();
+            // Mapear nombres de tab a secciones
+            const section = tabName === 'codigo' ? 'codigo' : tabName;
+            if (typeof switchSection === 'function') {
+                switchSection(section);
             }
         }
 
-        // Initialize tab from URL
+        // Initialize section from URL
         document.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
-            const tabParam = urlParams.get('tab');
-            if (tabParam) {
-                switchTab(tabParam);
+            const sectionParam = urlParams.get('section') || urlParams.get('tab');
+            if (sectionParam && typeof switchSection === 'function') {
+                switchSection(sectionParam);
             }
         });
-
 
 
         // ============ Upload Tab ============

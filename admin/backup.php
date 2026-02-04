@@ -160,10 +160,197 @@ if (is_dir($uploadsDir)) {
     }
 }
 
-// For sidebar
-$currentModule = 'backup';
+// Partial load for AJAX (from sidebar)
+if (isset($_GET['partial']) && $_GET['partial'] === '1') {
+    // Return only the content without layout
+    ?>
+    <div class="backup-hero">
+        <div class="backup-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+        </div>
+        <h1>💾 Respaldo de Datos</h1>
+        <p>Descarga una copia completa de seguridad de todos tus documentos y base de datos.</p>
+
+        <div class="backup-stats">
+            <div class="backup-stat">
+                <div class="value"><?= number_format($stats['documents']) ?></div>
+                <div class="label">Documentos</div>
+            </div>
+            <div class="backup-stat">
+                <div class="value"><?= number_format($stats['codes']) ?></div>
+                <div class="label">Códigos</div>
+            </div>
+            <div class="backup-stat">
+                <div class="value"><?= number_format($fileCount) ?></div>
+                <div class="label">Archivos PDF</div>
+            </div>
+            <div class="backup-stat">
+                <div class="value"><?= formatBytes($uploadsSize) ?></div>
+                <div class="label">Tamaño Total</div>
+            </div>
+        </div>
+
+        <a href="admin/backup.php?download=1" class="backup-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Descargar Backup Completo
+        </a>
+    </div>
+
+    <div class="backup-info">
+        <h3>📋 ¿Qué incluye el backup?</h3>
+        <ul>
+            <li>Base de datos SQLite completa (documentos, códigos, vínculos)</li>
+            <li>Todos los archivos PDF subidos</li>
+            <li>Estructura de carpetas preservada</li>
+            <li>Archivo ZIP listo para restaurar</li>
+        </ul>
+    </div>
+
+    <div class="backup-info" style="margin-top: 1rem;">
+        <h3>💡 Recomendaciones</h3>
+        <ul>
+            <li>Realiza backups periódicamente (semanal o mensual)</li>
+            <li>Guarda el archivo en un lugar seguro externo</li>
+            <li>Verifica que el ZIP descargue correctamente</li>
+            <li>El nombre del archivo incluye la fecha del backup</li>
+        </ul>
+    </div>
+
+    <style>
+        .backup-hero {
+            text-align: center;
+            padding: 2rem;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
+            border-radius: var(--radius-lg);
+            margin-bottom: 1.5rem;
+        }
+
+        .backup-icon {
+            width: 70px;
+            height: 70px;
+            background: var(--accent-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            color: white;
+        }
+
+        .backup-icon svg {
+            width: 35px;
+            height: 35px;
+        }
+
+        .backup-hero h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .backup-hero p {
+            color: var(--text-secondary);
+            max-width: 450px;
+            margin: 0 auto 1.5rem;
+        }
+
+        .backup-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .backup-stat {
+            background: var(--bg-secondary);
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            text-align: center;
+        }
+
+        .backup-stat .value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent-primary);
+        }
+
+        .backup-stat .label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        .backup-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.875rem 1.5rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .backup-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+            color: white;
+        }
+
+        .backup-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .backup-info {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+        }
+
+        .backup-info h3 {
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
+        }
+
+        .backup-info ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .backup-info li {
+            padding: 0.4rem 0;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .backup-info li::before {
+            content: '✓';
+            color: var(--accent-success);
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+    </style>
+    <?php
+    exit;
+}
+
+// For sidebar (full page load)
+$currentSection = 'backup';
 $baseUrl = '../';
 $pageTitle = 'Respaldo de Datos';
+
 ?>
 <!DOCTYPE html>
 <html lang="es">
