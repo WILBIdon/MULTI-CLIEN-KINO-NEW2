@@ -323,16 +323,15 @@ while ($row = $allDocsStmt->fetch(PDO::FETCH_ASSOC)) {
                 let processedCount = 0;
                 let pending = totalPending;
                 // Use a large batch size to attempt single-pass, but support loop if needed
-                const batchSize = 50; 
+                const batchSize = 50;
 
                 try {
                     do {
                         // Request batch
                         const response = await fetch(`${apiUrl}?action=reindex_documents&batch=${batchSize}`);
-                        
+
                         // 1. Get raw text first
                         const rawText = await response.text();
-                        console.log("Server Response:", rawText); 
 
                         if (!rawText.trim()) {
                             throw new Error("El servidor devolvió una respuesta vacía.");
@@ -343,8 +342,8 @@ while ($row = $allDocsStmt->fetch(PDO::FETCH_ASSOC)) {
                         try {
                             result = JSON.parse(rawText);
                         } catch (e) {
-                             console.error("JSON Parse Error:", e);
-                             throw new Error(`Respuesta inválida (no JSON): ${rawText.substring(0, 100)}...`);
+                            console.error("JSON Parse Error:", e);
+                            throw new Error(`Respuesta inválida (no JSON): ${rawText.substring(0, 100)}...`);
                         }
 
                         if (!result.success) {
@@ -363,7 +362,7 @@ while ($row = $allDocsStmt->fetch(PDO::FETCH_ASSOC)) {
 
                         // Safety break if no progress is made
                         if (result.indexed === 0 && pending > 0) {
-                             throw new Error(`El proceso se detuvo. ${pending} documentos no se pudieron procesar (posiblemente archivos faltantes).`);
+                            throw new Error(`El proceso se detuvo. ${pending} documentos no se pudieron procesar (posiblemente archivos faltantes).`);
                         }
 
                     } while (pending > 0);

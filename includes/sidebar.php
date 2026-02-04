@@ -112,10 +112,7 @@ $currentModule = $currentModule ?? '';
                 <a href="<?= $baseUrl ?? '' ?>modules/importar/" class="nav-subitem">
                     📡 Importar Backup (SQL)
                 </a>
-                <a href="<?= $baseUrl ?? '' ?>modules/importar_masiva/" class="nav-subitem"
-                    style="color: #4dabf7; font-weight: bold;">
-                    📑 Importación Masiva (CSV)
-                </a>
+
                 <a href="<?= $baseUrl ?? '' ?>modules/lote/" class="nav-subitem">
                     📦 Subida por Lote
                 </a>
@@ -131,9 +128,7 @@ $currentModule = $currentModule ?? '';
                 <a href="<?= $baseUrl ?? '' ?>modules/trazabilidad/validar.php" class="nav-subitem">
                     ✅ Validar
                 </a>
-                <a href="<?= $baseUrl ?? '' ?>modules/importar_sql/" class="nav-subitem">
-                    🚀 Importación Av.
-                </a>
+
             </div>
         </div>
 

@@ -645,10 +645,10 @@ $docIdForOcr = $documentId; // For OCR fallback
                     const page = await pdfDoc.getPage(i);
                     const textContent = await page.getTextContent();
                     const hasText = textContent.items && textContent.items.length > 0;
-                    
+
                     let pageHasMatch = false;
                     let cleanStr = '';
-                    
+
                     if (hasText) {
                         // CAMINO 1: PDF con texto embebido
                         const rawStr = textContent.items.map(x => x.str).join('');
@@ -661,7 +661,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                             const termsStr = encodeURIComponent(termsArr.join(','));
                             const ocrResp = await fetch(`ocr_text.php?doc=${docId}&page=${i}&terms=${termsStr}`);
                             const ocrResult = await ocrResp.json();
-                            
+
                             if (ocrResult.success && ocrResult.text) {
                                 cleanStr = ocrResult.text.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
                             }
@@ -787,7 +787,7 @@ $docIdForOcr = $documentId; // For OCR fallback
 
             } catch (err) { console.error("Render err pg " + pageNum, err); }
         }
-        
+
         // Fallback OCR: solo se usa para documentos escaneados (sin texto embebido)
         async function applyOcrHighlight(wrapper, textDiv, pageNum, allTerms) {
             // Mostrar modal de "Analizando..."
@@ -819,16 +819,16 @@ $docIdForOcr = $documentId; // For OCR fallback
                 `;
                 document.body.appendChild(loadingModal);
             }
-            
+
             try {
                 const docId = <?= $docIdForOcr ?>;
                 const termsStr = encodeURIComponent(allTerms.join(','));
                 const response = await fetch(`ocr_text.php?doc=${docId}&page=${pageNum}&terms=${termsStr}`);
                 const result = await response.json();
-                
+
                 // Ocultar modal
                 if (loadingModal) loadingModal.remove();
-                
+
                 if (result.success && result.matches && result.matches.length > 0) {
                     // Mostrar badge pequeño con resultado
                     const ocrBadge = document.createElement('div');
@@ -848,7 +848,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                     `;
                     ocrBadge.innerHTML = `✅ OCR: ${result.match_count} encontrado(s)`;
                     wrapper.appendChild(ocrBadge);
-                    
+
                     // Dibujar rectángulos de resaltado si tenemos coordenadas
                     if (result.highlights && result.highlights.length > 0 && result.image_width > 0) {
                         // Obtener canvas para calcular escala
@@ -858,7 +858,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                             const canvasHeight = canvas.height;
                             const scaleX = canvasWidth / result.image_width;
                             const scaleY = canvasHeight / result.image_height;
-                            
+
                             // Crear overlay para los rectángulos
                             const overlay = document.createElement('div');
                             overlay.className = 'ocr-highlights-overlay';
@@ -871,7 +871,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                                 pointer-events: none;
                                 z-index: 5;
                             `;
-                            
+
                             // Dibujar cada rectángulo de resaltado
                             for (const hl of result.highlights) {
                                 const rect = document.createElement('div');
@@ -881,19 +881,18 @@ $docIdForOcr = $documentId; // For OCR fallback
                                     top: ${hl.y * scaleY}px;
                                     width: ${hl.w * scaleX}px;
                                     height: ${hl.h * scaleY}px;
-                                    background: rgba(250, 204, 21, 0.4);
-                                    border: 2px solid #facc15;
-                                    border-radius: 3px;
-                                    box-shadow: 0 0 8px rgba(250, 204, 21, 0.6);
+                                    background: rgba(34, 197, 94, 0.45);
+                                    border: none;
+                                    border-radius: 2px;
                                 `;
                                 rect.title = hl.term;
                                 overlay.appendChild(rect);
                             }
-                            
+
                             wrapper.appendChild(overlay);
                         }
                     }
-                    
+
                     console.log(`OCR: ${result.match_count} coincidencias en página ${pageNum}`);
                 }
             } catch (e) {
@@ -975,7 +974,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                                     const height = (item.height || 12) * printScale;
 
                                     ctx.fillRect(x, y - height, width, height);
-                         break; // Solo un resaltado por item
+                                    break; // Solo un resaltado por item
                                 }
                             }
                         }

@@ -274,7 +274,6 @@ $pageTitle = 'Importación Avanzada';
             // Attach click handler via code, not HTML attribute
             document.getElementById('processBtn').addEventListener('click', (e) => {
                 e.preventDefault();
-                console.log('Button clicked via listener');
                 submitForm();
             });
         });
