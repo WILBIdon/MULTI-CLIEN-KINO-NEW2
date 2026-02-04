@@ -55,7 +55,7 @@ class DocumentController extends BaseController
             $extractResult = extract_codes_from_pdf($targetPath);
             if ($extractResult['success']) {
                 $datosExtraidos = [
-                    'text' => substr($extractResult['text'], 0, 10000),
+                    'text' => substr($extractResult['text'], 0, 50000),
                     'auto_codes' => $extractResult['codes']
                 ];
             }
@@ -151,7 +151,7 @@ class DocumentController extends BaseController
                 $extractResult = extract_codes_from_pdf($targetPath);
                 if ($extractResult['success']) {
                     $datosExtraidos = [
-                        'text' => substr($extractResult['text'], 0, 10000),
+                        'text' => substr($extractResult['text'], 0, 50000),
                         'auto_codes' => $extractResult['codes']
                     ];
                 }
