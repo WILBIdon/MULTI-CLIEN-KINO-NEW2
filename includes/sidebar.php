@@ -517,6 +517,27 @@ $currentSection = $currentSection ?? 'voraz';
 
     // Switch Section (cambiar contenido principal)
     function switchSection(sectionName) {
+        // Check if we're on a page that has the section content (like index.php)
+        const targetSection = document.getElementById('section-' + sectionName);
+
+        // If the section doesn't exist, redirect to index.php with section parameter
+        if (!targetSection) {
+            // Determine the base URL relative to current location
+            let baseUrl = './';
+            const path = window.location.pathname;
+
+            // If we're in a subdirectory (like modules/resaltar/), adjust the path
+            if (path.includes('/modules/')) {
+                // Count how many levels deep we are
+                const parts = path.split('/modules/')[1];
+                const depth = (parts.match(/\//g) || []).length;
+                baseUrl = '../'.repeat(depth + 1);
+            }
+
+            window.location.href = baseUrl + 'index.php?section=' + sectionName;
+            return;
+        }
+
         // Actualizar botones activos
         document.querySelectorAll('.nav-section-btn').forEach(btn => {
             btn.classList.remove('active');
@@ -530,10 +551,7 @@ $currentSection = $currentSection ?? 'voraz';
         document.querySelectorAll('.section-content').forEach(section => {
             section.classList.remove('active');
         });
-        const targetSection = document.getElementById('section-' + sectionName);
-        if (targetSection) {
-            targetSection.classList.add('active');
-        }
+        targetSection.classList.add('active');
 
         // Cargar documentos si es la sección "consultar"
         if (sectionName === 'consultar' && typeof loadDocuments === 'function') {
