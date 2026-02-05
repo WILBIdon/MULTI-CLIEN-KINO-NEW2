@@ -71,9 +71,23 @@ if (!empty($searchTerm)) {
     <title>Documento -
         <?= htmlspecialchars($document['numero']) ?>
     </title>
+    <?php
+    $clientConfig = get_client_config($clientCode);
+    $cP = $clientConfig['color_primario'] ?? '#c41e3a';
+    $cS = $clientConfig['color_secundario'] ?? '#333';
+    ?>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mark.js/dist/mark.min.js"></script>
     <style>
+        :root {
+            --primary-color:
+                <?= $cP ?>
+            ;
+            --secondary-color:
+                <?= $cS ?>
+            ;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -106,7 +120,7 @@ if (!empty($searchTerm)) {
         }
 
         .header-badge {
-            background: #c41e3a;
+            background: var(--primary-color);
             color: white;
             padding: 4px 12px;
             border-radius: 6px;
@@ -198,7 +212,7 @@ if (!empty($searchTerm)) {
             width: 50px;
             height: 50px;
             border: 4px solid #f3f3f3;
-            border-top: 4px solid #c41e3a;
+            border-top: 4px solid var(--primary-color);
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
@@ -225,7 +239,7 @@ if (!empty($searchTerm)) {
         }
 
         .public-footer a {
-            color: #c41e3a;
+            color: var(--primary-color);
             text-decoration: none;
         }
 

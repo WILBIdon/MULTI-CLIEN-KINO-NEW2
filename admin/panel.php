@@ -52,6 +52,24 @@ try {
 
                     $extraMsg = '';
 
+                    // Process logo upload
+                    if (!empty($_FILES['logo_file']['tmp_name']) && $_FILES['logo_file']['error'] === UPLOAD_ERR_OK) {
+                        $logoExt = strtolower(pathinfo($_FILES['logo_file']['name'], PATHINFO_EXTENSION));
+                        if (in_array($logoExt, ['png', 'jpg', 'jpeg', 'gif'])) {
+                            $logoDir = CLIENTS_DIR . "/{$code}/";
+                            $logoPath = $logoDir . 'logo.' . $logoExt;
+                            // Remove old logos
+                            foreach (['png', 'jpg', 'jpeg', 'gif'] as $ext) {
+                                $old = $logoDir . 'logo.' . $ext;
+                                if (file_exists($old))
+                                    unlink($old);
+                            }
+                            if (move_uploaded_file($_FILES['logo_file']['tmp_name'], $logoPath)) {
+                                $extraMsg .= ' + Logo subido.';
+                            }
+                        }
+                    }
+
                     // Copy KINO reference data if requested
                     if ($copyKinoData) {
                         $kinoDb = open_client_db('kino');
@@ -147,7 +165,7 @@ try {
             }
         }
 
-        // ACTUALIZAR COLORES
+        // ACTUALIZAR COLORES Y LOGO
         elseif ($action === 'update_colors') {
             $code = sanitize_code($_POST['client_code'] ?? '');
             $titulo = trim($_POST['titulo'] ?? '');
@@ -157,7 +175,26 @@ try {
             if ($code !== '') {
                 $stmt = $centralDb->prepare('UPDATE control_clientes SET titulo = ?, color_primario = ?, color_secundario = ? WHERE codigo = ?');
                 $stmt->execute([$titulo, $colorP, $colorS, $code]);
-                $message = "✅ Colores actualizados para '{$code}'.";
+                
+                $logoMsg = '';
+                // Process logo upload if provided
+                if (!empty($_FILES['logo_file']['tmp_name']) && $_FILES['logo_file']['error'] === UPLOAD_ERR_OK) {
+                    $logoExt = strtolower(pathinfo($_FILES['logo_file']['name'], PATHINFO_EXTENSION));
+                    if (in_array($logoExt, ['png', 'jpg', 'jpeg', 'gif'])) {
+                        $logoDir = CLIENTS_DIR . "/{$code}/";
+                        $logoPath = $logoDir . 'logo.' . $logoExt;
+                        // Remove old logos
+                        foreach (['png', 'jpg', 'jpeg', 'gif'] as $ext) {
+                            $old = $logoDir . 'logo.' . $ext;
+                            if (file_exists($old)) unlink($old);
+                        }
+                        if (move_uploaded_file($_FILES['logo_file']['tmp_name'], $logoPath)) {
+                            $logoMsg = ' + Logo actualizado.';
+                        }
+                    }
+                }
+                
+                $message = "✅ Cliente '{$code}' actualizado." . $logoMsg;
             }
         }
 
@@ -650,8 +687,9 @@ $clientCodes = array_column($clients, 'codigo');
                                 </div>
                             </div>
                         </div>
-                        
-                        <div class="form-group" style="padding: 0.75rem; background: rgba(59,130,246,0.05); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">
+
+                        <div class="form-group"
+                            style="padding: 0.75rem; background: rgba(59,130,246,0.05); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">
                             <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" name="copy_kino_data">
                                 <span>📦 Copiar datos de referencia de KINO</span>
@@ -660,7 +698,16 @@ $clientCodes = array_column($clients, 'codigo');
                                 Incluye 119 documentos y 18,400 códigos de inventario
                             </p>
                         </div>
-                        
+
+                        <div class="form-group">
+                            <label class="form-label">🖼️ Logo del Cliente (PNG/JPG)</label>
+                            <input type="file" class="form-input" name="logo_file" accept=".png,.jpg,.jpeg,.gif"
+                                style="padding: 0.5rem;">
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
+                                Imagen pequeña para mostrar en Dashboard y Buscador (recomendado: 200x80px)
+                            </p>
+                        </div>
+
                         <div class="form-group">
                             <label class="form-label">📁 Subir PDFs (ZIP opcional)</label>
                             <input type="file" class="form-input" name="zip_file" accept=".zip"
@@ -669,7 +716,7 @@ $clientCodes = array_column($clients, 'codigo');
                                 Sube un archivo ZIP con PDFs para importar automáticamente
                             </p>
                         </div>
-                        
+
                         <button type="submit" class="btn btn-primary" style="width: 100%;">Crear Cliente</button>
                     </form>
                 </div>
@@ -749,7 +796,7 @@ $clientCodes = array_column($clients, 'codigo');
     <div class="modal-overlay" id="editModal">
         <div class="modal">
             <h3>Editar Cliente</h3>
-            <form method="post">
+            <form method="post" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="update_colors">
                 <input type="hidden" name="client_code" id="editClientCode">
                 <div class="form-group">
@@ -768,6 +815,14 @@ $clientCodes = array_column($clients, 'codigo');
                             <label>Secundario</label>
                         </div>
                     </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">🖼️ Logo del Cliente</label>
+                    <div id="currentLogoPreview" style="margin-bottom: 0.5rem;"></div>
+                    <input type="file" class="form-input" name="logo_file" accept=".png,.jpg,.jpeg,.gif" style="padding: 0.5rem;">
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
+                        Dejar vacío para mantener el logo actual
+                    </p>
                 </div>
                 <div class="flex gap-2 mt-4">
                     <button type="submit" class="btn btn-primary">Guardar</button>

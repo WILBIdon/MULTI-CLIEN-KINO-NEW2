@@ -38,7 +38,32 @@ $db = open_client_db($clientCode);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Búsqueda por Código - KINO COMPANY</title>
     <link rel="stylesheet" href="../../assets/css/styles.css">
+    <?php
+    $clientConfig = get_client_config($clientCode);
+    $cP = $clientConfig['color_primario'] ?? '#c41e3a';
+    $cS = $clientConfig['color_secundario'] ?? '#333';
+    $clientName = $clientConfig['titulo'] ?? $clientConfig['nombre'] ?? 'KINO COMPANY';
+
+    // Detect logo
+    $clientLogo = '';
+    $extensions = ['png', 'jpg', 'jpeg', 'gif'];
+    foreach ($extensions as $ext) {
+        if (file_exists(__DIR__ . '/../../clients/' . $clientCode . '/logo.' . $ext)) {
+            $clientLogo = 'clients/' . $clientCode . '/logo.' . $ext;
+            break;
+        }
+    }
+    ?>
     <style>
+        :root {
+            --primary-color:
+                <?= $cP ?>
+            ;
+            --secondary-color:
+                <?= $cS ?>
+            ;
+        }
+
         /* Reset y estilos base */
         * {
             margin: 0;
@@ -108,11 +133,11 @@ $db = open_client_db($clientCode);
         }
 
         .logo-text .kino {
-            color: #c41e3a;
+            color: var(--primary-color);
         }
 
         .logo-text .company {
-            color: #666;
+            color: var(--secondary-color);
             font-weight: 400;
             letter-spacing: 8px;
             font-size: 14px;
@@ -174,7 +199,7 @@ $db = open_client_db($clientCode);
         }
 
         .modo-uso .link-red {
-            color: #c41e3a;
+            color: var(--primary-color);
             font-weight: 600;
         }
 
@@ -211,7 +236,7 @@ $db = open_client_db($clientCode);
         }
 
         .search-input:focus {
-            border-color: #c41e3a;
+            border-color: var(--primary-color);
         }
 
         .search-input::placeholder {
@@ -223,7 +248,7 @@ $db = open_client_db($clientCode);
             font-size: 16px;
             font-weight: 600;
             color: white;
-            background: #c41e3a;
+            background: var(--primary-color);
             border: none;
             border-radius: 8px;
             cursor: pointer;
@@ -231,9 +256,10 @@ $db = open_client_db($clientCode);
         }
 
         .btn-buscar:hover {
-            background: #a01830;
+            background: var(--primary-color);
+            filter: brightness(0.9);
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(196, 30, 58, 0.3);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         }
 
         .btn-limpiar {
@@ -276,7 +302,7 @@ $db = open_client_db($clientCode);
         }
 
         .result-item:hover {
-            border-color: #c41e3a;
+            border-color: var(--primary-color);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
 
@@ -288,7 +314,7 @@ $db = open_client_db($clientCode);
         }
 
         .result-badge {
-            background: #c41e3a;
+            background: var(--primary-color);
             color: white;
             padding: 4px 12px;
             border-radius: 6px;
@@ -320,7 +346,7 @@ $db = open_client_db($clientCode);
             font-size: 14px;
             font-weight: 600;
             color: white;
-            background: #c41e3a;
+            background: var(--primary-color);
             border: none;
             border-radius: 6px;
             cursor: pointer;
@@ -329,7 +355,8 @@ $db = open_client_db($clientCode);
         }
 
         .btn-ver-pdf:hover {
-            background: #a01830;
+            background: var(--primary-color);
+            filter: brightness(0.9);
         }
 
         .no-results {
@@ -348,7 +375,7 @@ $db = open_client_db($clientCode);
             width: 40px;
             height: 40px;
             border: 4px solid #f3f3f3;
-            border-top: 4px solid #c41e3a;
+            border-top: 4px solid var(--primary-color);
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin: 0 auto 15px;
@@ -383,14 +410,14 @@ $db = open_client_db($clientCode);
         }
 
         .footer-contact {
-            color: #c41e3a;
+            color: var(--primary-color);
             font-weight: 600;
             font-size: 14px;
             margin-bottom: 8px;
         }
 
         .footer-link {
-            color: #c41e3a;
+            color: var(--primary-color);
             text-decoration: none;
             font-size: 14px;
         }
@@ -404,7 +431,7 @@ $db = open_client_db($clientCode);
         }
 
         .footer-legal a {
-            color: #c41e3a;
+            color: var(--primary-color);
             text-decoration: underline;
             font-size: 13px;
         }
@@ -436,18 +463,16 @@ $db = open_client_db($clientCode);
         <div class="buscador-card">
             <!-- LOGO - Espacio reservado para agregar después -->
             <div class="logo-container">
-                <div class="logo-placeholder">
-                    <!-- 
-                        INSTRUCCIONES PARA AGREGAR LOGO:
-                        1. Coloca tu imagen en: assets/img/logo-kino.png (o similar)
-                        2. Reemplaza el contenido de este div con:
-                           <img src="../../assets/img/logo-kino.png" alt="KINO COMPANY">
-                        3. Ajusta el tamaño en .logo-placeholder según necesites
-                    -->
-                    <div class="logo-text">
-                        <span class="kino">KINO</span>
-                        <span class="company">C O M P A N Y</span>
-                    </div>
+                <div class="logo-placeholder" style="border: none; background: transparent;">
+                    <?php if ($clientLogo): ?>
+                        <img src="../../<?= $clientLogo ?>" alt="<?= htmlspecialchars($clientName) ?>">
+                    <?php else: ?>
+                        <div class="logo-text">
+                            <span class="kino"><?= htmlspecialchars(explode(' ', $clientName)[0]) ?></span>
+                            <span
+                                class="company"><?= htmlspecialchars(substr(strstr($clientName, ' ') ?: '', 1) ?: 'COMPANY') ?></span>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -497,7 +522,8 @@ $db = open_client_db($clientCode);
 
     <!-- Footer -->
     <footer class="buscador-footer">
-        <p class="footer-text">KINO COMPANY S.A.S importador directo de relojería y otros productos.</p>
+        <p class="footer-text"><?= htmlspecialchars($clientName) ?> importador directo de relojería y otros productos.
+        </p>
         <p class="footer-text">Estamos ubicados en Medellín – Bogotá – Panamá.</p>
         <p class="footer-contact">Línea de Atención: +57 318 5640716</p>
         <a href="https://kinocompanysas.kyte.site/es" target="_blank"

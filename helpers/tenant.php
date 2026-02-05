@@ -318,3 +318,22 @@ function resolve_pdf_path(string $clientCode, array $document): ?string
 
     return null;
 }
+
+/**
+ * Obtiene la configuración (colores, título, etc.) de un cliente desde la base central.
+ *
+ * @param string $code Código del cliente.
+ * @return array|null Array con datos del cliente o null si no se encuentra.
+ */
+function get_client_config(string $code): ?array
+{
+    global $centralDb;
+    $code = sanitize_code($code);
+    try {
+        $stmt = $centralDb->prepare('SELECT titulo, color_primario, color_secundario FROM control_clientes WHERE codigo = ?');
+        $stmt->execute([$code]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (PDOException $e) {
+        return null;
+    }
+}

@@ -40,8 +40,19 @@ $pageTitle = 'Gestor de Documentos';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <?= CsrfProtection::metaTag() ?>
-    <title>Gestor de Documentos - KINO TRACE</title>
+    <title><?= htmlspecialchars($pageTitle) ?></title>
     <link rel="stylesheet" href="assets/css/styles.css">
+    <?php
+    // Inyectar colores personalizados del cliente
+    $clientConfig = get_client_config($code);
+    if ($clientConfig) {
+        $cP = $clientConfig['color_primario'] ?? '';
+        $cS = $clientConfig['color_secundario'] ?? '';
+        if ($cP && $cS) {
+            echo "<style>:root { --accent-primary: {$cP} !important; --accent-secondary: {$cS} !important; --accent-primary-hover: {$cP} !important; --client-color: {$cP}; }</style>";
+        }
+    }
+    ?>
     <style>
         /* Contenedor de acciones voraz */
         .voraz-actions-container {
