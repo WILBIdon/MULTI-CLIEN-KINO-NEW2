@@ -386,6 +386,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             font-size: 0.75rem;
             margin-left: 0.5rem;
         }
+
+        /* Responsive Improvements */
+        @media (max-width: 900px) {
+            .pattern-config {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .pattern-config {
+                grid-template-columns: 1fr;
+            }
+
+            .container {
+                padding: 0.5rem;
+            }
+
+            .card {
+                padding: 1rem;
+            }
+
+            .form-grid,
+            .codes-area {
+                gap: 0.75rem;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+                margin-bottom: 0.5rem;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+
+            h2 {
+                font-size: 1.25rem;
+            }
+        }
     </style>
 </head>
 
@@ -519,6 +559,22 @@ También puedes escribirlos manualmente (uno por línea)"></textarea>
         const codesInput = document.getElementById('codesInput');
         const pdfText = document.getElementById('pdfText');
         const codeCount = document.getElementById('codeCount');
+
+        // Auto-resize Iframe logic to prevent double scrollbars
+        function updateParentHeight() {
+            if (window.frameElement) {
+                // Calculate total height including margins
+                const height = document.documentElement.scrollHeight;
+                window.frameElement.style.height = height + 50 + 'px';
+            }
+        }
+
+        // Update height on load, resize, and DOM changes
+        window.addEventListener('load', updateParentHeight);
+        window.addEventListener('resize', updateParentHeight);
+        // Also observe DOM mutations for dynamic content changes (like error messages or loading spinners)
+        const observer = new MutationObserver(updateParentHeight);
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true });
 
         // Drag and drop
         dropZone.addEventListener('dragover', (e) => {
