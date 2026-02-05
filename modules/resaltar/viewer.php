@@ -775,12 +775,35 @@ $docIdForOcr = $documentId; // For OCR fallback
                         const all = [...hits, ...context];
                         if (all.length) instance.mark(all, { ...opts, className: "highlight-hit" });
                     }
+
+                    // 4. Auto-scroll al primer resaltado encontrado
+                    if (!hasScrolledToFirstMatch) {
+                        const firstMark = textDiv.querySelector('mark');
+                        if (firstMark) {
+                            hasScrolledToFirstMatch = true;
+                            // Pequeño delay para asegurar que el DOM esté listo
+                            setTimeout(() => {
+                                firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }, 100);
+                        }
+                    }
                 } else {
                     // ✅ CAMINO 2: PDF escaneado (sin texto) - usar fallback OCR
                     const allTerms = [...hits, ...context];
                     if (allTerms.length > 0) {
                         console.log(`Página ${pageNum}: Sin texto embebido, usando fallback OCR...`);
                         await applyOcrHighlight(wrapper, textDiv, pageNum, allTerms);
+
+                        // También verificar scroll después de OCR
+                        if (!hasScrolledToFirstMatch) {
+                            const firstMark = wrapper.querySelector('.ocr-highlight, mark');
+                            if (firstMark) {
+                                hasScrolledToFirstMatch = true;
+                                setTimeout(() => {
+                                    firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }, 100);
+                            }
+                        }
                     }
                 }
 
