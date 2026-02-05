@@ -54,6 +54,13 @@ function search_by_code(PDO $db, string $searchTerm): array
     $stmt->execute([$searchTerm]);
     $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // ✨ FIX DE ORDENAMIENTO DE FECHAS ✨
+    // Como las fechas suelen ser strings (DD-MM-YYYY), el ordenamiento SQL falla.
+    // Ordenamos en PHP usando timestamps reales.
+    usort($result, function ($a, $b) {
+        return strtotime($b['fecha']) - strtotime($a['fecha']);
+    });
+
     if (class_exists('CacheManager')) {
         CacheManager::set($clientCode, $cacheKey, $result, 300); // 5 min
     }
@@ -202,7 +209,14 @@ function fulltext_search(PDO $db, string $query): array
     ");
 
     $stmt->execute(['%' . $query . '%']);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // ✨ FIX DE ORDENAMIENTO DE FECHAS ✨
+    usort($results, function ($a, $b) {
+        return strtotime($b['fecha']) - strtotime($a['fecha']);
+    });
+
+    return $results;
 }
 
 /**
@@ -230,9 +244,11 @@ function search_in_pdf_content(PDO $db, string $searchTerm, string $clientCode):
     $stmt = $db->query("
         SELECT id, tipo, numero, fecha, proveedor, ruta_archivo
         FROM documentos
+        FROM documentos
         WHERE ruta_archivo LIKE '%.pdf'
-        ORDER BY fecha DESC
-        LIMIT 100
+        -- Eliminamos ORDER BY/LIMIT SQL porque ocultan documentos recientes si el formato es DD-MM-YYYY
+        -- ORDER BY fecha DESC
+        -- LIMIT 100
     ");
 
     $documents = $stmt->fetchAll(PDO::FETCH_ASSOC);
