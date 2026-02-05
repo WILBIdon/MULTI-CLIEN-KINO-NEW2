@@ -795,8 +795,8 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                                 Ver Códigos
                             </button>
                             ${doc.ruta_archivo ? `
-                            <a href="clients/${clientCode}/uploads/${doc.ruta_archivo}" class="btn btn-secondary btn-sm" title="Ver PDF Original" target="_blank">
-                                Ver PDF
+                            <a href="modules/resaltar/download.php?doc=${doc.id}" class="btn btn-secondary btn-sm" title="Ver PDF Original" target="_blank">
+                                Ver PDF Original
                             </a>` : ''}
 
                             <button class="btn btn-secondary btn-icon" title="Editar" onclick="editDoc(${doc.id})">
@@ -853,7 +853,7 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                 // Check if we have the inline form elements
                 const docTipo = document.getElementById('docTipo');
                 const uploadForm = document.getElementById('uploadForm');
-                
+
                 if (!docTipo || !uploadForm) {
                     // Redirect to the subir module with edit parameter through iframe
                     switchTab('subir');
