@@ -2,21 +2,33 @@
 /**
  * Buscador Independiente - KINO TRACE
  *
- * Módulo standalone para búsqueda por código.
- * Diseño limpio y centrado para uso público/cliente.
+ * Módulo PÚBLICO standalone para búsqueda por código.
+ * No requiere autenticación - accesible para cualquier usuario.
+ * Cada cliente tiene su URL con parámetro ?cliente=CODIGO
  */
-session_start();
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../helpers/tenant.php';
 
-// Verificar autenticación
-if (!isset($_SESSION['client_code'])) {
-    header('Location: ../../login.php');
-    exit;
+// Obtener cliente desde parámetro (PÚBLICO - sin sesión)
+$clientCode = isset($_GET['cliente']) ? trim($_GET['cliente']) : '';
+if (empty($clientCode)) {
+    die('<div style="text-align:center; padding:50px; font-family:Arial;">
+        <h2>Error</h2>
+        <p>Debe especificar el cliente en la URL</p>
+        <p>Ejemplo: ?cliente=KINO</p>
+    </div>');
 }
 
-$code = $_SESSION['client_code'];
-$db = open_client_db($code);
+// Verificar que el cliente existe
+$clientDir = CLIENTS_DIR . "/{$clientCode}";
+if (!is_dir($clientDir)) {
+    die('<div style="text-align:center; padding:50px; font-family:Arial;">
+        <h2>Error</h2>
+        <p>Cliente no encontrado</p>
+    </div>');
+}
+
+$db = open_client_db($clientCode);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -497,7 +509,7 @@ $db = open_client_db($code);
 
     <script>
         const apiUrl = '../../api.php';
-        const clientCode = '<?= $code ?>';
+        const clientCode = '<?= $clientCode ?>';
         const codigoInput = document.getElementById('codigoInput');
         const loadingArea = document.getElementById('loadingArea');
         const resultsContainer = document.getElementById('resultsContainer');
@@ -552,7 +564,7 @@ $db = open_client_db($code);
                         </div>
                         <div class="result-title">${doc.numero || 'Sin nombre'}</div>
                         <div class="result-actions">
-                            <a href="../resaltar/viewer.php?doc=${doc.id}&term=${encodeURIComponent(codigo)}" 
+                            <a href="viewer_publico.php?cliente=${clientCode}&doc=${doc.id}&term=${encodeURIComponent(codigo)}" 
                                target="_blank" 
                                class="btn-ver-pdf">
                                 📄 VER PDF
