@@ -1055,6 +1055,7 @@ $docIdForOcr = $documentId; // For OCR fallback
 
                     // Obtener contenido de texto para resaltados
                     const textContent = await page.getTextContent();
+                    const hasEmbeddedText = textContent.items && textContent.items.length > 0;
                     const allTerms = [...hits, ...context];
 
                     // Dibujar resaltados sobre el canvas
@@ -1062,20 +1063,49 @@ $docIdForOcr = $documentId; // For OCR fallback
                         ctx.globalAlpha = 0.55;
                         ctx.fillStyle = '#0d6939'; // Verde oscuro para escala de grises
 
-                        for (const item of textContent.items) {
-                            const itemText = item.str.toLowerCase();
-                            for (const term of allTerms) {
-                                if (term && itemText.includes(term.toLowerCase())) {
-                                    // Calcular posición usando la matriz de transformación
-                                    const tx = item.transform;
-                                    const x = tx[4] * printScale;
-                                    const y = viewport.height - (tx[5] * printScale);
-                                    const width = (item.width || 50) * printScale;
-                                    const height = (item.height || 12) * printScale;
+                        if (hasEmbeddedText) {
+                            // CAMINO 1: PDF con texto embebido - usar coordenadas de PDF.js
+                            for (const item of textContent.items) {
+                                const itemText = item.str.toLowerCase();
+                                for (const term of allTerms) {
+                                    if (term && itemText.includes(term.toLowerCase())) {
+                                        // Calcular posición usando la matriz de transformación
+                                        const tx = item.transform;
+                                        const x = tx[4] * printScale;
+                                        const y = viewport.height - (tx[5] * printScale);
+                                        const width = (item.width || 50) * printScale;
+                                        const height = (item.height || 12) * printScale;
 
-                                    ctx.fillRect(x, y - height, width, height);
-                                    break; // Solo un resaltado por item
+                                        ctx.fillRect(x, y - height, width, height);
+                                        break; // Solo un resaltado por item
+                                    }
                                 }
+                            }
+                        } else {
+                            // CAMINO 2: PDF escaneado - obtener coordenadas de OCR
+                            try {
+                                const docId = <?= $docIdForOcr ?>;
+                                const termsStr = encodeURIComponent(allTerms.join(','));
+                                const ocrResp = await fetch(`ocr_text.php?doc=${docId}&page=${pageNum}&terms=${termsStr}`);
+                                const ocrResult = await ocrResp.json();
+
+                                if (ocrResult.success && ocrResult.highlights && ocrResult.highlights.length > 0) {
+                                    // Calcular escala entre imagen OCR y canvas de impresión
+                                    const scaleX = tempCanvas.width / ocrResult.image_width;
+                                    const scaleY = tempCanvas.height / ocrResult.image_height;
+
+                                    // Dibujar cada rectángulo de resaltado OCR
+                                    for (const hl of ocrResult.highlights) {
+                                        const x = hl.x * scaleX;
+                                        const y = hl.y * scaleY;
+                                        const w = hl.w * scaleX;
+                                        const h = hl.h * scaleY;
+                                        ctx.fillRect(x, y, w, h);
+                                    }
+                                    console.log(`Print: ${ocrResult.highlights.length} resaltados OCR en página ${pageNum}`);
+                                }
+                            } catch (ocrErr) {
+                                console.warn(`Print OCR error página ${pageNum}:`, ocrErr);
                             }
                         }
                         ctx.globalAlpha = 1.0;
