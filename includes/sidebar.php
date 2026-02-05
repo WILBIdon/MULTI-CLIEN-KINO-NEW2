@@ -40,7 +40,7 @@ $currentSection = $currentSection ?? 'voraz';
         <div class="sidebar-logo">K</div>
         <div class="sidebar-brand">
             <h1>KINO TRACE</h1>
-            <span><?= htmlspecialchars($clientName === 'KINO TRACE' ? 'Gestión Documental' : $clientName) ?></span>
+            <span>Gestor documental</span>
         </div>
     </div>
 
