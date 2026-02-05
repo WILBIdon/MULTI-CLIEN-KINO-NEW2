@@ -139,8 +139,8 @@ function greedy_search(PDO $db, array $codes): array
             if ($best === null || count($cover) > count($bestCover)) {
                 $best = $doc;
                 $bestCover = $cover;
-            } elseif (count($cover) === count($bestCover) && $doc['fecha'] > $best['fecha']) {
-                // Si empatan, preferir el más reciente
+            } elseif (count($cover) === count($bestCover) && strtotime($doc['fecha']) > strtotime($best['fecha'])) {
+                // Si empatan, preferir el más reciente (ahora comparando timestamps correctamente)
                 $best = $doc;
                 $bestCover = $cover;
             }
