@@ -784,7 +784,24 @@ $docIdForOcr = $documentId; // For OCR fallback
 
                     // 3. Resaltado (Mark.js)
                     const instance = new Mark(textDiv);
-                    const opts = { element: "mark", accuracy: "partially", separateWordSearch: false };
+                    const opts = { 
+                        element: "mark", 
+                        accuracy: "partially", 
+                        separateWordSearch: false,
+                        done: () => {
+                            // 4. Auto-scroll al primer resaltado encontrado (Mark.js) - Dentro de callback para asegurar DOM
+                            if (!hasScrollToMark) {
+                                const firstMark = textDiv.querySelector('mark');
+                                if (firstMark) {
+                                    hasScrollToMark = true;
+                                    // Delay aumentado para dar tiempo a renderizado y evitar conflicto con scroll de página
+                                    setTimeout(() => {
+                                        firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    }, 500); 
+                                }
+                            }
+                        }
+                    };
 
                     // Aplicar estilos diferenciados si es strict mode, o genéricos si no
                     if (isStrictMode) {
@@ -793,18 +810,6 @@ $docIdForOcr = $documentId; // For OCR fallback
                     } else {
                         const all = [...hits, ...context];
                         if (all.length) instance.mark(all, { ...opts, className: "highlight-hit" });
-                    }
-
-                    // 4. Auto-scroll al primer resaltado encontrado (Mark.js)
-                    if (!hasScrollToMark) {
-                        const firstMark = textDiv.querySelector('mark');
-                        if (firstMark) {
-                            hasScrollToMark = true;
-                            // Pequeño delay para asegurar que el DOM esté listo
-                            setTimeout(() => {
-                                firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }, 100);
-                        }
                     }
                 } else {
                     // ✅ CAMINO 2: PDF escaneado (sin texto) - usar fallback OCR
@@ -820,7 +825,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                                 hasScrollToMark = true;
                                 setTimeout(() => {
                                     firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                }, 100);
+                                }, 500);
                             }
                         }
                     }
