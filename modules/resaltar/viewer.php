@@ -834,10 +834,23 @@ $docIdForOcr = $documentId; // For OCR fallback
                 loadingModal.innerHTML = `
                     <style>
                         @keyframes ocr-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                        @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 8px rgba(22, 101, 52, 0.6); } 50% { box-shadow: 0 0 20px rgba(22, 101, 52, 1); } }
                     </style>
                     <div style="width:60px;height:60px;border:4px solid rgba(255,255,255,0.2);border-top:4px solid #166534;border-radius:50%;animation:ocr-spin 1s linear infinite;margin:0 auto 20px;"></div>
                     <div style="font-size:18px;font-weight:bold;">Analizando documento...</div>
                     <div style="font-size:13px;opacity:0.7;margin-top:10px;">Extrayendo texto con OCR</div>
+                    
+                    <div style="margin-top:25px; padding:15px 20px; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); border-radius:12px; animation: pulse-glow 2s ease-in-out infinite;">
+                        <div style="font-size:14px; font-weight:bold; color:#78350f; margin-bottom:8px;">
+                            ⚠️ RECUERDE
+                        </div>
+                        <div style="font-size:12px; color:#451a03; line-height:1.5;">
+                            El éxito del resaltado depende de la <strong>calidad y legibilidad</strong> de la imagen del PDF.
+                        </div>
+                        <div style="margin-top:10px; padding:8px 12px; background:rgba(22, 101, 52, 0.9); border-radius:6px; display:inline-block;">
+                            <span style="font-size:12px; color:white; font-weight:600;">🎯 Los resultados se resaltan en <span style="color:#86efac;">VERDE OSCURO</span></span>
+                        </div>
+                    </div>
                 `;
                 document.body.appendChild(loadingModal);
             }
