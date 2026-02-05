@@ -4,6 +4,7 @@
  *
  * Permite subir PDFs y extraer códigos automáticamente usando patrones
  * personalizables (prefijo/terminador) como en la aplicación anterior.
+ * soporta MODO EDICIÓN.
  */
 session_start();
 require_once __DIR__ . '/../../config.php';
@@ -28,75 +29,187 @@ $geminiConfigured = is_gemini_configured();
 $message = '';
 $error = '';
 
-// Procesar subida
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save') {
-    try {
-        $tipo = sanitize_code($_POST['tipo'] ?? 'documento');
-        $numero = trim($_POST['numero'] ?? '');
-        $fecha = trim($_POST['fecha'] ?? date('Y-m-d'));
-        $proveedor = trim($_POST['proveedor'] ?? '');
-        $codes = array_filter(array_map('trim', explode("\n", $_POST['codes'] ?? '')));
+// --- MODO EDICIÓN: Cargar datos si existe parámetro 'edit' ---
+$editId = isset($_GET['edit']) ? (int) $_GET['edit'] : 0;
+$isEditMode = $editId > 0;
+$editDoc = null;
+$editCodes = [];
 
-        if (empty($_FILES['file']['tmp_name']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
-            throw new Exception('Archivo no recibido correctamente');
-        }
+if ($isEditMode) {
+    // Cargar documento
+    $stmt = $db->prepare("SELECT * FROM documentos WHERE id = ?");
+    $stmt->execute([$editId]);
+    $editDoc = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        // Crear directorio
-        $clientDir = CLIENTS_DIR . '/' . $code;
-        $uploadDir = $clientDir . '/uploads/' . $tipo;
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0777, true);
-        }
+    if ($editDoc) {
+        // Cargar códigos
+        $stmtCodes = $db->prepare("SELECT codigo FROM codigos WHERE documento_id = ?");
+        $stmtCodes->execute([$editId]);
+        $editCodes = $stmtCodes->fetchAll(PDO::FETCH_COLUMN);
+    } else {
+        $error = "Documento no encontrado o eliminado.";
+        $isEditMode = false;
+    }
+}
 
-        // Mover archivo
-        $ext = pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION);
-        $targetName = uniqid($tipo . '_', true) . '.' . $ext;
-        $targetPath = $uploadDir . '/' . $targetName;
-        move_uploaded_file($_FILES['file']['tmp_name'], $targetPath);
+// Procesar Formulario (Guardar o Actualizar)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    $action = $_POST['action'];
 
-        $hash = hash_file('sha256', $targetPath);
+    if ($action === 'save' || $action === 'update') {
+        try {
+            $tipo = sanitize_code($_POST['tipo'] ?? 'documento');
+            $numero = trim($_POST['numero'] ?? '');
+            $fecha = trim($_POST['fecha'] ?? date('Y-m-d'));
+            $proveedor = trim($_POST['proveedor'] ?? '');
+            $codes = array_filter(array_map('trim', explode("\n", $_POST['codes'] ?? '')));
 
-        // Datos extraídos
-        $datosExtraidos = [];
-        if (strtolower($ext) === 'pdf') {
-            $extractResult = extract_codes_from_pdf($targetPath);
-            if ($extractResult['success']) {
-                $datosExtraidos = [
-                    'text' => substr($extractResult['text'], 0, 10000),
-                    'auto_codes' => $extractResult['codes']
+            // Validar ID en update
+            $updateId = isset($_POST['edit_id']) ? (int) $_POST['edit_id'] : 0;
+            if ($action === 'update' && $updateId <= 0) {
+                throw new Exception('ID de documento inválido para actualización');
+            }
+
+            // Manejo de Archivo
+            $targetPath = null;
+            $targetName = null;
+            $hash = null;
+            $datosExtraidos = [];
+            $fileUploaded = false;
+
+            // Si hay archivo nuevo subido
+            if (!empty($_FILES['file']['tmp_name']) && $_FILES['file']['error'] === UPLOAD_ERR_OK) {
+                // Crear directorio
+                $clientDir = CLIENTS_DIR . '/' . $code;
+                $uploadDir = $clientDir . '/uploads/' . $tipo;
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0777, true);
+                }
+
+                $ext = pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION);
+                $targetName = uniqid($tipo . '_', true) . '.' . $ext;
+                $targetPath = $uploadDir . '/' . $targetName;
+
+                if (!move_uploaded_file($_FILES['file']['tmp_name'], $targetPath)) {
+                    throw new Exception('Error al mover el archivo subido.');
+                }
+
+                $hash = hash_file('sha256', $targetPath);
+                $fileUploaded = true;
+
+                // Extraer datos si es PDF
+                if (strtolower($ext) === 'pdf') {
+                    $extractResult = extract_codes_from_pdf($targetPath);
+                    if ($extractResult['success']) {
+                        $datosExtraidos = [
+                            'text' => substr($extractResult['text'], 0, 10000),
+                            'auto_codes' => $extractResult['codes']
+                        ];
+                    }
+                }
+            } elseif ($action === 'save') {
+                throw new Exception('Debes seleccionar un archivo PDF para crear un nuevo documento.');
+            }
+
+            // --- OPERACIÓN EN BASE DE DATOS ---
+            $db->beginTransaction();
+
+            if ($action === 'save') {
+                // INSERT
+                $stmt = $db->prepare("
+                    INSERT INTO documentos (tipo, numero, fecha, proveedor, ruta_archivo, hash_archivo, datos_extraidos)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([
+                    $tipo,
+                    $numero,
+                    $fecha,
+                    $proveedor,
+                    $tipo . '/' . $targetName,
+                    $hash,
+                    json_encode($datosExtraidos)
+                ]);
+                $docId = $db->lastInsertId();
+                $message = "✅ Documento creado exitosamente";
+
+            } else {
+                // UPDATE
+                $docId = $updateId;
+
+                // Construir query dinámico según si cambió el archivo
+                if ($fileUploaded) {
+                    $stmt = $db->prepare("
+                        UPDATE documentos 
+                        SET tipo=?, numero=?, fecha=?, proveedor=?, ruta_archivo=?, hash_archivo=?, datos_extraidos=?
+                        WHERE id=?
+                    ");
+                    $stmt->execute([
+                        $tipo,
+                        $numero,
+                        $fecha,
+                        $proveedor,
+                        $tipo . '/' . $targetName,
+                        $hash,
+                        json_encode($datosExtraidos),
+                        $docId
+                    ]);
+                } else {
+                    $stmt = $db->prepare("
+                        UPDATE documentos 
+                        SET tipo=?, numero=?, fecha=?, proveedor=?
+                        WHERE id=?
+                    ");
+                    $stmt->execute([
+                        $tipo,
+                        $numero,
+                        $fecha,
+                        $proveedor,
+                        $docId
+                    ]);
+                }
+
+                // Borrar códigos anteriores para re-insertar (estrategia simple de reemplazo)
+                $db->prepare("DELETE FROM codigos WHERE documento_id = ?")->execute([$docId]);
+                $message = "✅ Documento actualizado exitosamente";
+
+                // Actualizar modo edición para reflejar cambios
+                $isEditMode = true;
+                $editDoc = [
+                    'id' => $docId,
+                    'tipo' => $tipo,
+                    'numero' => $numero,
+                    'fecha' => $fecha,
+                    'proveedor' => $proveedor,
+                    'ruta_archivo' => $fileUploaded ? ($tipo . '/' . $targetName) : $_POST['current_file_path'] // Mantener o nuevo
                 ];
+                $editCodes = $codes;
             }
-        }
 
-        // Insertar documento
-        $stmt = $db->prepare("
-            INSERT INTO documentos (tipo, numero, fecha, proveedor, ruta_archivo, hash_archivo, datos_extraidos)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ");
-        $stmt->execute([
-            $tipo,
-            $numero,
-            $fecha,
-            $proveedor,
-            $tipo . '/' . $targetName,
-            $hash,
-            json_encode($datosExtraidos)
-        ]);
-
-        $docId = $db->lastInsertId();
-
-        // Insertar códigos
-        if (!empty($codes)) {
-            $insertCode = $db->prepare("INSERT INTO codigos (documento_id, codigo) VALUES (?, ?)");
-            foreach (array_unique($codes) as $c) {
-                $insertCode->execute([$docId, $c]);
+            // Insertar códigos (común para save y update)
+            if (!empty($codes)) {
+                $insertCode = $db->prepare("INSERT INTO codigos (documento_id, codigo) VALUES (?, ?)");
+                foreach (array_unique($codes) as $c) {
+                    if (!empty($c))
+                        $insertCode->execute([$docId, $c]);
+                }
             }
+
+            $db->commit();
+            $message .= " con " . count($codes) . " código(s)";
+
+            // Si fue save exitoso, limpiar formulario (redirigir para evitar re-submit)
+            if ($action === 'save') {
+                // Opcional: header("Location: index.php?success=1");
+                $isEditMode = false;
+                $editDoc = null;
+                $editCodes = [];
+            }
+
+        } catch (Exception $e) {
+            if ($db->inTransaction())
+                $db->rollBack();
+            $error = "❌ Error: " . $e->getMessage();
         }
-
-        $message = "✅ Documento guardado exitosamente con " . count($codes) . " código(s)";
-
-    } catch (Exception $e) {
-        $error = "❌ Error: " . $e->getMessage();
     }
 }
 ?>
@@ -106,7 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Subir Documento - KINO TRACE</title>
+    <title><?= $isEditMode ? 'Editar Documento' : 'Subir Documento' ?> - KINO TRACE</title>
     <meta name="csrf-token" content="<?= htmlspecialchars($csrfToken) ?>">
     <link rel="stylesheet" href="../../assets/css/styles.css">
     <style>
@@ -223,6 +336,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
         .file-drop input {
             display: none;
+        }
+
+        /* Edit Mode Styles for File Drop */
+        .file-drop.has-file {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.05);
         }
 
         .pattern-config {
@@ -432,7 +551,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 <body>
     <div class="container">
 
-
         <?php if ($message): ?>
             <div class="message">
                 <?= htmlspecialchars($message) ?>
@@ -444,17 +562,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             </div>
         <?php endif; ?>
 
+        <?php if ($isEditMode): ?>
+            <div style="margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between;">
+                <h1 style="font-size: 1.5rem; color: #4338ca;">✏️ Editando: <?= htmlspecialchars($editDoc['numero']) ?></h1>
+                <a href="index.php" class="btn btn-secondary" style="text-decoration: none;">Cancelar Edición</a>
+            </div>
+        <?php endif; ?>
+
         <form method="POST" enctype="multipart/form-data" id="uploadForm">
-            <input type="hidden" name="action" value="save">
+            <!-- Hidden inputs for Edit Mode -->
+            <input type="hidden" name="action" value="<?= $isEditMode ? 'update' : 'save' ?>">
+            <?php if ($isEditMode): ?>
+                <input type="hidden" name="edit_id" value="<?= $editDoc['id'] ?>">
+                <input type="hidden" name="current_file_path" value="<?= htmlspecialchars($editDoc['ruta_archivo']) ?>">
+            <?php endif; ?>
 
             <!-- Paso 1: Subir archivo -->
             <div class="card">
-                <h2>📁 Paso 1: Seleccionar Archivo PDF</h2>
+                <h2>📁 Paso 1: <?= $isEditMode ? 'Actualizar Archivo PDF (Opcional)' : 'Seleccionar Archivo PDF' ?></h2>
 
-                <div class="file-drop" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                <div class="file-drop <?= $isEditMode ? 'has-file' : '' ?>" id="dropZone"
+                    onclick="document.getElementById('fileInput').click()">
                     <div class="icon">📄</div>
-                    <p id="fileName">Arrastra un PDF aquí o haz clic para seleccionar</p>
-                    <input type="file" name="file" id="fileInput" accept=".pdf" required>
+                    <p id="fileName">
+                        <?php if ($isEditMode): ?>
+                            ✅ Archivo actual: <?= htmlspecialchars(basename($editDoc['ruta_archivo'])) ?><br>
+                            <span style="font-size: 0.9em; color: #666;">Haz clic para reemplazarlo</span>
+                        <?php else: ?>
+                            Arrastra un PDF aquí o haz clic para seleccionar
+                        <?php endif; ?>
+                    </p>
+                    <input type="file" name="file" id="fileInput" accept=".pdf" <?= $isEditMode ? '' : 'required' ?>>
                 </div>
 
                 <div class="pattern-config">
@@ -496,14 +634,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             <!-- Paso 2: Códigos -->
             <div class="card">
                 <h2>📋 Paso 2: Códigos Detectados
-                    <span class="code-count" id="codeCount">0 códigos</span>
+                    <span class="code-count" id="codeCount"><?= $isEditMode ? count($editCodes) : 0 ?> códigos</span>
                 </h2>
 
                 <div class="codes-area">
                     <div class="codes-box">
                         <h4>✏️ Códigos a Guardar (editables)</h4>
-                        <textarea name="codes" id="codesInput" placeholder="Los códigos aparecerán aquí después de extraerlos del PDF...
-También puedes escribirlos manualmente (uno por línea)"></textarea>
+                        <textarea name="codes" id="codesInput"
+                            placeholder="Los códigos aparecerán aquí después de extraerlos del PDF...
+También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? htmlspecialchars(implode("\n", $editCodes)) : '' ?></textarea>
                     </div>
                     <div class="codes-box">
                         <h4>📄 Texto Extraído del PDF</h4>
@@ -520,32 +659,37 @@ También puedes escribirlos manualmente (uno por línea)"></textarea>
                     <div class="form-group">
                         <label>Tipo de Documento</label>
                         <select name="tipo" id="tipoDoc" required>
-                            <option value="manifiesto">📦 Manifiesto</option>
-                            <option value="declaracion">📄 Declaración</option>
-                            <option value="factura">💰 Factura</option>
-                            <option value="reporte">📊 Reporte</option>
-                            <option value="otro">📁 Otro</option>
+                            <?php
+                            $types = ['manifiesto' => '📦 Manifiesto', 'declaracion' => '📄 Declaración', 'factura' => '💰 Factura', 'reporte' => '📊 Reporte', 'otro' => '📁 Otro'];
+                            $currentType = $isEditMode ? $editDoc['tipo'] : 'documento';
+                            foreach ($types as $val => $label): ?>
+                                <option value="<?= $val ?>" <?= $currentType === $val ? 'selected' : '' ?>><?= $label ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Número de Documento</label>
-                        <input type="text" name="numero" id="numeroDoc" required placeholder="Ej: 12345">
+                        <input type="text" name="numero" id="numeroDoc" required placeholder="Ej: 12345"
+                            value="<?= $isEditMode ? htmlspecialchars($editDoc['numero']) : '' ?>">
                     </div>
                     <div class="form-group">
                         <label>Fecha</label>
-                        <input type="date" name="fecha" value="<?= date('Y-m-d') ?>" required>
+                        <input type="date" name="fecha" required
+                            value="<?= $isEditMode ? htmlspecialchars($editDoc['fecha']) : date('Y-m-d') ?>">
                     </div>
                     <div class="form-group">
                         <label>Proveedor</label>
-                        <input type="text" name="proveedor" placeholder="Nombre del proveedor">
+                        <input type="text" name="proveedor" placeholder="Nombre del proveedor"
+                            value="<?= $isEditMode ? htmlspecialchars($editDoc['proveedor']) : '' ?>">
                     </div>
                 </div>
 
                 <div class="action-buttons">
                     <button type="submit" class="btn btn-success">
-                        💾 Guardar Documento con Códigos
+                        <?= $isEditMode ? '💾 Actualizar Documento' : '💾 Guardar Documento con Códigos' ?>
                     </button>
-                    <button type="reset" class="btn btn-secondary">Limpiar Todo</button>
+                    <a href="index.php" class="btn btn-secondary">Limpiar / Nuevo</a>
                 </div>
             </div>
         </form>
@@ -560,19 +704,15 @@ También puedes escribirlos manualmente (uno por línea)"></textarea>
         const pdfText = document.getElementById('pdfText');
         const codeCount = document.getElementById('codeCount');
 
-        // Auto-resize Iframe logic to prevent double scrollbars
+        // Auto-resize Iframe logic 
         function updateParentHeight() {
             if (window.frameElement) {
-                // Calculate total height including margins
                 const height = document.documentElement.scrollHeight;
                 window.frameElement.style.height = height + 50 + 'px';
             }
         }
-
-        // Update height on load, resize, and DOM changes
         window.addEventListener('load', updateParentHeight);
         window.addEventListener('resize', updateParentHeight);
-        // Also observe DOM mutations for dynamic content changes (like error messages or loading spinners)
         const observer = new MutationObserver(updateParentHeight);
         observer.observe(document.body, { childList: true, subtree: true, attributes: true });
 
