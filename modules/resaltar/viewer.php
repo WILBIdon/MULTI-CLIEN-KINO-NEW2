@@ -558,7 +558,8 @@ $docIdForOcr = $documentId; // For OCR fallback
         let pdfDoc = null;
 
         // Variables Radar y Scroll
-        let hasScrolledToFirstMatch = false;
+        let hasScrollToPage = false; // Scroll general a la página (Radar)
+        let hasScrollToMark = false; // Scroll preciso al texto (Render)
 
         // --- VORAZ NAV ---
         let vorazData = JSON.parse(sessionStorage.getItem('voraz_viewer_data') || 'null');
@@ -639,6 +640,8 @@ $docIdForOcr = $documentId; // For OCR fallback
             let missingMap = new Map();
             termsToFind.forEach(t => missingMap.set(t.replace(/[^a-zA-Z0-9]/g, '').toLowerCase(), t));
 
+            let pagesWithMatches = []; // Lista de páginas con hallazgos
+
             for (let i = 1; i <= pdfDoc.numPages; i++) {
                 try {
                     const page = await pdfDoc.getPage(i);
@@ -677,12 +680,16 @@ $docIdForOcr = $documentId; // For OCR fallback
                         }
                     }
 
-                    // AUTO SCROLL al primer hallazgo relevante
-                    if (pageHasMatch && !hasScrolledToFirstMatch) {
-                        hasScrolledToFirstMatch = true;
-                        const pEl = document.getElementById('page-' + i);
-                        if (pEl) {
-                            pEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    if (pageHasMatch) {
+                        pagesWithMatches.push(i);
+
+                        // AUTO SCROLL A LA PÁGINA (Primera aproximación)
+                        if (!hasScrollToPage) {
+                            hasScrollToPage = true;
+                            const pEl = document.getElementById('page-' + i);
+                            if (pEl) {
+                                pEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
                         }
                     }
 
@@ -692,19 +699,31 @@ $docIdForOcr = $documentId; // For OCR fallback
                 } catch (e) { console.error("Radar error pg " + i, e); }
             }
 
+            // Generar HTML de resumen de PÁGINAS
+            let pagesHtml = '';
+            if (pagesWithMatches.length > 0) {
+                pagesHtml = `
+                    <div style="margin-top:10px; background:#eff6ff; color:#1e40af; padding:10px; border-radius:6px; border:1px solid #bfdbfe; font-size:0.9em;">
+                        📄 <strong>Resaltado en hojas:</strong> ${pagesWithMatches.join(', ')}
+                    </div>`;
+            }
+
             // Actualizar UI Final
+            let statusHtml = '';
             if (missingMap.size === 0) {
-                statusDiv.innerHTML = `
+                statusHtml = `
                     <div style="background:#dcfce7; color:#166534; padding:10px; border-radius:6px; border:1px solid #86efac; font-size:0.9em;">
                         ✅ <strong>Completo:</strong> Todo encontrado.
                     </div>`;
             } else {
                 const missingArr = Array.from(missingMap.values());
-                statusDiv.innerHTML = `
+                statusHtml = `
                     <div style="background:#fee2e2; color:#991b1b; padding:10px; border-radius:6px; border:1px solid #fecaca; font-size:0.9em;">
                         <strong>⚠️ Faltan (${missingArr.length}):</strong> ${missingArr.join(', ')}
                     </div>`;
             }
+
+            statusDiv.innerHTML = statusHtml + pagesHtml;
         }
 
         // --- RENDERIZADO VISUAL ---
@@ -776,11 +795,11 @@ $docIdForOcr = $documentId; // For OCR fallback
                         if (all.length) instance.mark(all, { ...opts, className: "highlight-hit" });
                     }
 
-                    // 4. Auto-scroll al primer resaltado encontrado
-                    if (!hasScrolledToFirstMatch) {
+                    // 4. Auto-scroll al primer resaltado encontrado (Mark.js)
+                    if (!hasScrollToMark) {
                         const firstMark = textDiv.querySelector('mark');
                         if (firstMark) {
-                            hasScrolledToFirstMatch = true;
+                            hasScrollToMark = true;
                             // Pequeño delay para asegurar que el DOM esté listo
                             setTimeout(() => {
                                 firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -795,10 +814,10 @@ $docIdForOcr = $documentId; // For OCR fallback
                         await applyOcrHighlight(wrapper, textDiv, pageNum, allTerms);
 
                         // También verificar scroll después de OCR
-                        if (!hasScrolledToFirstMatch) {
-                            const firstMark = wrapper.querySelector('.ocr-highlight, mark');
+                        if (!hasScrollToMark) {
+                            const firstMark = wrapper.querySelector('.ocr-highlight');
                             if (firstMark) {
-                                hasScrolledToFirstMatch = true;
+                                hasScrollToMark = true;
                                 setTimeout(() => {
                                     firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 }, 100);
