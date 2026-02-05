@@ -86,12 +86,12 @@ function greedy_search(PDO $db, array $codes): array
     $clientCode = $_SESSION['client_code'] ?? 'default';
     $cacheKey = 'greedy_search_' . md5(implode(',', $codes));
 
-    if (class_exists('CacheManager')) {
-        $cached = CacheManager::get($clientCode, $cacheKey);
-        if ($cached !== null) {
-            return $cached;
-        }
-    }
+    // if (class_exists('CacheManager')) {
+    //     $cached = CacheManager::get($clientCode, $cacheKey);
+    //     if ($cached !== null) {
+    //         return $cached;
+    //     }
+    // }
 
     // Construir condición para buscar cualquiera de los códigos
     $placeholders = implode(',', array_fill(0, count($codes), '?'));
