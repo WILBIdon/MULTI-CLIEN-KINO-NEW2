@@ -861,10 +861,22 @@ $docIdForOcr = $documentId; // For OCR fallback
                 const response = await fetch(`ocr_text.php?doc=${docId}&page=${pageNum}&terms=${termsStr}`);
                 const result = await response.json();
 
-                // Ocultar modal
-                if (loadingModal) loadingModal.remove();
-
                 if (result.success && result.matches && result.matches.length > 0) {
+                    // ✅ ENCONTRADO: Mostrar resultado de éxito en el modal
+                    if (loadingModal) {
+                        loadingModal.innerHTML = `
+                            <div style="font-size:50px; margin-bottom:15px;">✅</div>
+                            <div style="font-size:20px; font-weight:bold; color:#86efac;">¡Encontrado!</div>
+                            <div style="font-size:14px; margin-top:10px; opacity:0.9;">${result.match_count} coincidencia(s) en página ${pageNum}</div>
+                        `;
+                        loadingModal.style.transition = 'opacity 0.3s ease';
+                        // Cerrar modal después de 2 segundos
+                        setTimeout(() => {
+                            loadingModal.style.opacity = '0';
+                            setTimeout(() => loadingModal.remove(), 300);
+                        }, 2000);
+                    }
+
                     // Mostrar badge pequeño con resultado
                     const ocrBadge = document.createElement('div');
                     ocrBadge.style.cssText = `
@@ -910,6 +922,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                             // Dibujar cada rectángulo de resaltado
                             for (const hl of result.highlights) {
                                 const rect = document.createElement('div');
+                                rect.className = 'ocr-highlight'; // Clase para auto-scroll
                                 rect.style.cssText = `
                                     position: absolute;
                                     left: ${hl.x * scaleX}px;
@@ -929,10 +942,62 @@ $docIdForOcr = $documentId; // For OCR fallback
                     }
 
                     console.log(`OCR: ${result.match_count} coincidencias en página ${pageNum}`);
+                } else {
+                    // ⚠️ NO ENCONTRADO: Mostrar notificación clara
+                    if (loadingModal) {
+                        loadingModal.innerHTML = `
+                            <div style="font-size:50px; margin-bottom:15px;">⚠️</div>
+                            <div style="font-size:20px; font-weight:bold; color:#fbbf24;">Sin coincidencias</div>
+                            <div style="font-size:14px; margin-top:10px; opacity:0.9;">OCR no encontró los códigos buscados en esta página.</div>
+                            <div style="margin-top:15px; padding:10px 15px; background:rgba(255,255,255,0.1); border-radius:8px; font-size:12px;">
+                                Esto puede deberse a:<br>
+                                • Baja calidad de imagen del PDF<br>
+                                • El código no existe en esta página
+                            </div>
+                        `;
+                        loadingModal.style.transition = 'opacity 0.3s ease';
+                        // Cerrar modal después de 3 segundos
+                        setTimeout(() => {
+                            loadingModal.style.opacity = '0';
+                            setTimeout(() => loadingModal.remove(), 300);
+                        }, 3000);
+                    }
+
+                    // Mostrar badge de "no encontrado" en la página
+                    const noMatchBadge = document.createElement('div');
+                    noMatchBadge.style.cssText = `
+                        position: absolute;
+                        top: 10px;
+                        right: 10px;
+                        background: #dc2626;
+                        color: white;
+                        padding: 8px 15px;
+                        border-radius: 8px;
+                        z-index: 100;
+                        font-family: system-ui, sans-serif;
+                        font-size: 13px;
+                        font-weight: bold;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                    `;
+                    noMatchBadge.innerHTML = `⚠️ OCR: Sin coincidencias`;
+                    wrapper.appendChild(noMatchBadge);
+
+                    console.log(`OCR: Sin coincidencias en página ${pageNum}`);
                 }
             } catch (e) {
-                // Ocultar modal en caso de error
-                if (loadingModal) loadingModal.remove();
+                // Ocultar modal en caso de error con mensaje
+                if (loadingModal) {
+                    loadingModal.innerHTML = `
+                        <div style="font-size:50px; margin-bottom:15px;">❌</div>
+                        <div style="font-size:20px; font-weight:bold; color:#f87171;">Error de OCR</div>
+                        <div style="font-size:14px; margin-top:10px; opacity:0.9;">${e.message || 'No se pudo procesar la página'}</div>
+                    `;
+                    loadingModal.style.transition = 'opacity 0.3s ease';
+                    setTimeout(() => {
+                        loadingModal.style.opacity = '0';
+                        setTimeout(() => loadingModal.remove(), 300);
+                    }, 2500);
+                }
                 console.warn(`OCR fallback error en página ${pageNum}:`, e);
             }
         }
