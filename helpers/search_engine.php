@@ -140,7 +140,7 @@ function greedy_search(PDO $db, array $codes): array
         $bestCover = [];
 
         foreach ($documents as $doc) {
-            $docCodesUpper = array_map('strtoupper', $doc['codes']);
+            $docCodesUpper = array_unique(array_map('strtoupper', $doc['codes']));
             $cover = array_intersect($docCodesUpper, $remaining);
 
             if ($best === null || count($cover) > count($bestCover)) {
