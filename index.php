@@ -451,7 +451,9 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                             <div class="spinner"></div>
                             <p>Cargando módulo de subida...</p>
                         </div>
-                        <iframe id="subir-iframe" src="modules/subir/" style="width: 100%; height: 800px; border: none; display: none;" onload="document.getElementById('subir-loading').style.display='none'; this.style.display='block';"></iframe>
+                        <iframe id="subir-iframe" src="modules/subir/"
+                            style="width: 100%; height: 800px; border: none; display: none;"
+                            onload="document.getElementById('subir-loading').style.display='none'; this.style.display='block';"></iframe>
                     </div>
 
 
@@ -594,30 +596,37 @@ Se extraerán solo los códigos de la izquierda."></textarea>
 
 
         // ============ Upload Tab ============
+        // NOTE: Upload functionality is now handled by iframe in section-subir
+        // This code is kept for backwards compatibility but only runs if elements exist
         const uploadZone = document.getElementById('uploadZone');
         const fileInput = document.getElementById('fileInput');
 
-        uploadZone.addEventListener('click', () => fileInput.click());
-        uploadZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadZone.classList.add('dragover');
-        });
-        uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
-        uploadZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadZone.classList.remove('dragover');
-            if (e.dataTransfer.files.length) {
-                fileInput.files = e.dataTransfer.files;
-                showFileName();
-            }
-        });
+        if (uploadZone && fileInput) {
+            uploadZone.addEventListener('click', () => fileInput.click());
+            uploadZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadZone.classList.add('dragover');
+            });
+            uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+            uploadZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadZone.classList.remove('dragover');
+                if (e.dataTransfer.files.length) {
+                    fileInput.files = e.dataTransfer.files;
+                    showFileName();
+                }
+            });
 
-        fileInput.addEventListener('change', showFileName);
+            fileInput.addEventListener('change', showFileName);
+        }
 
         function showFileName() {
-            if (fileInput.files.length) {
-                document.getElementById('fileName').textContent = '✓ ' + fileInput.files[0].name;
-                document.getElementById('fileName').classList.remove('hidden');
+            if (fileInput && fileInput.files.length) {
+                const fileNameEl = document.getElementById('fileName');
+                if (fileNameEl) {
+                    fileNameEl.textContent = '✓ ' + fileInput.files[0].name;
+                    fileNameEl.classList.remove('hidden');
+                }
             }
         }
 
@@ -625,6 +634,8 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             const form = document.getElementById('uploadForm');
             const uploadZone = document.getElementById('uploadZone');
             const fileNameDisplay = document.getElementById('fileName');
+
+            if (!form || !uploadZone || !fileNameDisplay) return;
 
             // Reset form
             form.reset();
@@ -634,7 +645,8 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             delete form.dataset.currentFile;
 
             // Reset upload zone
-            uploadZone.querySelector('p').textContent = 'Arrastra un archivo PDF o haz clic para seleccionar';
+            const pEl = uploadZone.querySelector('p');
+            if (pEl) pEl.textContent = 'Arrastra un archivo PDF o haz clic para seleccionar';
             uploadZone.style.borderColor = '';
             uploadZone.style.background = '';
 
@@ -643,87 +655,98 @@ Se extraerán solo los códigos de la izquierda."></textarea>
             fileNameDisplay.style.color = '';
 
             // Reset title and button
-            document.querySelector('#tab-subir h3').textContent = 'Subir Documento';
-            document.getElementById('uploadBtn').innerHTML = `
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-                Subir Documento
-            `;
+            const titleEl = document.querySelector('#tab-subir h3');
+            if (titleEl) titleEl.textContent = 'Subir Documento';
+            const uploadBtn = document.getElementById('uploadBtn');
+            if (uploadBtn) {
+                uploadBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    Subir Documento
+                `;
+            }
         }
 
-        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
+        // Only attach submit handler if form exists
+        const uploadForm = document.getElementById('uploadForm');
+        if (uploadForm) {
+            uploadForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
 
-            const form = e.target;
-            const isEditMode = !!form.dataset.editId;
+                const form = e.target;
+                const isEditMode = !!form.dataset.editId;
 
-            // In edit mode, file is optional; in create mode, it's required
-            if (!isEditMode && !fileInput.files.length) {
-                alert('Selecciona un archivo PDF');
-                return;
-            }
-
-            const btn = document.getElementById('uploadBtn');
-            btn.disabled = true;
-            btn.textContent = isEditMode ? 'Guardando...' : 'Subiendo...';
-
-            const formData = new FormData();
-            formData.append('action', isEditMode ? 'update' : 'upload');
-            formData.append('tipo', document.getElementById('docTipo').value);
-            formData.append('numero', document.getElementById('docNumero').value);
-            formData.append('fecha', document.getElementById('docFecha').value);
-            formData.append('proveedor', document.getElementById('docProveedor').value);
-            formData.append('codes', document.getElementById('docCodes').value);
-
-            // Add document ID if editing
-            if (isEditMode) {
-                formData.append('id', form.dataset.editId);
-                formData.append('current_file', form.dataset.currentFile);
-            }
-
-            // Add file only if a new one was selected
-            if (fileInput.files.length) {
-                formData.append('file', fileInput.files[0]);
-            }
-
-            // CSRF Token in Body (Fallback)
-            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            formData.append('csrf_token', token);
-
-            try {
-                const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRF-TOKEN': token
-                    }
-                });
-                const result = await response.json();
-
-                if (result.success) {
-                    alert(isEditMode ? 'Documento actualizado correctamente' : 'Documento subido correctamente');
-                    resetUploadForm();
-
-                    // Switch to Consultar tab and reload documents
-                    switchTab('consultar');
-                    loadDocuments();
-                } else if (result.warning) {
-                    // Handle duplicate file warning
-                    alert('El documento PDF que quieres subir ya existe en la base de datos.');
-                } else if (result.error) {
-                    alert('Error: ' + result.error);
-                } else {
-                    alert('Error: Respuesta inesperada del servidor');
+                // In edit mode, file is optional; in create mode, it's required
+                if (!isEditMode && (!fileInput || !fileInput.files.length)) {
+                    alert('Selecciona un archivo PDF');
+                    return;
                 }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg> Subir Documento`;
-            }
-        });
+
+                const btn = document.getElementById('uploadBtn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = isEditMode ? 'Guardando...' : 'Subiendo...';
+                }
+
+                const formData = new FormData();
+                formData.append('action', isEditMode ? 'update' : 'upload');
+                formData.append('tipo', document.getElementById('docTipo')?.value || '');
+                formData.append('numero', document.getElementById('docNumero')?.value || '');
+                formData.append('fecha', document.getElementById('docFecha')?.value || '');
+                formData.append('proveedor', document.getElementById('docProveedor')?.value || '');
+                formData.append('codes', document.getElementById('docCodes')?.value || '');
+
+                // Add document ID if editing
+                if (isEditMode) {
+                    formData.append('id', form.dataset.editId);
+                    formData.append('current_file', form.dataset.currentFile);
+                }
+
+                // Add file only if a new one was selected
+                if (fileInput && fileInput.files.length) {
+                    formData.append('file', fileInput.files[0]);
+                }
+
+                // CSRF Token in Body (Fallback)
+                const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                formData.append('csrf_token', token);
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-CSRF-TOKEN': token
+                        }
+                    });
+                    const result = await response.json();
+
+                    if (result.success) {
+                        alert(isEditMode ? 'Documento actualizado correctamente' : 'Documento subido correctamente');
+                        resetUploadForm();
+
+                        // Switch to Consultar tab and reload documents
+                        switchTab('consultar');
+                        loadDocuments();
+                    } else if (result.warning) {
+                        // Handle duplicate file warning
+                        alert('El documento PDF que quieres subir ya existe en la base de datos.');
+                    } else if (result.error) {
+                        alert('Error: ' + result.error);
+                    } else {
+                        alert('Error: Respuesta inesperada del servidor');
+                    }
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                } finally {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg> Subir Documento`;
+                    }
+                }
+            });
+        }
 
         // ============ Consultar Tab ============
         async function loadDocuments(page = 1, tipo = '') {
@@ -827,45 +850,67 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                     return;
                 }
 
+                // Check if we have the inline form elements
+                const docTipo = document.getElementById('docTipo');
+                const uploadForm = document.getElementById('uploadForm');
+                
+                if (!docTipo || !uploadForm) {
+                    // Redirect to the subir module with edit parameter through iframe
+                    switchTab('subir');
+                    const subirIframe = document.getElementById('subir-iframe');
+                    if (subirIframe) {
+                        subirIframe.src = 'modules/subir/?edit=' + id;
+                    }
+                    return;
+                }
+
                 // Switch to Subir tab
                 switchTab('subir');
 
                 // Fill form with document data
-                document.getElementById('docTipo').value = doc.tipo;
-                document.getElementById('docNumero').value = doc.numero;
-                document.getElementById('docFecha').value = doc.fecha;
-                document.getElementById('docProveedor').value = doc.proveedor || '';
+                docTipo.value = doc.tipo;
+                const docNumero = document.getElementById('docNumero');
+                if (docNumero) docNumero.value = doc.numero;
+                const docFecha = document.getElementById('docFecha');
+                if (docFecha) docFecha.value = doc.fecha;
+                const docProveedor = document.getElementById('docProveedor');
+                if (docProveedor) docProveedor.value = doc.proveedor || '';
                 // Convert codes array to newline-separated text
-                document.getElementById('docCodes').value = (doc.codes || []).join('\n');
+                const docCodes = document.getElementById('docCodes');
+                if (docCodes) docCodes.value = (doc.codes || []).join('\n');
 
                 // Show current PDF filename and make upload optional
                 const uploadZone = document.getElementById('uploadZone');
                 const fileNameDisplay = document.getElementById('fileName');
 
-                if (doc.ruta_archivo) {
+                if (doc.ruta_archivo && fileNameDisplay && uploadZone) {
                     fileNameDisplay.textContent = `📄 PDF actual: ${doc.ruta_archivo}`;
                     fileNameDisplay.classList.remove('hidden');
                     fileNameDisplay.style.color = 'var(--accent-success)';
 
                     // Update upload zone text
-                    uploadZone.querySelector('p').textContent = 'PDF actual cargado. Arrastra uno nuevo solo si deseas reemplazarlo';
+                    const pEl = uploadZone.querySelector('p');
+                    if (pEl) pEl.textContent = 'PDF actual cargado. Arrastra uno nuevo solo si deseas reemplazarlo';
                     uploadZone.style.borderColor = 'var(--accent-success)';
                     uploadZone.style.background = 'rgba(16, 185, 129, 0.05)';
                 }
 
                 // Update form title and button
-                document.querySelector('#tab-subir h3').textContent = 'Editar Documento';
-                document.getElementById('uploadBtn').innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                    Guardar Cambios
-                `;
+                const titleEl = document.querySelector('#tab-subir h3');
+                if (titleEl) titleEl.textContent = 'Editar Documento';
+                const uploadBtn = document.getElementById('uploadBtn');
+                if (uploadBtn) {
+                    uploadBtn.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        Guardar Cambios
+                    `;
+                }
 
                 // Store doc ID and current file path for update
-                const form = document.getElementById('uploadForm');
-                form.dataset.editId = id;
-                form.dataset.currentFile = doc.ruta_archivo || '';
+                uploadForm.dataset.editId = id;
+                uploadForm.dataset.currentFile = doc.ruta_archivo || '';
 
 
             } catch (error) {
