@@ -1,6 +1,6 @@
 <?php
 /**
- * Sidebar Navigation Component - KINO TRANCE
+ * Sidebar Navigation Component - KINO TRACE
  * 
  * Nueva estructura:
  * 1. Búsqueda Voraz (carga AJAX)
@@ -14,7 +14,7 @@
 
 // Get client info for branding
 $clientCode = $_SESSION['client_code'] ?? 'guest';
-$clientName = 'KINO TRANCE';
+$clientName = 'KINO TRACE';
 
 // Try to get client name from central DB if available
 if (isset($centralDb)) {
@@ -40,7 +40,7 @@ $currentSection = $currentSection ?? 'voraz';
         <div class="sidebar-logo">K</div>
         <div class="sidebar-brand">
             <h1><?= htmlspecialchars($clientName) ?></h1>
-            <span>Gestor Documental</span>
+            <span>Gestión Documental</span>
         </div>
     </div>
 
@@ -176,7 +176,7 @@ $currentSection = $currentSection ?? 'voraz';
 
 <style>
     /* =====================================
-       SIDEBAR STYLES - KINO TRANCE
+       SIDEBAR STYLES - KINO TRACE
        Diseño minimalista y responsive
        ===================================== */
 
