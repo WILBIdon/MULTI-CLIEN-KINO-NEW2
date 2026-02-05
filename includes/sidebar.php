@@ -39,8 +39,8 @@ $currentSection = $currentSection ?? 'voraz';
     <div class="sidebar-header">
         <div class="sidebar-logo">K</div>
         <div class="sidebar-brand">
-            <h1><?= htmlspecialchars($clientName) ?></h1>
-            <span>Gestión Documental</span>
+            <h1>KINO TRACE</h1>
+            <span><?= htmlspecialchars($clientName === 'KINO TRACE' ? 'Gestión Documental' : $clientName) ?></span>
         </div>
     </div>
 
