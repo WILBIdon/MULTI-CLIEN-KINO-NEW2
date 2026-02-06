@@ -56,7 +56,8 @@ try {
 
         foreach ($cachedOcr['words'] as $word) {
             foreach ($terms as $term) {
-                if (mb_stripos($word['text'], $term, 0, 'UTF-8') !== false) {
+                // Comparación EXACTA de palabra (no parcial) para evitar falsos positivos
+                if (mb_strtolower(trim($word['text']), 'UTF-8') === mb_strtolower(trim($term), 'UTF-8')) {
                     $matches[] = [
                         'term' => $term,
                         'word' => $word['text'],
@@ -188,8 +189,8 @@ try {
         $wordText = $word['text'];
 
         foreach ($terms as $term) {
-            // Buscar coincidencia parcial (el término puede estar dentro de la palabra)
-            if (mb_stripos($wordText, $term, 0, 'UTF-8') !== false) {
+            // Comparación EXACTA de palabra (no parcial) para evitar falsos positivos
+            if (mb_strtolower(trim($wordText), 'UTF-8') === mb_strtolower(trim($term), 'UTF-8')) {
                 $matches[] = [
                     'term' => $term,
                     'word' => $wordText,
