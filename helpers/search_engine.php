@@ -193,6 +193,8 @@ function fulltext_search(PDO $db, string $query): array
     }
 
     // Buscar en datos_extraidos que contiene el JSON del texto
+    // Usamos LOWER() para búsqueda case-insensitive
+    $lowerQuery = '%' . strtolower($query) . '%';
     $stmt = $db->prepare("
         SELECT
             d.id,
@@ -203,12 +205,12 @@ function fulltext_search(PDO $db, string $query): array
             d.ruta_archivo,
             d.datos_extraidos
         FROM documentos d
-        WHERE d.datos_extraidos LIKE ?
+        WHERE LOWER(d.datos_extraidos) LIKE ? OR LOWER(d.numero) LIKE ?
         ORDER BY d.fecha DESC
-        LIMIT 50
+        LIMIT 200
     ");
 
-    $stmt->execute(['%' . $query . '%']);
+    $stmt->execute([$lowerQuery, $lowerQuery]);
     $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // ✨ FIX DE ORDENAMIENTO DE FECHAS ✨
@@ -244,11 +246,7 @@ function search_in_pdf_content(PDO $db, string $searchTerm, string $clientCode):
     $stmt = $db->query("
         SELECT id, tipo, numero, fecha, proveedor, ruta_archivo
         FROM documentos
-        FROM documentos
         WHERE ruta_archivo LIKE '%.pdf'
-        -- Eliminamos ORDER BY/LIMIT SQL porque ocultan documentos recientes si el formato es DD-MM-YYYY
-        -- ORDER BY fecha DESC
-        -- LIMIT 100
     ");
 
     $documents = $stmt->fetchAll(PDO::FETCH_ASSOC);

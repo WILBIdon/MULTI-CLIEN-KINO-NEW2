@@ -60,23 +60,24 @@ class SearchController extends BaseController
     public function fulltextSearch($request)
     {
         $query = trim($request['query'] ?? '');
-        $limit = min(100, max(1, (int) ($request['limit'] ?? 50)));
+        $limit = min(200, max(1, (int) ($request['limit'] ?? 100)));
 
         if (strlen($query) < 3) {
             $this->jsonExit(['error' => 'El término debe tener al menos 3 caracteres']);
         }
 
+        // Búsqueda case-insensitive usando LOWER()
+        $lowerQuery = '%' . strtolower($query) . '%';
         $stmt = $this->db->prepare("
             SELECT 
                 d.id, d.tipo, d.numero, d.fecha, d.proveedor, d.ruta_archivo,
                 d.datos_extraidos
             FROM documentos d
-            WHERE d.datos_extraidos LIKE ? OR d.numero LIKE ?
+            WHERE LOWER(d.datos_extraidos) LIKE ? OR LOWER(d.numero) LIKE ?
             ORDER BY d.fecha DESC, d.id DESC
             LIMIT $limit
         ");
-        $likeQuery = '%' . $query . '%';
-        $stmt->execute([$likeQuery, $likeQuery]);
+        $stmt->execute([$lowerQuery, $lowerQuery]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $results = [];
