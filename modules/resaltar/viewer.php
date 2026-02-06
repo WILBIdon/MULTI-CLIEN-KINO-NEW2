@@ -708,11 +708,12 @@ $docIdForOcr = $documentId; // For OCR fallback
                     </div>`;
 
                 // FORZAR RENDERIZADO de todas las páginas con coincidencias
+                console.log('Forzando renderizado de páginas:', pagesWithMatches);
                 for (const pageNum of pagesWithMatches) {
                     const wrapper = document.getElementById('page-' + pageNum);
-                    if (wrapper && !wrapper.dataset.rendered) {
+                    if (wrapper && wrapper.dataset.rendered !== 'ocr-complete') {
                         await renderPage(pageNum, wrapper);
-                        wrapper.dataset.rendered = 'true';
+                        wrapper.dataset.rendered = 'ocr-complete';
                     }
                 }
             }
