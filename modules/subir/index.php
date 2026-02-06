@@ -115,6 +115,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $db->beginTransaction();
 
             if ($action === 'save') {
+                // Validar número de documento duplicado
+                $checkStmt = $db->prepare("SELECT id FROM documentos WHERE numero = ?");
+                $checkStmt->execute([$numero]);
+                if ($checkStmt->fetch()) {
+                    $db->rollBack();
+                    throw new Exception('⚠️ Ya existe un documento con el número "' . $numero . '". Por favor usa un número diferente.');
+                }
+
                 // INSERT
                 $stmt = $db->prepare("
                     INSERT INTO documentos (tipo, numero, fecha, proveedor, ruta_archivo, hash_archivo, datos_extraidos)
@@ -459,19 +467,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         .message {
-            background: #dcfce7;
-            color: #166534;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 1.25rem 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+            animation: slideIn 0.5s ease-out;
+            position: relative;
         }
 
         .error {
-            background: #fee2e2;
-            color: #dc2626;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            padding: 1.25rem 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+            animation: slideIn 0.5s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Overlay de carga para submit del formulario */
+        .submit-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .submit-overlay.active {
+            display: flex;
+        }
+
+        .submit-overlay .spinner-large {
+            width: 60px;
+            height: 60px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #22c55e;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .submit-overlay p {
+            color: white;
+            font-size: 1.25rem;
+            margin-top: 1rem;
+            font-weight: 500;
         }
 
         .loading {
@@ -549,17 +613,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 </head>
 
 <body>
+    <!-- Overlay de carga -->
+    <div class="submit-overlay" id="submitOverlay">
+        <div class="spinner-large"></div>
+        <p>📤 Subiendo documento... Por favor espera</p>
+    </div>
+
     <div class="container">
 
         <?php if ($message): ?>
-            <div class="message">
+            <div class="message" id="successMsg">
                 <?= htmlspecialchars($message) ?>
             </div>
+            <script>document.addEventListener('DOMContentLoaded', function () { document.getElementById('successMsg')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });</script>
         <?php endif; ?>
         <?php if ($error): ?>
-            <div class="error">
+            <div class="error" id="errorMsg">
                 <?= htmlspecialchars($error) ?>
             </div>
+            <script>document.addEventListener('DOMContentLoaded', function () { document.getElementById('errorMsg')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });</script>
         <?php endif; ?>
 
         <?php if ($isEditMode): ?>
@@ -686,7 +758,7 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
                 </div>
 
                 <div class="action-buttons">
-                    <button type="submit" class="btn btn-success">
+                    <button type="submit" class="btn btn-success" id="submitBtn">
                         <?= $isEditMode ? '💾 Actualizar Documento' : '💾 Guardar Documento con Códigos' ?>
                     </button>
                     <a href="index.php" class="btn btn-secondary">Limpiar / Nuevo</a>
@@ -749,6 +821,31 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
         }
 
         codesInput.addEventListener('input', updateCodeCount);
+
+        // Mostrar overlay al enviar formulario
+        document.getElementById('uploadForm').addEventListener('submit', function (e) {
+            const isEditMode = <?= $isEditMode ? 'true' : 'false' ?>;
+            const fileInput = document.getElementById('fileInput');
+            const numero = document.getElementById('numeroDoc').value.trim();
+
+            // Validar que haya archivo si es nuevo documento
+            if (!isEditMode && !fileInput.files.length) {
+                e.preventDefault();
+                alert('⚠️ Debes seleccionar un archivo PDF');
+                return false;
+            }
+
+            // Validar número de documento
+            if (!numero) {
+                e.preventDefault();
+                alert('⚠️ Debes ingresar un número de documento');
+                return false;
+            }
+
+            // Mostrar overlay de carga
+            document.getElementById('submitOverlay').classList.add('active');
+            document.getElementById('submitBtn').disabled = true;
+        });
 
         async function extractCodes() {
             if (!fileInput.files.length) {
