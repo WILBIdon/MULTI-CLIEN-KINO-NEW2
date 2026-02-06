@@ -514,11 +514,31 @@ $currentSection = $currentSection ?? 'voraz';
         }
     }
 
-    // Toggle Admin Menu (oculta botones principales)
+    // Toggle Admin Menu (oculta botones principales) - PROTEGIDO CON CÓDIGO
+    let adminUnlocked = false;
+
     function toggleAdminMenu() {
         const submenu = document.getElementById('submenu-admin');
         const button = submenu.previousElementSibling;
         const mainButtons = document.getElementById('main-nav-buttons');
+
+        // Si el menú está cerrado y no está desbloqueado, pedir código
+        if (!submenu.classList.contains('open') && !adminUnlocked) {
+            const code = prompt('🔐 Ingresa el código de administrador:');
+
+            if (code === null) {
+                // Usuario canceló
+                return;
+            }
+
+            if (code !== '3312') {
+                alert('❌ Código incorrecto');
+                return;
+            }
+
+            // Código correcto - desbloquear para esta sesión
+            adminUnlocked = true;
+        }
 
         // Toggle submenu
         submenu.classList.toggle('open');
