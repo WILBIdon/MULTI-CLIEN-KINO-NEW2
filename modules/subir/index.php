@@ -978,12 +978,15 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
         }
 
         function confirmUploadWithoutCodes() {
+            console.log('[MODAL] Usuario confirmó subir sin códigos');
             hideCodesConfirmModal();
             confirmedWithoutCodes = true;
             // Mostrar overlay de carga y enviar
             document.getElementById('submitOverlay').classList.add('active');
             document.getElementById('submitBtn').disabled = true;
+            console.log('[MODAL] Enviando formulario ahora...');
             document.getElementById('uploadForm').submit();
+            console.log('[MODAL] form.submit() ejecutado');
         }
 
         // Mostrar overlay al enviar formulario
