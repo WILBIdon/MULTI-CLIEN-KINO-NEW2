@@ -957,39 +957,7 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
 
         codesInput.addEventListener('input', updateCodeCount);
 
-        // Variable para controlar si ya se confirmó subir sin códigos
-        let confirmedWithoutCodes = false;
-
-        // Funciones del modal de confirmación de códigos vacíos
-        function showCodesConfirmModal() {
-            document.getElementById('confirmCodesModal').classList.add('active');
-        }
-
-        function hideCodesConfirmModal() {
-            document.getElementById('confirmCodesModal').classList.remove('active');
-        }
-
-        function cancelUploadAndFocusCodes() {
-            hideCodesConfirmModal();
-            // Enfocar el textarea de códigos
-            const codesTextarea = document.getElementById('codesInput');
-            codesTextarea.focus();
-            codesTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-
-        function confirmUploadWithoutCodes() {
-            console.log('[MODAL] Usuario confirmó subir sin códigos');
-            hideCodesConfirmModal();
-            confirmedWithoutCodes = true;
-            // Mostrar overlay de carga y enviar
-            document.getElementById('submitOverlay').classList.add('active');
-            document.getElementById('submitBtn').disabled = true;
-            console.log('[MODAL] Enviando formulario ahora...');
-            document.getElementById('uploadForm').submit();
-            console.log('[MODAL] form.submit() ejecutado');
-        }
-
-        // Mostrar overlay al enviar formulario
+        // Validación del formulario al enviar
         document.getElementById('uploadForm').addEventListener('submit', function (e) {
             const isEditMode = <?= $isEditMode ? 'true' : 'false' ?>;
             const fileInput = document.getElementById('fileInput');
@@ -998,16 +966,16 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
             const fechaDoc = document.getElementById('fechaDoc').value.trim();
             const codes = codesInput.value.trim();
 
-            console.log('[VALIDACIÓN] PDF:', fileInput.files.length, 'Tipo:', tipoDoc, 'Número:', numero, 'Fecha:', fechaDoc, 'Códigos:', codes.length);
+            console.log('[VALIDACIÓN] PDF:', fileInput.files.length, 'Tipo:', tipoDoc, 'Número:', numero, 'Fecha:', fechaDoc, 'Códigos:', codes ? codes.split('\n').length : 0);
 
-            // Validar que haya archivo si es nuevo documento
+            // 1. Validar que haya archivo si es nuevo documento
             if (!isEditMode && !fileInput.files.length) {
                 e.preventDefault();
                 alert('⚠️ Debes seleccionar un archivo PDF');
                 return false;
             }
 
-            // Validar tipo de documento
+            // 2. Validar tipo de documento
             if (!tipoDoc) {
                 e.preventDefault();
                 alert('⚠️ Debes seleccionar un tipo de documento');
@@ -1015,7 +983,7 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
                 return false;
             }
 
-            // Validar número de documento
+            // 3. Validar número de documento
             if (!numero) {
                 e.preventDefault();
                 alert('⚠️ Debes ingresar un número de documento');
@@ -1023,7 +991,7 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
                 return false;
             }
 
-            // Validar fecha
+            // 4. Validar fecha
             if (!fechaDoc) {
                 e.preventDefault();
                 alert('⚠️ Debes seleccionar una fecha');
@@ -1031,18 +999,26 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
                 return false;
             }
 
-            // Verificar si hay códigos, si no, mostrar modal de confirmación
-            if (!codes && !confirmedWithoutCodes) {
-                e.preventDefault();
-                showCodesConfirmModal();
-                return false;
+            // 5. Verificar si hay códigos - usar confirm() simple
+            if (!codes) {
+                const userConfirmed = confirm(
+                    '⚠️ No hay códigos asignados al documento.\n\n' +
+                    '¿Deseas continuar sin códigos?\n\n' +
+                    'Puedes agregarlos manualmente o extraerlos con el extractor.'
+                );
+
+                if (!userConfirmed) {
+                    e.preventDefault();
+                    document.getElementById('codesInput').focus();
+                    document.getElementById('codesInput').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return false;
+                }
             }
 
-            // ✅ Todo está válido - mostrar overlay de carga
-            console.log('[VALIDACIÓN] ✅ Todo válido, enviando formulario...');
+            // ✅ Todo válido - mostrar overlay y enviar
+            console.log('[VALIDACIÓN] ✅ Enviando formulario...');
             document.getElementById('submitOverlay').classList.add('active');
             document.getElementById('submitBtn').disabled = true;
-            // El formulario se enviará automáticamente
         });
 
         async function extractCodes() {
