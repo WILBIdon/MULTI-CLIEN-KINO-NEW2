@@ -146,15 +146,9 @@ $clients = $centralDb->query('SELECT codigo, nombre FROM control_clientes WHERE 
 
             <form method="post">
                 <div class="form-group">
-                    <label class="form-label" for="codigo">Cliente</label>
-                    <select name="codigo" id="codigo" class="form-select" required>
-                        <option value="">Seleccione un cliente...</option>
-                        <?php foreach ($clients as $cli): ?>
-                            <option value="<?= htmlspecialchars($cli['codigo']) ?>">
-                                <?= htmlspecialchars($cli['nombre']) ?> (<?= htmlspecialchars($cli['codigo']) ?>)
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
+                    <label class="form-label" for="codigo">Usuario</label>
+                    <input type="text" name="codigo" id="codigo" class="form-input" required
+                        placeholder="Ingrese su código de cliente" autocomplete="username">
                 </div>
 
                 <div class="form-group">
