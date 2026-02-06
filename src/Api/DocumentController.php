@@ -251,12 +251,13 @@ class DocumentController extends BaseController
         $where = '';
         $params = [];
         if ($tipo !== '') {
-            $where = 'WHERE d.tipo = ?';
+            $where = 'WHERE LOWER(d.tipo) = LOWER(?)';
             $params[] = $tipo;
         }
 
         if ($params) {
-            $stmt = $this->db->prepare("SELECT COUNT(*) FROM documentos $where");
+            // Fix: add 'd.' prefix to tipo column in COUNT query
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM documentos d $where");
             $stmt->execute($params);
             $total = (int) $stmt->fetchColumn();
         } else {
