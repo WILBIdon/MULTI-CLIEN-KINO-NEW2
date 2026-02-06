@@ -316,8 +316,8 @@ function extract_with_ocr_coordinates(string $pdfPath, int $pageNum = 1): array
         $imagePrefix = $tempDir . '/page';
         $escapedPrefix = escapeshellarg($imagePrefix);
 
-        // -f y -l para especificar página, -r para resolución (150 DPI)
-        $cmdConvert = "$pdftoppmPath -png -r 150 -f $pageNum -l $pageNum $escapedPdf $escapedPrefix";
+        // -f y -l para especificar página, -r 150 DPI, -gray para escala de grises (mejora OCR en fondos de color)
+        $cmdConvert = "$pdftoppmPath -png -gray -r 150 -f $pageNum -l $pageNum $escapedPdf $escapedPrefix";
         exec($cmdConvert, $output, $returnCode);
 
         // Buscar la imagen generada
