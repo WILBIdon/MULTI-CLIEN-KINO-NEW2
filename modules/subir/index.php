@@ -1027,8 +1027,10 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
             }
 
             // Verificar si hay códigos, si no, mostrar modal de confirmación
+            console.log('[DEBUG] Verificando códigos:', codes, 'confirmado:', confirmedWithoutCodes);
             if (!codes && !confirmedWithoutCodes) {
                 e.preventDefault();
+                console.log('[DEBUG] Mostrando modal de códigos vacíos');
                 showCodesConfirmModal();
                 return false;
             }
