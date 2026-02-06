@@ -776,7 +776,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             </div>
         <?php endif; ?>
 
-        <form method="POST" enctype="multipart/form-data" id="uploadForm">
+        <form method="POST" enctype="multipart/form-data" id="uploadForm" novalidate>
             <!-- Hidden inputs for Edit Mode -->
             <input type="hidden" name="action" value="<?= $isEditMode ? 'update' : 'save' ?>">
             <?php if ($isEditMode): ?>
