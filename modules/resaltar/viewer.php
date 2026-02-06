@@ -773,7 +773,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                 wrapper.style.minHeight = "auto";
                 wrapper.style.color = "inherit";
 
-                if (hasText) {
+                if (false) { // FORZAR OCR: Siempre usar OCR, nunca texto embebido
                     // ✅ CAMINO 1: PDF tiene texto embebido - usar Mark.js (LÓGICA ORIGINAL)
                     await pdfjsLib.renderTextLayer({
                         textContent: textContent,
@@ -784,9 +784,9 @@ $docIdForOcr = $documentId; // For OCR fallback
 
                     // 3. Resaltado (Mark.js)
                     const instance = new Mark(textDiv);
-                    const opts = { 
-                        element: "mark", 
-                        accuracy: "partially", 
+                    const opts = {
+                        element: "mark",
+                        accuracy: "partially",
                         separateWordSearch: false,
                         done: () => {
                             // 4. Auto-scroll al primer resaltado encontrado (Mark.js) - Dentro de callback para asegurar DOM
@@ -797,7 +797,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                                     // Delay aumentado para dar tiempo a renderizado y evitar conflicto con scroll de página
                                     setTimeout(() => {
                                         firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                    }, 500); 
+                                    }, 500);
                                 }
                             }
                         }
@@ -1087,7 +1087,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                         ctx.globalAlpha = 0.55;
                         ctx.fillStyle = '#0d6939'; // Verde oscuro para escala de grises
 
-                        if (hasEmbeddedText) {
+                        if (false) { // FORZAR OCR: Siempre usar OCR para impresión
                             // CAMINO 1: PDF con texto embebido - usar coordenadas de PDF.js
                             for (const item of textContent.items) {
                                 const itemText = item.str.toLowerCase();
