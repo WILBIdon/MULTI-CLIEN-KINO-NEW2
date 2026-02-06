@@ -475,10 +475,11 @@ Se extraerán solo los códigos de la izquierda."></textarea>
                             <div class="flex gap-2">
                                 <select class="form-select" id="filterTipo" style="width: auto;">
                                     <option value="">Todos los tipos</option>
-                                    <option value="manifiesto">Manifiestos</option>
-                                    <option value="declaracion">Declaraciones</option>
-                                    <option value="factura">Facturas</option>
-                                    <option value="documento">Documentos</option>
+                                    <option value="manifiesto">📦 Manifiestos</option>
+                                    <option value="declaracion">📄 Declaraciones</option>
+                                    <option value="factura">💰 Facturas</option>
+                                    <option value="reporte">📊 Reportes</option>
+                                    <option value="otro">📁 Otros</option>
                                 </select>
                                 <button class="btn btn-secondary" onclick="downloadCSV()">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none"
