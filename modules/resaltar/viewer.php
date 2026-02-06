@@ -672,6 +672,8 @@ $docIdForOcr = $documentId; // For OCR fallback
             }
 
             // ESCANEO PROGRESIVO: Escanea y resalta inmediatamente
+            console.log(`Iniciando escaneo de ${totalPages} páginas...`);
+            
             for (let i = 1; i <= totalPages; i++) {
                 updateStatus(i);
 
@@ -693,6 +695,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                         }
 
                         if (pageHasMatch) {
+                            console.log(`✓ Página ${i}: coincidencia encontrada`);
                             pagesWithMatches.push(i);
                             
                             // RESALTAR INMEDIATAMENTE esta página
@@ -711,12 +714,17 @@ $docIdForOcr = $documentId; // For OCR fallback
                             updateStatus(i);
                         }
                     }
-                } catch (e) { console.warn('OCR error pg ' + i, e); }
+                } catch (e) { 
+                    console.warn(`⚠ Error en página ${i}, continuando...`, e); 
+                    // Continuar con la siguiente página aunque haya error
+                }
 
                 // Pausa mínima para UI
                 if (i % 5 === 0) await new Promise(r => setTimeout(r, 1));
             }
 
+            console.log(`✓ Escaneo completado. Total: ${totalPages} páginas, Coincidencias: ${pagesWithMatches.length}`);
+            
             // Resultado final
             updateStatus(totalPages, true);
         }
