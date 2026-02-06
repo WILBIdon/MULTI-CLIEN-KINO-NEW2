@@ -635,6 +635,16 @@ $docIdForOcr = $documentId; // For OCR fallback
 
             statusDiv.innerHTML = '<div style="color:#d97706; font-size:0.9em;">🔎 Analizando documento...</div>';
 
+            // FORZAR SCROLL AL FINAL para que todas las páginas se inicialicen
+            const container = document.getElementById('pdf-container');
+            const scrollContainer = container.parentElement;
+            const originalScroll = scrollContainer.scrollTop;
+            
+            // Scroll rápido al final y volver al inicio
+            scrollContainer.scrollTop = scrollContainer.scrollHeight;
+            await new Promise(r => setTimeout(r, 100));
+            scrollContainer.scrollTop = originalScroll;
+
             // Mapa para control de "Faltantes"
             // Normalizamos keys para comparación (sin espacios, minuscula)
             let missingMap = new Map();
