@@ -641,6 +641,7 @@ $docIdForOcr = $documentId; // For OCR fallback
             termsToFind.forEach(t => missingMap.set(t.replace(/[^a-zA-Z0-9]/g, '').toLowerCase(), t));
 
             let pagesWithMatches = []; // Lista de páginas con hallazgos
+            let foundTermsSet = new Set(); // Términos encontrados en todo el documento
 
             for (let i = 1; i <= pdfDoc.numPages; i++) {
                 try {
@@ -651,16 +652,15 @@ $docIdForOcr = $documentId; // For OCR fallback
                     let pageHasMatch = false;
                     let cleanStr = '';
 
-                    if (hasText) {
-                        // CAMINO 1: PDF con texto embebido
+                    if (false) { // FORZAR OCR: Siempre usar OCR para el radar
+                        // CAMINO 1: PDF con texto embebido (DESHABILITADO)
                         const rawStr = textContent.items.map(x => x.str).join('');
                         cleanStr = rawStr.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                    } else if (missingMap.size > 0) {
+                    } else if (termsToFind.length > 0) {
                         // CAMINO 2: PDF escaneado - usar OCR para el radar
                         try {
                             const docId = <?= $docIdForOcr ?>;
-                            const termsArr = Array.from(missingMap.values());
-                            const termsStr = encodeURIComponent(termsArr.join(','));
+                            const termsStr = encodeURIComponent(termsToFind.join(','));
                             const ocrResp = await fetch(`ocr_text.php?doc=${docId}&page=${i}&terms=${termsStr}`);
                             const ocrResult = await ocrResp.json();
 
@@ -672,10 +672,10 @@ $docIdForOcr = $documentId; // For OCR fallback
                         }
                     }
 
-                    // Chequear coincidencias
+                    // Chequear coincidencias - NO eliminar del mapa para encontrar en TODAS las páginas
                     for (let [key, original] of missingMap) {
                         if (cleanStr.includes(key)) {
-                            missingMap.delete(key); // ¡Encontrado!
+                            foundTermsSet.add(original); // Agregar al set de encontrados
                             pageHasMatch = true;
                         }
                     }
@@ -708,18 +708,19 @@ $docIdForOcr = $documentId; // For OCR fallback
                     </div>`;
             }
 
-            // Actualizar UI Final
+            // Actualizar UI Final - Comparar encontrados vs buscados
             let statusHtml = '';
-            if (missingMap.size === 0) {
+            const missingTerms = termsToFind.filter(t => !foundTermsSet.has(t));
+            
+            if (missingTerms.length === 0) {
                 statusHtml = `
                     <div style="background:#dcfce7; color:#166534; padding:10px; border-radius:6px; border:1px solid #86efac; font-size:0.9em;">
-                        ✅ <strong>Completo:</strong> Todo encontrado.
+                        ✅ <strong>Completo:</strong> Todo encontrado (${foundTermsSet.size} término${foundTermsSet.size > 1 ? 's' : ''}).
                     </div>`;
             } else {
-                const missingArr = Array.from(missingMap.values());
                 statusHtml = `
                     <div style="background:#fee2e2; color:#991b1b; padding:10px; border-radius:6px; border:1px solid #fecaca; font-size:0.9em;">
-                        <strong>⚠️ Faltan (${missingArr.length}):</strong> ${missingArr.join(', ')}
+                        <strong>⚠️ Faltan (${missingTerms.length}):</strong> ${missingTerms.join(', ')}
                     </div>`;
             }
 
