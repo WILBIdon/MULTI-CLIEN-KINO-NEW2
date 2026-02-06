@@ -622,128 +622,103 @@ $docIdForOcr = $documentId; // For OCR fallback
             }
         }
 
-        // --- RADAR DE FONDO (ESCANEO SECUENCIAL) ---
+        // --- RADAR DE FONDO (ESCANEO PROGRESIVO) ---
         async function scanAllPagesForSummary() {
             const statusDiv = document.getElementById('simpleStatus');
             if (!statusDiv) return;
 
-            // Unir todo para el radar: Buscamos Hits y Contexto
             const termsToFind = [...hits, ...context];
             if (termsToFind.length === 0) {
                 statusDiv.innerHTML = ''; return;
             }
 
             const totalPages = pdfDoc.numPages;
-
-            // Mapa para control de "Faltantes"
             let missingMap = new Map();
             termsToFind.forEach(t => missingMap.set(t.replace(/[^a-zA-Z0-9]/g, '').toLowerCase(), t));
 
             let pagesWithMatches = [];
             let foundTermsSet = new Set();
+            let firstMatchScrolled = false;
 
-            // ========================================
-            // FASE 1: ESCANEAR TODAS LAS PÁGINAS (sin interrupciones)
-            // ========================================
+            // Función para actualizar status en tiempo real
+            function updateStatus(currentPage, isComplete = false) {
+                const missingTerms = termsToFind.filter(t => !foundTermsSet.has(t));
+                let html = '';
+                
+                if (!isComplete) {
+                    html += `<div style="color:#d97706; font-size:0.9em; margin-bottom:5px;">🔎 Escaneando ${currentPage}/${totalPages}...</div>`;
+                }
+                
+                if (pagesWithMatches.length > 0) {
+                    html += `<div style="background:#dcfce7; color:#166534; padding:8px; border-radius:6px; font-size:0.9em; margin-bottom:5px;">
+                        ✅ Encontrado en hojas: ${pagesWithMatches.join(', ')}
+                    </div>`;
+                }
+                
+                if (isComplete && missingTerms.length > 0) {
+                    html += `<div style="background:#fee2e2; color:#991b1b; padding:8px; border-radius:6px; font-size:0.9em;">
+                        ⚠️ Faltan: ${missingTerms.join(', ')}
+                    </div>`;
+                } else if (isComplete && missingTerms.length === 0) {
+                    html = `<div style="background:#dcfce7; color:#166534; padding:10px; border-radius:6px; font-size:0.9em;">
+                        ✅ <strong>Completo:</strong> Todo encontrado (${foundTermsSet.size} término${foundTermsSet.size > 1 ? 's' : ''}).
+                    </div>
+                    <div style="margin-top:8px; background:#eff6ff; color:#1e40af; padding:8px; border-radius:6px; font-size:0.9em;">
+                        📄 Resaltado en hojas: ${pagesWithMatches.join(', ')}
+                    </div>`;
+                }
+                
+                statusDiv.innerHTML = html;
+            }
+
+            // ESCANEO PROGRESIVO: Escanea y resalta inmediatamente
             for (let i = 1; i <= totalPages; i++) {
-                // Mostrar progreso
-                statusDiv.innerHTML = `<div style="color:#d97706; font-size:0.9em;">🔎 Analizando página ${i} de ${totalPages}...</div>`;
+                updateStatus(i);
 
                 try {
-                    const page = await pdfDoc.getPage(i);
-                    const textContent = await page.getTextContent();
-                    let cleanStr = '';
+                    const docId = <?= $docIdForOcr ?>;
+                    const termsStr = encodeURIComponent(termsToFind.join(','));
+                    const ocrResp = await fetch(`ocr_text.php?doc=${docId}&page=${i}&terms=${termsStr}`);
+                    const ocrResult = await ocrResp.json();
 
-                    // Usar OCR para obtener texto
-                    try {
-                        const docId = <?= $docIdForOcr ?>;
-                        const termsStr = encodeURIComponent(termsToFind.join(','));
-                        const ocrResp = await fetch(`ocr_text.php?doc=${docId}&page=${i}&terms=${termsStr}`);
-                        const ocrResult = await ocrResp.json();
-
-                        if (ocrResult.success && ocrResult.text) {
-                            cleanStr = ocrResult.text.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                    if (ocrResult.success && ocrResult.text) {
+                        const cleanStr = ocrResult.text.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                        
+                        let pageHasMatch = false;
+                        for (let [key, original] of missingMap) {
+                            if (cleanStr.includes(key)) {
+                                foundTermsSet.add(original);
+                                pageHasMatch = true;
+                            }
                         }
-                    } catch (ocrErr) {
-                        console.warn('OCR radar error pg ' + i, ocrErr);
-                    }
 
-                    // Chequear coincidencias
-                    let pageHasMatch = false;
-                    for (let [key, original] of missingMap) {
-                        if (cleanStr.includes(key)) {
-                            foundTermsSet.add(original);
-                            pageHasMatch = true;
+                        if (pageHasMatch) {
+                            pagesWithMatches.push(i);
+                            
+                            // RESALTAR INMEDIATAMENTE esta página
+                            const wrapper = document.getElementById('page-' + i);
+                            if (wrapper && wrapper.dataset.rendered !== 'ocr-complete') {
+                                await renderPage(i, wrapper);
+                                wrapper.dataset.rendered = 'ocr-complete';
+                            }
+                            
+                            // Scroll a primera coincidencia
+                            if (!firstMatchScrolled) {
+                                firstMatchScrolled = true;
+                                if (wrapper) wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                            
+                            updateStatus(i);
                         }
                     }
+                } catch (e) { console.warn('OCR error pg ' + i, e); }
 
-                    if (pageHasMatch) {
-                        pagesWithMatches.push(i);
-                    }
-
-                    // Pausa leve para no congelar UI
-                    if (i % 3 === 0) await new Promise(r => setTimeout(r, 5));
-
-                } catch (e) { console.error("Radar error pg " + i, e); }
+                // Pausa mínima para UI
+                if (i % 5 === 0) await new Promise(r => setTimeout(r, 1));
             }
 
-            // ========================================
-            // FASE 2: RESALTAR TODAS LAS PÁGINAS CON COINCIDENCIAS
-            // ========================================
-            if (pagesWithMatches.length > 0) {
-                statusDiv.innerHTML = `<div style="color:#d97706; font-size:0.9em;">✏️ Aplicando resaltados en ${pagesWithMatches.length} página(s)...</div>`;
-                
-                console.log('Forzando renderizado de páginas:', pagesWithMatches);
-                for (const pageNum of pagesWithMatches) {
-                    const wrapper = document.getElementById('page-' + pageNum);
-                    if (wrapper && wrapper.dataset.rendered !== 'ocr-complete') {
-                        await renderPage(pageNum, wrapper);
-                        wrapper.dataset.rendered = 'ocr-complete';
-                    }
-                }
-            }
-
-            // ========================================
-            // FASE 3: MOSTRAR RESULTADO FINAL
-            // ========================================
-            let pagesHtml = '';
-            if (pagesWithMatches.length > 0) {
-                pagesHtml = `
-                    <div style="margin-top:10px; background:#eff6ff; color:#1e40af; padding:10px; border-radius:6px; border:1px solid #bfdbfe; font-size:0.9em;">
-                        📄 <strong>Resaltado en hojas:</strong> ${pagesWithMatches.join(', ')}
-                    </div>`;
-            }
-
-            let statusHtml = '';
-            const missingTerms = termsToFind.filter(t => !foundTermsSet.has(t));
-
-            if (missingTerms.length === 0) {
-                statusHtml = `
-                    <div style="background:#dcfce7; color:#166534; padding:10px; border-radius:6px; border:1px solid #86efac; font-size:0.9em;">
-                        ✅ <strong>Completo:</strong> Todo encontrado (${foundTermsSet.size} término${foundTermsSet.size > 1 ? 's' : ''}).
-                    </div>`;
-            } else {
-                statusHtml = `
-                    <div style="background:#fee2e2; color:#991b1b; padding:10px; border-radius:6px; border:1px solid #fecaca; font-size:0.9em;">
-                        <strong>⚠️ Faltan (${missingTerms.length}):</strong> ${missingTerms.join(', ')}
-                    </div>`;
-            }
-
-            statusDiv.innerHTML = statusHtml + pagesHtml;
-
-            // ========================================
-            // FASE 4: SCROLL A PRIMERA COINCIDENCIA (AL FINAL)
-            // ========================================
-            if (pagesWithMatches.length > 0 && !hasScrollToPage) {
-                hasScrollToPage = true;
-                const firstMatchPage = pagesWithMatches[0];
-                const pEl = document.getElementById('page-' + firstMatchPage);
-                if (pEl) {
-                    setTimeout(() => {
-                        pEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }, 300);
-                }
-            }
+            // Resultado final
+            updateStatus(totalPages, true);
         }
 
         // --- RENDERIZADO VISUAL ---
