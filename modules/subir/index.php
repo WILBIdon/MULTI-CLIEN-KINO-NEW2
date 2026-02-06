@@ -882,7 +882,7 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
                     </div>
                     <div class="form-group">
                         <label>Fecha</label>
-                        <input type="date" name="fecha" required
+                        <input type="date" name="fecha" id="fechaDoc" required
                             value="<?= $isEditMode ? htmlspecialchars($editDoc['fecha']) : date('Y-m-d') ?>">
                     </div>
                     <div class="form-group">
@@ -981,21 +981,32 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
         function confirmUploadWithoutCodes() {
             hideCodesConfirmModal();
             confirmedWithoutCodes = true;
-            // Re-enviar el formulario
-            document.getElementById('uploadForm').dispatchEvent(new Event('submit', { cancelable: true }));
+            // Re-enviar el formulario usando submit() nativo
+            document.getElementById('uploadForm').submit();
         }
 
         // Mostrar overlay al enviar formulario
         document.getElementById('uploadForm').addEventListener('submit', function (e) {
             const isEditMode = <?= $isEditMode ? 'true' : 'false' ?>;
             const fileInput = document.getElementById('fileInput');
+            const tipoDoc = document.getElementById('tipoDoc').value.trim();
             const numero = document.getElementById('numeroDoc').value.trim();
+            const fechaDoc = document.getElementById('fechaDoc').value.trim();
             const codes = codesInput.value.trim();
 
             // Validar que haya archivo si es nuevo documento
             if (!isEditMode && !fileInput.files.length) {
                 e.preventDefault();
                 alert('⚠️ Debes seleccionar un archivo PDF');
+                fileInput.focus();
+                return false;
+            }
+
+            // Validar tipo de documento
+            if (!tipoDoc) {
+                e.preventDefault();
+                alert('⚠️ Debes seleccionar un tipo de documento');
+                document.getElementById('tipoDoc').focus();
                 return false;
             }
 
@@ -1003,6 +1014,15 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
             if (!numero) {
                 e.preventDefault();
                 alert('⚠️ Debes ingresar un número de documento');
+                document.getElementById('numeroDoc').focus();
+                return false;
+            }
+
+            // Validar fecha
+            if (!fechaDoc) {
+                e.preventDefault();
+                alert('⚠️ Debes seleccionar una fecha');
+                document.getElementById('fechaDoc').focus();
                 return false;
             }
 
