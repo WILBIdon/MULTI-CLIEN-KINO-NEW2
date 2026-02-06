@@ -622,7 +622,7 @@ $docIdForOcr = $documentId; // For OCR fallback
             }
         }
 
-        // --- RADAR DE FONDO (AUTO-SCROLL) ---
+        // --- RADAR DE FONDO (ESCANEO SECUENCIAL) ---
         async function scanAllPagesForSummary() {
             const statusDiv = document.getElementById('simpleStatus');
             if (!statusDiv) return;
@@ -633,91 +633,66 @@ $docIdForOcr = $documentId; // For OCR fallback
                 statusDiv.innerHTML = ''; return;
             }
 
-            statusDiv.innerHTML = '<div style="color:#d97706; font-size:0.9em;">🔎 Analizando documento...</div>';
-
-            // FORZAR SCROLL AL FINAL para que todas las páginas se inicialicen
-            const container = document.getElementById('pdf-container');
-            const scrollContainer = container.parentElement;
-            const originalScroll = scrollContainer.scrollTop;
-            
-            // Scroll rápido al final y volver al inicio
-            scrollContainer.scrollTop = scrollContainer.scrollHeight;
-            await new Promise(r => setTimeout(r, 100));
-            scrollContainer.scrollTop = originalScroll;
+            const totalPages = pdfDoc.numPages;
 
             // Mapa para control de "Faltantes"
-            // Normalizamos keys para comparación (sin espacios, minuscula)
             let missingMap = new Map();
             termsToFind.forEach(t => missingMap.set(t.replace(/[^a-zA-Z0-9]/g, '').toLowerCase(), t));
 
-            let pagesWithMatches = []; // Lista de páginas con hallazgos
-            let foundTermsSet = new Set(); // Términos encontrados en todo el documento
+            let pagesWithMatches = [];
+            let foundTermsSet = new Set();
 
-            for (let i = 1; i <= pdfDoc.numPages; i++) {
+            // ========================================
+            // FASE 1: ESCANEAR TODAS LAS PÁGINAS (sin interrupciones)
+            // ========================================
+            for (let i = 1; i <= totalPages; i++) {
+                // Mostrar progreso
+                statusDiv.innerHTML = `<div style="color:#d97706; font-size:0.9em;">🔎 Analizando página ${i} de ${totalPages}...</div>`;
+
                 try {
                     const page = await pdfDoc.getPage(i);
                     const textContent = await page.getTextContent();
-                    const hasText = textContent.items && textContent.items.length > 0;
-
-                    let pageHasMatch = false;
                     let cleanStr = '';
 
-                    if (false) { // FORZAR OCR: Siempre usar OCR para el radar
-                        // CAMINO 1: PDF con texto embebido (DESHABILITADO)
-                        const rawStr = textContent.items.map(x => x.str).join('');
-                        cleanStr = rawStr.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                    } else if (termsToFind.length > 0) {
-                        // CAMINO 2: PDF escaneado - usar OCR para el radar
-                        try {
-                            const docId = <?= $docIdForOcr ?>;
-                            const termsStr = encodeURIComponent(termsToFind.join(','));
-                            const ocrResp = await fetch(`ocr_text.php?doc=${docId}&page=${i}&terms=${termsStr}`);
-                            const ocrResult = await ocrResp.json();
+                    // Usar OCR para obtener texto
+                    try {
+                        const docId = <?= $docIdForOcr ?>;
+                        const termsStr = encodeURIComponent(termsToFind.join(','));
+                        const ocrResp = await fetch(`ocr_text.php?doc=${docId}&page=${i}&terms=${termsStr}`);
+                        const ocrResult = await ocrResp.json();
 
-                            if (ocrResult.success && ocrResult.text) {
-                                cleanStr = ocrResult.text.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                            }
-                        } catch (ocrErr) {
-                            console.warn('OCR radar error pg ' + i, ocrErr);
+                        if (ocrResult.success && ocrResult.text) {
+                            cleanStr = ocrResult.text.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
                         }
+                    } catch (ocrErr) {
+                        console.warn('OCR radar error pg ' + i, ocrErr);
                     }
 
-                    // Chequear coincidencias - NO eliminar del mapa para encontrar en TODAS las páginas
+                    // Chequear coincidencias
+                    let pageHasMatch = false;
                     for (let [key, original] of missingMap) {
                         if (cleanStr.includes(key)) {
-                            foundTermsSet.add(original); // Agregar al set de encontrados
+                            foundTermsSet.add(original);
                             pageHasMatch = true;
                         }
                     }
 
                     if (pageHasMatch) {
                         pagesWithMatches.push(i);
-
-                        // AUTO SCROLL A LA PÁGINA (Primera aproximación)
-                        if (!hasScrollToPage) {
-                            hasScrollToPage = true;
-                            const pEl = document.getElementById('page-' + i);
-                            if (pEl) {
-                                pEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }
-                        }
                     }
 
-                    // Pausa leve para no congelar UI en docs largos
-                    if (i % 5 === 0) await new Promise(r => setTimeout(r, 10));
+                    // Pausa leve para no congelar UI
+                    if (i % 3 === 0) await new Promise(r => setTimeout(r, 5));
 
                 } catch (e) { console.error("Radar error pg " + i, e); }
             }
 
-            // Generar HTML de resumen de PÁGINAS
-            let pagesHtml = '';
+            // ========================================
+            // FASE 2: RESALTAR TODAS LAS PÁGINAS CON COINCIDENCIAS
+            // ========================================
             if (pagesWithMatches.length > 0) {
-                pagesHtml = `
-                    <div style="margin-top:10px; background:#eff6ff; color:#1e40af; padding:10px; border-radius:6px; border:1px solid #bfdbfe; font-size:0.9em;">
-                        📄 <strong>Resaltado en hojas:</strong> ${pagesWithMatches.join(', ')}
-                    </div>`;
-
-                // FORZAR RENDERIZADO de todas las páginas con coincidencias
+                statusDiv.innerHTML = `<div style="color:#d97706; font-size:0.9em;">✏️ Aplicando resaltados en ${pagesWithMatches.length} página(s)...</div>`;
+                
                 console.log('Forzando renderizado de páginas:', pagesWithMatches);
                 for (const pageNum of pagesWithMatches) {
                     const wrapper = document.getElementById('page-' + pageNum);
@@ -728,7 +703,17 @@ $docIdForOcr = $documentId; // For OCR fallback
                 }
             }
 
-            // Actualizar UI Final - Comparar encontrados vs buscados
+            // ========================================
+            // FASE 3: MOSTRAR RESULTADO FINAL
+            // ========================================
+            let pagesHtml = '';
+            if (pagesWithMatches.length > 0) {
+                pagesHtml = `
+                    <div style="margin-top:10px; background:#eff6ff; color:#1e40af; padding:10px; border-radius:6px; border:1px solid #bfdbfe; font-size:0.9em;">
+                        📄 <strong>Resaltado en hojas:</strong> ${pagesWithMatches.join(', ')}
+                    </div>`;
+            }
+
             let statusHtml = '';
             const missingTerms = termsToFind.filter(t => !foundTermsSet.has(t));
 
@@ -745,6 +730,20 @@ $docIdForOcr = $documentId; // For OCR fallback
             }
 
             statusDiv.innerHTML = statusHtml + pagesHtml;
+
+            // ========================================
+            // FASE 4: SCROLL A PRIMERA COINCIDENCIA (AL FINAL)
+            // ========================================
+            if (pagesWithMatches.length > 0 && !hasScrollToPage) {
+                hasScrollToPage = true;
+                const firstMatchPage = pagesWithMatches[0];
+                const pEl = document.getElementById('page-' + firstMatchPage);
+                if (pEl) {
+                    setTimeout(() => {
+                        pEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 300);
+                }
+            }
         }
 
         // --- RENDERIZADO VISUAL ---
