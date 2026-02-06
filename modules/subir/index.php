@@ -79,6 +79,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             // Si hay archivo nuevo subido
             if (!empty($_FILES['file']['tmp_name']) && $_FILES['file']['error'] === UPLOAD_ERR_OK) {
+                $originalFileName = $_FILES['file']['name'];
+
+                // Validar nombre de archivo duplicado
+                $checkFileStmt = $db->prepare("SELECT id, numero FROM documentos WHERE ruta_archivo LIKE ?");
+                $checkFileStmt->execute(['%/' . basename($originalFileName)]);
+                $existingFile = $checkFileStmt->fetch(PDO::FETCH_ASSOC);
+                if ($existingFile) {
+                    throw new Exception('⚠️ Ya existe un archivo con el nombre "' . $originalFileName . '" (Documento #' . $existingFile['numero'] . '). Renombra el archivo antes de subirlo.');
+                }
+
+                // Validar contenido duplicado por hash
+                $tempHash = hash_file('sha256', $_FILES['file']['tmp_name']);
+                $checkHashStmt = $db->prepare("SELECT id, numero FROM documentos WHERE hash_archivo = ?");
+                $checkHashStmt->execute([$tempHash]);
+                $existingHash = $checkHashStmt->fetch(PDO::FETCH_ASSOC);
+                if ($existingHash) {
+                    throw new Exception('⚠️ Este archivo ya fue subido anteriormente (Documento #' . $existingHash['numero'] . '). El contenido es idéntico.');
+                }
+
                 // Crear directorio
                 $clientDir = CLIENTS_DIR . '/' . $code;
                 $uploadDir = $clientDir . '/uploads/' . $tipo;
@@ -86,15 +105,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     mkdir($uploadDir, 0777, true);
                 }
 
-                $ext = pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION);
-                $targetName = uniqid($tipo . '_', true) . '.' . $ext;
+                $ext = pathinfo($originalFileName, PATHINFO_EXTENSION);
+                // Guardar con nombre original para poder validarlo después
+                $targetName = preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', pathinfo($originalFileName, PATHINFO_FILENAME)) . '_' . uniqid() . '.' . $ext;
                 $targetPath = $uploadDir . '/' . $targetName;
 
                 if (!move_uploaded_file($_FILES['file']['tmp_name'], $targetPath)) {
                     throw new Exception('Error al mover el archivo subido.');
                 }
 
-                $hash = hash_file('sha256', $targetPath);
+                $hash = $tempHash;
                 $fileUploaded = true;
 
                 // Extraer datos si es PDF
