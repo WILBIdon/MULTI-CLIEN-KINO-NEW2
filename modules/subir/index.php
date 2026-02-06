@@ -867,7 +867,7 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
                         <label>Tipo de Documento</label>
                         <select name="tipo" id="tipoDoc" required>
                             <?php
-                            $types = ['manifiesto' => '📦 Manifiesto', 'declaracion' => '📄 Declaración', 'factura' => '💰 Factura', 'reporte' => '📊 Reporte', 'otro' => '📁 Otro'];
+                            $types = ['declaracion' => '📄 Declaración', 'factura' => '💰 Factura', 'otro' => '📁 Otro'];
                             $currentType = $isEditMode ? $editDoc['tipo'] : 'documento';
                             foreach ($types as $val => $label): ?>
                                 <option value="<?= $val ?>" <?= $currentType === $val ? 'selected' : '' ?>><?= $label ?>
