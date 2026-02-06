@@ -706,12 +706,21 @@ $docIdForOcr = $documentId; // For OCR fallback
                     <div style="margin-top:10px; background:#eff6ff; color:#1e40af; padding:10px; border-radius:6px; border:1px solid #bfdbfe; font-size:0.9em;">
                         📄 <strong>Resaltado en hojas:</strong> ${pagesWithMatches.join(', ')}
                     </div>`;
+
+                // FORZAR RENDERIZADO de todas las páginas con coincidencias
+                for (const pageNum of pagesWithMatches) {
+                    const wrapper = document.getElementById('page-' + pageNum);
+                    if (wrapper && !wrapper.dataset.rendered) {
+                        await renderPage(pageNum, wrapper);
+                        wrapper.dataset.rendered = 'true';
+                    }
+                }
             }
 
             // Actualizar UI Final - Comparar encontrados vs buscados
             let statusHtml = '';
             const missingTerms = termsToFind.filter(t => !foundTermsSet.has(t));
-            
+
             if (missingTerms.length === 0) {
                 statusHtml = `
                     <div style="background:#dcfce7; color:#166534; padding:10px; border-radius:6px; border:1px solid #86efac; font-size:0.9em;">
