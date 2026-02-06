@@ -650,6 +650,110 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         <p>📤 Subiendo documento... Por favor espera</p>
     </div>
 
+    <!-- Modal de confirmación para códigos vacíos -->
+    <div class="confirm-modal-overlay" id="confirmCodesModal">
+        <div class="confirm-modal">
+            <div class="confirm-modal-icon">⚠️</div>
+            <h3>Documento sin códigos asignados</h3>
+            <p class="confirm-modal-text">
+                ¿Deseas subir el PDF sin códigos asignados?
+            </p>
+            <p class="confirm-modal-hint">
+                💡 Puedes agregarlos manualmente en el textarea o extraerlos con el extractor de códigos.
+            </p>
+            <div class="confirm-modal-buttons">
+                <button type="button" class="btn btn-secondary" onclick="cancelUploadAndFocusCodes()">
+                    ✏️ No, quiero agregar códigos
+                </button>
+                <button type="button" class="btn btn-primary" onclick="confirmUploadWithoutCodes()">
+                    ✅ Sí, subir sin códigos
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .confirm-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .confirm-modal-overlay.active {
+            display: flex;
+        }
+
+        .confirm-modal {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            max-width: 450px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .confirm-modal-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .confirm-modal h3 {
+            color: #1f2937;
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+        }
+
+        .confirm-modal-text {
+            color: #4b5563;
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
+        }
+
+        .confirm-modal-hint {
+            background: linear-gradient(135deg, #eff6ff, #dbeafe);
+            color: #1e40af;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid #bfdbfe;
+        }
+
+        .confirm-modal-buttons {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .confirm-modal-buttons .btn {
+            flex: 1;
+            min-width: 150px;
+        }
+    </style>
+
     <div class="container">
 
         <?php if ($message): ?>
@@ -853,11 +957,40 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
 
         codesInput.addEventListener('input', updateCodeCount);
 
+        // Variable para controlar si ya se confirmó subir sin códigos
+        let confirmedWithoutCodes = false;
+
+        // Funciones del modal de confirmación de códigos vacíos
+        function showCodesConfirmModal() {
+            document.getElementById('confirmCodesModal').classList.add('active');
+        }
+
+        function hideCodesConfirmModal() {
+            document.getElementById('confirmCodesModal').classList.remove('active');
+        }
+
+        function cancelUploadAndFocusCodes() {
+            hideCodesConfirmModal();
+            // Enfocar el textarea de códigos
+            const codesTextarea = document.getElementById('codesInput');
+            codesTextarea.focus();
+            // Scroll al textarea
+            codesTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function confirmUploadWithoutCodes() {
+            hideCodesConfirmModal();
+            confirmedWithoutCodes = true;
+            // Re-enviar el formulario
+            document.getElementById('uploadForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        }
+
         // Mostrar overlay al enviar formulario
         document.getElementById('uploadForm').addEventListener('submit', function (e) {
             const isEditMode = <?= $isEditMode ? 'true' : 'false' ?>;
             const fileInput = document.getElementById('fileInput');
             const numero = document.getElementById('numeroDoc').value.trim();
+            const codes = codesInput.value.trim();
 
             // Validar que haya archivo si es nuevo documento
             if (!isEditMode && !fileInput.files.length) {
@@ -872,6 +1005,16 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
                 alert('⚠️ Debes ingresar un número de documento');
                 return false;
             }
+
+            // Verificar si hay códigos, si no, mostrar modal de confirmación
+            if (!codes && !confirmedWithoutCodes) {
+                e.preventDefault();
+                showCodesConfirmModal();
+                return false;
+            }
+
+            // Resetear la bandera para futuras subidas
+            confirmedWithoutCodes = false;
 
             // Mostrar overlay de carga
             document.getElementById('submitOverlay').classList.add('active');
