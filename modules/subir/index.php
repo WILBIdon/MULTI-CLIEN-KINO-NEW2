@@ -29,6 +29,12 @@ $geminiConfigured = is_gemini_configured();
 $message = '';
 $error = '';
 
+// Leer mensaje de éxito de sesión (flash message)
+if (isset($_SESSION['upload_success'])) {
+    $message = $_SESSION['upload_success'];
+    unset($_SESSION['upload_success']);
+}
+
 // --- MODO EDICIÓN: Cargar datos si existe parámetro 'edit' ---
 $editId = isset($_GET['edit']) ? (int) $_GET['edit'] : 0;
 $isEditMode = $editId > 0;
@@ -223,14 +229,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
 
             $db->commit();
-            $message .= " con " . count($codes) . " código(s)";
 
-            // Si fue save exitoso, limpiar formulario (redirigir para evitar re-submit)
+            // Guardar mensaje en sesión y redirigir (patrón POST-Redirect-GET)
+            $successMsg = ($action === 'save' ? "✅ Documento creado" : "✅ Documento actualizado") . " exitosamente con " . count($codes) . " código(s)";
+            $_SESSION['upload_success'] = $successMsg;
+
+            // Redirigir para limpiar estado del formulario
             if ($action === 'save') {
-                // Opcional: header("Location: index.php?success=1");
-                $isEditMode = false;
-                $editDoc = null;
-                $editCodes = [];
+                header("Location: index.php");
+                exit;
+            } else {
+                // En modo edición, quedarse en el documento
+                header("Location: index.php?edit=" . $docId);
+                exit;
             }
 
         } catch (Exception $e) {
