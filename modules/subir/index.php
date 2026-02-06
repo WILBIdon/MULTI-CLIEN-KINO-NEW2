@@ -974,14 +974,15 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
             // Enfocar el textarea de códigos
             const codesTextarea = document.getElementById('codesInput');
             codesTextarea.focus();
-            // Scroll al textarea
             codesTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
         function confirmUploadWithoutCodes() {
             hideCodesConfirmModal();
             confirmedWithoutCodes = true;
-            // Re-enviar el formulario usando submit() nativo
+            // Mostrar overlay de carga y enviar
+            document.getElementById('submitOverlay').classList.add('active');
+            document.getElementById('submitBtn').disabled = true;
             document.getElementById('uploadForm').submit();
         }
 
@@ -994,11 +995,12 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
             const fechaDoc = document.getElementById('fechaDoc').value.trim();
             const codes = codesInput.value.trim();
 
+            console.log('[VALIDACIÓN] PDF:', fileInput.files.length, 'Tipo:', tipoDoc, 'Número:', numero, 'Fecha:', fechaDoc, 'Códigos:', codes.length);
+
             // Validar que haya archivo si es nuevo documento
             if (!isEditMode && !fileInput.files.length) {
                 e.preventDefault();
                 alert('⚠️ Debes seleccionar un archivo PDF');
-                fileInput.focus();
                 return false;
             }
 
@@ -1027,20 +1029,17 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
             }
 
             // Verificar si hay códigos, si no, mostrar modal de confirmación
-            console.log('[DEBUG] Verificando códigos:', codes, 'confirmado:', confirmedWithoutCodes);
             if (!codes && !confirmedWithoutCodes) {
                 e.preventDefault();
-                console.log('[DEBUG] Mostrando modal de códigos vacíos');
                 showCodesConfirmModal();
                 return false;
             }
 
-            // Resetear la bandera para futuras subidas
-            confirmedWithoutCodes = false;
-
-            // Mostrar overlay de carga
+            // ✅ Todo está válido - mostrar overlay de carga
+            console.log('[VALIDACIÓN] ✅ Todo válido, enviando formulario...');
             document.getElementById('submitOverlay').classList.add('active');
             document.getElementById('submitBtn').disabled = true;
+            // El formulario se enviará automáticamente
         });
 
         async function extractCodes() {
