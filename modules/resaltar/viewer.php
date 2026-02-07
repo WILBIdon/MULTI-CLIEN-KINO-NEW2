@@ -953,7 +953,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                                     top: ${hl.y * scaleY}px;
                                     width: ${hl.w * scaleX}px;
                                     height: ${hl.h * scaleY}px;
-                                    background: rgba(22, 101, 52, 0.55);
+                                    background: rgba(144, 238, 144, 0.25);
                                     border: none;
                                     border-radius: 2px;
                                 `;
@@ -1084,8 +1084,8 @@ $docIdForOcr = $documentId; // For OCR fallback
 
                     // Dibujar resaltados sobre el canvas
                     if (allTerms.length > 0) {
-                        ctx.globalAlpha = 0.55;
-                        ctx.fillStyle = '#0d6939'; // Verde oscuro para escala de grises
+                        ctx.globalAlpha = 0.25;
+                        ctx.fillStyle = '#90ee90'; // Verde claro para no tapar texto
 
                         if (false) { // FORZAR OCR: Siempre usar OCR para impresión
                             // CAMINO 1: PDF con texto embebido - usar coordenadas de PDF.js
