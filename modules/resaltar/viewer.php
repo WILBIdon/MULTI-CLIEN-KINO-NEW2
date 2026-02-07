@@ -209,8 +209,6 @@ $docIdForOcr = $documentId; // For OCR fallback
             overflow: hidden;
             opacity: 1;
             line-height: 1;
-            mix-blend-mode: multiply;
-            /* Fusión para que se vea el texto negro debajo */
         }
 
         .text-layer span {
@@ -226,7 +224,6 @@ $docIdForOcr = $documentId; // For OCR fallback
             margin: 0;
             border-radius: 0;
             color: transparent;
-            mix-blend-mode: multiply;
         }
 
         /* Verde claro (Hits Manuales) - Visible en impresión B/N */
