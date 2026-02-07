@@ -228,12 +228,12 @@ $docIdForOcr = $documentId; // For OCR fallback
 
         /* Verde gris (Hits Manuales) - Visible en impresión B/N */
         .highlight-hit {
-            background-color: rgba(100, 160, 100, 0.35) !important;
+            background-color: rgba(100, 160, 100, 0.60) !important;
         }
 
         /* Verde gris suave (Contexto Automático) */
         .highlight-context {
-            background-color: rgba(100, 160, 100, 0.30) !important;
+            background-color: rgba(100, 160, 100, 0.55) !important;
         }
 
         /* --- UI COMPONENTS --- */
@@ -953,7 +953,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                                     top: ${hl.y * scaleY}px;
                                     width: ${hl.w * scaleX}px;
                                     height: ${hl.h * scaleY}px;
-                                    background: rgba(100, 160, 100, 0.35);
+                                    background: rgba(100, 160, 100, 0.60);
                                     border: none;
                                     border-radius: 2px;
                                 `;
@@ -1084,7 +1084,7 @@ $docIdForOcr = $documentId; // For OCR fallback
 
                     // Dibujar resaltados sobre el canvas
                     if (allTerms.length > 0) {
-                        ctx.globalAlpha = 0.35;
+                        ctx.globalAlpha = 0.60;
                         ctx.fillStyle = '#64a064'; // Gris-verde visible en B/N
 
                         if (false) { // FORZAR OCR: Siempre usar OCR para impresión
