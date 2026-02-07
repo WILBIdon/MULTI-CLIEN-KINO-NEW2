@@ -228,12 +228,12 @@ $docIdForOcr = $documentId; // For OCR fallback
 
         /* Verde gris (Hits Manuales) - Visible en impresión B/N */
         .highlight-hit {
-            background-color: rgba(22, 101, 52, 0.45) !important;
+            background-color: rgba(85, 140, 45, 0.45) !important;
         }
 
         /* Verde gris suave (Contexto Automático) */
         .highlight-context {
-            background-color: rgba(22, 101, 52, 0.45) !important;
+            background-color: rgba(85, 140, 45, 0.45) !important;
         }
 
         /* --- UI COMPONENTS --- */
@@ -989,7 +989,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                                     top: ${hl.y * scaleY}px;
                                     width: ${hl.w * scaleX}px;
                                     height: ${hl.h * scaleY}px;
-                                    background: rgba(22, 101, 52, 0.45);
+                                    background: rgba(85, 140, 45, 0.45);
                                     border: none;
                                     border-radius: 2px;
                                 `;
@@ -1121,7 +1121,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                     // Dibujar resaltados sobre el canvas
                     if (allTerms.length > 0) {
                         ctx.globalAlpha = 0.45;
-                        ctx.fillStyle = '#166534'; // Verde bosque
+                        ctx.fillStyle = '#558c2d'; // Verde amarillento
 
                         if (false) { // FORZAR OCR: Siempre usar OCR para impresión
                             // CAMINO 1: PDF con texto embebido - usar coordenadas de PDF.js
