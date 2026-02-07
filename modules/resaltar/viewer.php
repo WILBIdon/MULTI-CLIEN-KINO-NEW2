@@ -229,14 +229,14 @@ $docIdForOcr = $documentId; // For OCR fallback
             mix-blend-mode: multiply;
         }
 
-        /* Verde Bosque (Hits Manuales) */
+        /* Verde claro (Hits Manuales) - Visible en impresión B/N */
         .highlight-hit {
-            background-color: rgba(34, 197, 94, 0.45) !important;
+            background-color: rgba(34, 197, 94, 0.25) !important;
         }
 
-        /* Verde Bosque Suave (Contexto Automático) */
+        /* Verde más suave (Contexto Automático) */
         .highlight-context {
-            background-color: rgba(34, 197, 94, 0.35) !important;
+            background-color: rgba(34, 197, 94, 0.20) !important;
         }
 
         /* --- UI COMPONENTS --- */
