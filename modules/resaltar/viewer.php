@@ -231,12 +231,12 @@ $docIdForOcr = $documentId; // For OCR fallback
 
         /* Verde claro (Hits Manuales) - Visible en impresión B/N */
         .highlight-hit {
-            background-color: rgba(34, 197, 94, 0.25) !important;
+            background-color: rgba(34, 197, 94, 0.12) !important;
         }
 
         /* Verde más suave (Contexto Automático) */
         .highlight-context {
-            background-color: rgba(34, 197, 94, 0.20) !important;
+            background-color: rgba(34, 197, 94, 0.10) !important;
         }
 
         /* --- UI COMPONENTS --- */
