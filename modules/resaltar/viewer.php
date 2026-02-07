@@ -1,9 +1,10 @@
 <?php
 /**
  * Print-Optimized PDF Viewer with Highlighting
- * * Optimized Version:
+ * 
+ * Optimized Version:
  * - Client-side ONLY highlighting (Mark.js).
- * - Lazy Loading with Auto-Scroll Radar.
+ * - TURBO Lazy Loading with Parallel Radar.
  * - Persistent Context Preservation (Hidden Inputs).
  * - Editable Search List.
  */
@@ -564,6 +565,9 @@ $docIdForOcr = $documentId; // For OCR fallback
         // LOCK: Páginas actualmente en proceso de renderizado (evitar duplicados)
         const pagesBeingRendered = new Set();
 
+        // CONFIGURACIÓN TURBO
+        const CONCURRENCY_LIMIT = 4; // Páginas a escanear en paralelo
+
         // --- VORAZ NAV ---
         let vorazData = JSON.parse(sessionStorage.getItem('voraz_viewer_data') || 'null');
         let currentDocIndex = vorazData ? (vorazData.currentIndex || 0) : 0;
@@ -625,7 +629,7 @@ $docIdForOcr = $documentId; // For OCR fallback
             }
         }
 
-        // --- RADAR DE FONDO (ESCANEO PROGRESIVO) ---
+        // --- RADAR DE FONDO OPTIMIZADO (TURBO BATCH SCAN) ---
         async function scanAllPagesForSummary() {
             const statusDiv = document.getElementById('simpleStatus');
             if (!statusDiv) return;
@@ -649,12 +653,12 @@ $docIdForOcr = $documentId; // For OCR fallback
                 let html = '';
 
                 if (!isComplete) {
-                    html += `<div style="color:#d97706; font-size:0.9em; margin-bottom:5px;">🔎 Escaneando ${currentPage}/${totalPages}...</div>`;
+                    html += `<div style="color:#d97706; font-size:0.9em; margin-bottom:5px;">🚀 Escaneando Rápido... (${currentPage}/${totalPages})</div>`;
                 }
 
                 if (pagesWithMatches.length > 0) {
                     html += `<div style="background:#dcfce7; color:#166534; padding:8px; border-radius:6px; font-size:0.9em; margin-bottom:5px;">
-                        ✅ Encontrado en hojas: ${pagesWithMatches.join(', ')}
+                        ✅ Encontrado en hojas: ${pagesWithMatches.sort((a, b) => a - b).join(', ')}
                     </div>`;
                 }
 
@@ -667,73 +671,103 @@ $docIdForOcr = $documentId; // For OCR fallback
                         ✅ <strong>Completo:</strong> Todo encontrado (${foundTermsSet.size} término${foundTermsSet.size > 1 ? 's' : ''}).
                     </div>
                     <div style="margin-top:8px; background:#eff6ff; color:#1e40af; padding:8px; border-radius:6px; font-size:0.9em;">
-                        📄 Resaltado en hojas: ${pagesWithMatches.join(', ')}
+                        📄 Resaltado en hojas: ${pagesWithMatches.sort((a, b) => a - b).join(', ')}
                     </div>`;
                 }
 
                 statusDiv.innerHTML = html;
             }
 
-            // ESCANEO PROGRESIVO: Escanea y resalta inmediatamente
-            console.log(`Iniciando escaneo de ${totalPages} páginas...`);
+            // ESCANEO PROGRESIVO EN LOTES (PARALELO)
+            console.log(`Iniciando escaneo TURBO de ${totalPages} páginas en bloques de ${CONCURRENCY_LIMIT}...`);
+            const docId = <?= $docIdForOcr ?>;
+            const termsStr = encodeURIComponent(termsToFind.join(','));
 
-            for (let i = 1; i <= totalPages; i++) {
-                updateStatus(i);
+            for (let i = 1; i <= totalPages; i += CONCURRENCY_LIMIT) {
+                // Preparar lote de promesas
+                const batchPromises = [];
+                const batchPages = [];
 
-                try {
-                    const docId = <?= $docIdForOcr ?>;
-                    const termsStr = encodeURIComponent(termsToFind.join(','));
-                    const ocrResp = await fetch(`ocr_text.php?doc=${docId}&page=${i}&terms=${termsStr}`);
-                    const ocrResult = await ocrResp.json();
+                for (let j = 0; j < CONCURRENCY_LIMIT; j++) {
+                    const pageNum = i + j;
+                    if (pageNum > totalPages) break;
 
-                    // OPTIMIZACIÓN: Guardar resultado en cache para evitar petición duplicada
-                    if (ocrResult.success) {
-                        ocrResultsCache.set(i, ocrResult);
-                    }
-
-                    if (ocrResult.success && ocrResult.text) {
-                        const cleanStr = ocrResult.text.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-
-                        let pageHasMatch = false;
-                        for (let [key, original] of missingMap) {
-                            if (cleanStr.includes(key)) {
-                                foundTermsSet.add(original);
-                                pageHasMatch = true;
-                            }
-                        }
-
-                        if (pageHasMatch) {
-                            console.log(`✓ Página ${i}: coincidencia encontrada`);
-                            pagesWithMatches.push(i);
-
-                            // RESALTAR INMEDIATAMENTE esta página (con resultados ya cacheados)
-                            const wrapper = document.getElementById('page-' + i);
-                            if (wrapper && wrapper.dataset.rendered !== 'ocr-complete') {
-                                await renderPage(i, wrapper);
-                                wrapper.dataset.rendered = 'ocr-complete';
-                            }
-
-                            // Scroll a primera coincidencia
-                            if (!firstMatchScrolled) {
-                                firstMatchScrolled = true;
-                                if (wrapper) wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }
-
-                            updateStatus(i);
-                        }
-                    }
-                } catch (e) {
-                    console.warn(`⚠ Error en página ${i}, continuando...`, e);
-                    // Continuar con la siguiente página aunque haya error
+                    batchPages.push(pageNum);
+                    // Lanzar petición
+                    batchPromises.push(
+                        fetch(`ocr_text.php?doc=${docId}&page=${pageNum}&terms=${termsStr}`)
+                            .then(res => res.json())
+                            .catch(err => ({ success: false, error: err }))
+                    );
                 }
 
-                // Pausa mínima para UI
-                if (i % 5 === 0) await new Promise(r => setTimeout(r, 1));
+                // Actualizar UI indicando el progreso del lote actual
+                updateStatus(Math.min(i + CONCURRENCY_LIMIT - 1, totalPages));
+
+                try {
+                    // Esperar a que todo el lote responda
+                    const results = await Promise.all(batchPromises);
+
+                    // Procesar resultados del lote
+                    for (let k = 0; k < results.length; k++) {
+                        const ocrResult = results[k];
+                        const pageNum = batchPages[k];
+
+                        // Cachear resultado
+                        if (ocrResult.success) {
+                            ocrResultsCache.set(pageNum, ocrResult);
+                        }
+
+                        if (ocrResult.success && ocrResult.text) {
+                            const cleanStr = ocrResult.text.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                            let pageHasMatch = false;
+
+                            for (let [key, original] of missingMap) {
+                                if (cleanStr.includes(key)) {
+                                    foundTermsSet.add(original);
+                                    pageHasMatch = true;
+                                }
+                            }
+
+                            if (pageHasMatch) {
+                                console.log(`✓ Página ${pageNum}: coincidencia encontrada`);
+                                pagesWithMatches.push(pageNum);
+
+                                // RESALTAR INMEDIATAMENTE si la página está visible o cerca
+                                const wrapper = document.getElementById('page-' + pageNum);
+                                if (wrapper && wrapper.dataset.rendered !== 'ocr-complete') {
+                                    // Solo forzar render si el usuario la está viendo o es la primera
+                                    // Para no saturar la CPU con canvas mientras descargamos lotes
+                                    if (pageNum === 1 || !firstMatchScrolled) {
+                                        await renderPage(pageNum, wrapper);
+                                        wrapper.dataset.rendered = 'ocr-complete';
+                                    } else {
+                                        // Marcar visualmente "pendiente de revisar"
+                                        wrapper.style.borderLeft = "5px solid #16a34a";
+                                    }
+                                }
+
+                                // Scroll a primera coincidencia
+                                if (!firstMatchScrolled) {
+                                    firstMatchScrolled = true;
+                                    const firstWrapper = document.getElementById('page-' + pageNum);
+                                    if (firstWrapper) firstWrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                            }
+                        }
+                    }
+
+                    updateStatus(Math.min(i + CONCURRENCY_LIMIT - 1, totalPages));
+
+                } catch (e) {
+                    console.warn(`⚠ Error en lote iniciando pág ${i}, continuando...`, e);
+                }
+
+                // Pausa mínima para no congelar la UI
+                await new Promise(r => setTimeout(r, 20));
             }
 
-            console.log(`✓ Escaneo completado. Total: ${totalPages} páginas, Coincidencias: ${pagesWithMatches.length}`);
-
-            // Resultado final
+            console.log(`✓ Escaneo TURBO completado. Total: ${totalPages} páginas.`);
             updateStatus(totalPages, true);
         }
 

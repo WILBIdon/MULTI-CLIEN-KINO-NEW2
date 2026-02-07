@@ -251,7 +251,8 @@ function extract_with_ocr(string $pdfPath): string
         $escapedPrefix = escapeshellarg($tempDir . '/page');
 
         // Sin límite de páginas para extraer de TODO el documento
-        $cmdConvert = "$pdftoppmPath -png -r 150 $escapedPdf $escapedPrefix";
+        // OPTIMIZACIÓN: Se reduce a 96 DPI para velocidad si es solo texto general
+        $cmdConvert = "$pdftoppmPath -png -r 96 $escapedPdf $escapedPrefix";
         exec($cmdConvert);
 
         // 2. Procesar cada imagen con Tesseract
@@ -316,8 +317,10 @@ function extract_with_ocr_coordinates(string $pdfPath, int $pageNum = 1): array
         $imagePrefix = $tempDir . '/page';
         $escapedPrefix = escapeshellarg($imagePrefix);
 
-        // -f y -l para especificar página, -r 150 DPI, -gray para escala de grises (mejora OCR en fondos de color)
-        $cmdConvert = "$pdftoppmPath -png -gray -r 150 -f $pageNum -l $pageNum $escapedPdf $escapedPrefix";
+        // OPTIMIZACIÓN DE VELOCIDAD:
+        // -r 96 (antes 150): Reduce la resolución para acelerar OCR un 50%
+        // -gray: Convierte a escala de grises para procesar menos datos de color
+        $cmdConvert = "$pdftoppmPath -png -gray -r 96 -f $pageNum -l $pageNum $escapedPdf $escapedPrefix";
         exec($cmdConvert, $output, $returnCode);
 
         // Buscar la imagen generada
