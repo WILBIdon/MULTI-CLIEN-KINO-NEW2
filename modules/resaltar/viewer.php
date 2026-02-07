@@ -228,12 +228,12 @@ $docIdForOcr = $documentId; // For OCR fallback
 
         /* Verde gris (Hits Manuales) - Visible en impresión B/N */
         .highlight-hit {
-            background-color: rgba(22, 101, 52, 0.35) !important;
+            background-color: rgba(22, 101, 52, 0.45) !important;
         }
 
         /* Verde gris suave (Contexto Automático) */
         .highlight-context {
-            background-color: rgba(22, 101, 52, 0.35) !important;
+            background-color: rgba(22, 101, 52, 0.45) !important;
         }
 
         /* --- UI COMPONENTS --- */
@@ -561,6 +561,9 @@ $docIdForOcr = $documentId; // For OCR fallback
         // OPTIMIZACIÓN: Cache de resultados OCR en memoria para evitar peticiones duplicadas
         const ocrResultsCache = new Map();
 
+        // LOCK: Páginas actualmente en proceso de renderizado (evitar duplicados)
+        const pagesBeingRendered = new Set();
+
         // --- VORAZ NAV ---
         let vorazData = JSON.parse(sessionStorage.getItem('voraz_viewer_data') || 'null');
         let currentDocIndex = vorazData ? (vorazData.currentIndex || 0) : 0;
@@ -748,6 +751,13 @@ $docIdForOcr = $documentId; // For OCR fallback
         }
 
         async function renderPage(pageNum, wrapper) {
+            // LOCK: Evitar renders duplicados de la misma página
+            if (pagesBeingRendered.has(pageNum)) {
+                console.log(`Página ${pageNum}: ya está en proceso, ignorando llamada duplicada`);
+                return;
+            }
+            pagesBeingRendered.add(pageNum);
+
             try {
                 const page = await pdfDoc.getPage(pageNum);
                 const viewport = page.getViewport({ scale });
@@ -839,7 +849,12 @@ $docIdForOcr = $documentId; // For OCR fallback
                     }
                 }
 
-            } catch (err) { console.error("Render err pg " + pageNum, err); }
+            } catch (err) {
+                console.error("Render err pg " + pageNum, err);
+            } finally {
+                // Liberar lock
+                pagesBeingRendered.delete(pageNum);
+            }
         }
 
         // Fallback OCR: solo se usa para documentos escaneados (sin texto embebido)
@@ -974,7 +989,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                                     top: ${hl.y * scaleY}px;
                                     width: ${hl.w * scaleX}px;
                                     height: ${hl.h * scaleY}px;
-                                    background: rgba(22, 101, 52, 0.35);
+                                    background: rgba(22, 101, 52, 0.45);
                                     border: none;
                                     border-radius: 2px;
                                 `;
@@ -1105,7 +1120,7 @@ $docIdForOcr = $documentId; // For OCR fallback
 
                     // Dibujar resaltados sobre el canvas
                     if (allTerms.length > 0) {
-                        ctx.globalAlpha = 0.35;
+                        ctx.globalAlpha = 0.45;
                         ctx.fillStyle = '#166534'; // Verde bosque
 
                         if (false) { // FORZAR OCR: Siempre usar OCR para impresión
