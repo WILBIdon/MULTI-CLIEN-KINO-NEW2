@@ -231,12 +231,12 @@ $docIdForOcr = $documentId; // For OCR fallback
 
         /* Verde Bosque (Hits Manuales) */
         .highlight-hit {
-            background-color: rgba(22, 101, 52, 0.55) !important;
+            background-color: rgba(34, 197, 94, 0.45) !important;
         }
 
         /* Verde Bosque Suave (Contexto Automático) */
         .highlight-context {
-            background-color: rgba(22, 101, 52, 0.4) !important;
+            background-color: rgba(34, 197, 94, 0.35) !important;
         }
 
         /* --- UI COMPONENTS --- */
@@ -644,17 +644,17 @@ $docIdForOcr = $documentId; // For OCR fallback
             function updateStatus(currentPage, isComplete = false) {
                 const missingTerms = termsToFind.filter(t => !foundTermsSet.has(t));
                 let html = '';
-                
+
                 if (!isComplete) {
                     html += `<div style="color:#d97706; font-size:0.9em; margin-bottom:5px;">🔎 Escaneando ${currentPage}/${totalPages}...</div>`;
                 }
-                
+
                 if (pagesWithMatches.length > 0) {
                     html += `<div style="background:#dcfce7; color:#166534; padding:8px; border-radius:6px; font-size:0.9em; margin-bottom:5px;">
                         ✅ Encontrado en hojas: ${pagesWithMatches.join(', ')}
                     </div>`;
                 }
-                
+
                 if (isComplete && missingTerms.length > 0) {
                     html += `<div style="background:#fee2e2; color:#991b1b; padding:8px; border-radius:6px; font-size:0.9em;">
                         ⚠️ Faltan: ${missingTerms.join(', ')}
@@ -667,13 +667,13 @@ $docIdForOcr = $documentId; // For OCR fallback
                         📄 Resaltado en hojas: ${pagesWithMatches.join(', ')}
                     </div>`;
                 }
-                
+
                 statusDiv.innerHTML = html;
             }
 
             // ESCANEO PROGRESIVO: Escanea y resalta inmediatamente
             console.log(`Iniciando escaneo de ${totalPages} páginas...`);
-            
+
             for (let i = 1; i <= totalPages; i++) {
                 updateStatus(i);
 
@@ -685,7 +685,7 @@ $docIdForOcr = $documentId; // For OCR fallback
 
                     if (ocrResult.success && ocrResult.text) {
                         const cleanStr = ocrResult.text.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                        
+
                         let pageHasMatch = false;
                         for (let [key, original] of missingMap) {
                             if (cleanStr.includes(key)) {
@@ -697,25 +697,25 @@ $docIdForOcr = $documentId; // For OCR fallback
                         if (pageHasMatch) {
                             console.log(`✓ Página ${i}: coincidencia encontrada`);
                             pagesWithMatches.push(i);
-                            
+
                             // RESALTAR INMEDIATAMENTE esta página
                             const wrapper = document.getElementById('page-' + i);
                             if (wrapper && wrapper.dataset.rendered !== 'ocr-complete') {
                                 await renderPage(i, wrapper);
                                 wrapper.dataset.rendered = 'ocr-complete';
                             }
-                            
+
                             // Scroll a primera coincidencia
                             if (!firstMatchScrolled) {
                                 firstMatchScrolled = true;
                                 if (wrapper) wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             }
-                            
+
                             updateStatus(i);
                         }
                     }
-                } catch (e) { 
-                    console.warn(`⚠ Error en página ${i}, continuando...`, e); 
+                } catch (e) {
+                    console.warn(`⚠ Error en página ${i}, continuando...`, e);
                     // Continuar con la siguiente página aunque haya error
                 }
 
@@ -724,7 +724,7 @@ $docIdForOcr = $documentId; // For OCR fallback
             }
 
             console.log(`✓ Escaneo completado. Total: ${totalPages} páginas, Coincidencias: ${pagesWithMatches.length}`);
-            
+
             // Resultado final
             updateStatus(totalPages, true);
         }
