@@ -558,6 +558,9 @@ $docIdForOcr = $documentId; // For OCR fallback
         let hasScrollToPage = false; // Scroll general a la página (Radar)
         let hasScrollToMark = false; // Scroll preciso al texto (Render)
 
+        // OPTIMIZACIÓN: Cache de resultados OCR en memoria para evitar peticiones duplicadas
+        const ocrResultsCache = new Map();
+
         // --- VORAZ NAV ---
         let vorazData = JSON.parse(sessionStorage.getItem('voraz_viewer_data') || 'null');
         let currentDocIndex = vorazData ? (vorazData.currentIndex || 0) : 0;
@@ -680,6 +683,11 @@ $docIdForOcr = $documentId; // For OCR fallback
                     const ocrResp = await fetch(`ocr_text.php?doc=${docId}&page=${i}&terms=${termsStr}`);
                     const ocrResult = await ocrResp.json();
 
+                    // OPTIMIZACIÓN: Guardar resultado en cache para evitar petición duplicada
+                    if (ocrResult.success) {
+                        ocrResultsCache.set(i, ocrResult);
+                    }
+
                     if (ocrResult.success && ocrResult.text) {
                         const cleanStr = ocrResult.text.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
@@ -695,7 +703,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                             console.log(`✓ Página ${i}: coincidencia encontrada`);
                             pagesWithMatches.push(i);
 
-                            // RESALTAR INMEDIATAMENTE esta página
+                            // RESALTAR INMEDIATAMENTE esta página (con resultados ya cacheados)
                             const wrapper = document.getElementById('page-' + i);
                             if (wrapper && wrapper.dataset.rendered !== 'ocr-complete') {
                                 await renderPage(i, wrapper);
@@ -880,10 +888,23 @@ $docIdForOcr = $documentId; // For OCR fallback
             }
 
             try {
-                const docId = <?= $docIdForOcr ?>;
-                const termsStr = encodeURIComponent(allTerms.join(','));
-                const response = await fetch(`ocr_text.php?doc=${docId}&page=${pageNum}&terms=${termsStr}`);
-                const result = await response.json();
+                // OPTIMIZACIÓN: Usar cache si existe para evitar petición duplicada
+                let result;
+                if (ocrResultsCache.has(pageNum)) {
+                    result = ocrResultsCache.get(pageNum);
+                    console.log(`OCR página ${pageNum}: usando cache`);
+                    // Cerrar modal inmediatamente si usamos cache
+                    if (loadingModal) loadingModal.remove();
+                } else {
+                    const docId = <?= $docIdForOcr ?>;
+                    const termsStr = encodeURIComponent(allTerms.join(','));
+                    const response = await fetch(`ocr_text.php?doc=${docId}&page=${pageNum}&terms=${termsStr}`);
+                    result = await response.json();
+                    // Guardar en cache
+                    if (result.success) {
+                        ocrResultsCache.set(pageNum, result);
+                    }
+                }
 
                 if (result.success && result.matches && result.matches.length > 0) {
                     // ✅ ENCONTRADO: Mostrar resultado de éxito en el modal
