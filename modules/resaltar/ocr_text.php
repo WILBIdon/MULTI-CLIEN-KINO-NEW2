@@ -43,10 +43,10 @@ try {
         exit;
     }
 
-    // ============================================
     // OPTIMIZACIÓN: Verificar cache antes de OCR
     // ============================================
-    $cacheKey = "ocr_doc{$documentId}_p{$pageNum}";
+    // V2: Usamos "ocr_v2_" para invalidar caches viejos de 150 DPI tras pasar a 200 DPI
+    $cacheKey = "ocr_v2_doc{$documentId}_p{$pageNum}";
     $cachedOcr = CacheManager::get($clientCode, $cacheKey);
 
     if ($cachedOcr && !empty($cachedOcr['words'])) {
