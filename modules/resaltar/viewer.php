@@ -445,17 +445,36 @@ $docIdForOcr = $documentId; // For OCR fallback
             margin-bottom: 2rem;
         }
 
-        /* SPINNER MINI (Added for scanning status) */
+        /* SPINNER MINI (Blue and more visible) */
         .spinner-mini {
             display: inline-block;
-            width: 14px;
-            height: 14px;
-            border: 2px solid rgba(217, 119, 6, 0.3);
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
-            border-top-color: #d97706;
+            border-top-color: #ffffff;
             animation: spin 1s ease-in-out infinite;
-            margin-right: 8px;
+            margin-right: 10px;
             vertical-align: middle;
+        }
+
+        .scanning-status-box {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.5);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            animation: pulse-blue 2s infinite;
+        }
+
+        @keyframes pulse-blue {
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
         }
 
         @keyframes spin {
@@ -668,8 +687,9 @@ $docIdForOcr = $documentId; // For OCR fallback
                 let html = '';
 
                 if (!isComplete) {
-                    html += `<div style="color:#d97706; font-size:0.9em; margin-bottom:5px; display:flex; align-items:center;">
-                        <span class="spinner-mini"></span> Escaneando ${currentPage}/${totalPages}...
+                    html += `<div class="scanning-status-box">
+                        <span class="spinner-mini"></span> 
+                        <span>Escaneando página ${currentPage} de ${totalPages}...</span>
                     </div>`;
                 }
 
