@@ -228,12 +228,16 @@ $docIdForOcr = $documentId; // For OCR fallback
 
         /* Verde gris (Hits Manuales) - Visible en impresión B/N */
         .highlight-hit {
-            background-color: rgba(85, 140, 45, 0.45) !important;
+            background-color: rgba(85, 140, 45, 0.70) !important;
+            border: 2px solid #365e10;
+            padding: 2px 0;
         }
 
         /* Verde gris suave (Contexto Automático) */
         .highlight-context {
-            background-color: rgba(85, 140, 45, 0.45) !important;
+            background-color: rgba(85, 140, 45, 0.70) !important;
+            border: 2px solid #365e10;
+            padding: 2px 0;
         }
 
         /* --- UI COMPONENTS --- */
@@ -472,9 +476,17 @@ $docIdForOcr = $documentId; // For OCR fallback
         }
 
         @keyframes pulse-blue {
-            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-            70% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+            0% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 6px rgba(59, 130, 246, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+            }
         }
 
         @keyframes spin {
@@ -732,36 +744,35 @@ $docIdForOcr = $documentId; // For OCR fallback
                         ocrResultsCache.set(i, ocrResult);
                     }
 
-                    if (ocrResult.success && ocrResult.text) {
-                        const cleanStr = ocrResult.text.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-
-                        let pageHasMatch = false;
-                        for (let [key, original] of missingMap) {
-                            if (cleanStr.includes(key)) {
-                                foundTermsSet.add(original);
-                                pageHasMatch = true;
-                            }
+                    // CORRECCIÓN: Usar match_count del servidor en lugar de búsqueda manual en cliente
+                    if (ocrResult.success && ocrResult.match_count > 0) {
+                        
+                        // Añadir términos encontrados al set de encontrados
+                        if (ocrResult.matches && ocrResult.matches.length > 0) {
+                            ocrResult.matches.forEach(m => {
+                                // Normalizar para el set (aunque el servidor ya lo hizo)
+                                foundTermsSet.add(m.term); 
+                            });
                         }
 
-                        if (pageHasMatch) {
-                            console.log(`✓ Página ${i}: coincidencia encontrada`);
-                            pagesWithMatches.push(i);
+                        // Si el servidor dice que hay matches, es página positiva
+                        console.log(`✓ Página ${i}: ${ocrResult.match_count} coincidencias encontradas (Server verify)`);
+                        pagesWithMatches.push(i);
 
-                            // RESALTAR INMEDIATAMENTE esta página (con resultados ya cacheados)
-                            const wrapper = document.getElementById('page-' + i);
-                            if (wrapper && wrapper.dataset.rendered !== 'ocr-complete') {
-                                await renderPage(i, wrapper);
-                                wrapper.dataset.rendered = 'ocr-complete';
-                            }
-
-                            // Scroll a primera coincidencia
-                            if (!firstMatchScrolled) {
-                                firstMatchScrolled = true;
-                                if (wrapper) wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }
-
-                            updateStatus(i);
+                        // RESALTAR INMEDIATAMENTE esta página (con resultados ya cacheados)
+                        const wrapper = document.getElementById('page-' + i);
+                        if (wrapper && wrapper.dataset.rendered !== 'ocr-complete') {
+                            await renderPage(i, wrapper);
+                            wrapper.dataset.rendered = 'ocr-complete';
                         }
+
+                        // Scroll a primera coincidencia
+                        if (!firstMatchScrolled) {
+                            firstMatchScrolled = true;
+                            if (wrapper) wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+
+                        updateStatus(i);
                     }
                 } catch (e) {
                     console.warn(`⚠ Error en página ${i}, continuando...`, e);
@@ -970,9 +981,10 @@ $docIdForOcr = $documentId; // For OCR fallback
                                     top: ${hl.y * scaleY}px;
                                     width: ${hl.w * scaleX}px;
                                     height: ${hl.h * scaleY}px;
-                                    background: rgba(85, 140, 45, 0.45);
-                                    border: none;
+                                    background: rgba(85, 140, 45, 0.65);
+                                    border: 2px solid #365e10;
                                     border-radius: 2px;
+                                    box-shadow: 0 0 4px rgba(0,0,0,0.3);
                                 `;
                                 rect.title = hl.term;
                                 overlay.appendChild(rect);
@@ -1068,7 +1080,9 @@ $docIdForOcr = $documentId; // For OCR fallback
 
                     // Dibujar resaltados sobre el canvas
                     if (allTerms.length > 0) {
-                        ctx.globalAlpha = 0.45;
+                        ctx.globalAlpha = 0.70;
+                        ctx.strokeStyle = '#365e10';
+                        ctx.lineWidth = 2;
                         ctx.fillStyle = '#558c2d'; // Verde amarillento
 
                         if (false) { // FORZAR OCR: Siempre usar OCR para impresión
@@ -1109,6 +1123,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                                         const w = hl.w * scaleX;
                                         const h = hl.h * scaleY;
                                         ctx.fillRect(x, y, w, h);
+                                        ctx.strokeRect(x, y, w, h);
                                     }
                                     console.log(`Print: ${ocrResult.highlights.length} resaltados OCR en página ${pageNum}`);
                                 }
@@ -1251,7 +1266,7 @@ $docIdForOcr = $documentId; // For OCR fallback
                         imagesLoaded++;
                         if (imagesLoaded === totalImages) {
                             setTimeout(() => window.print(), 300);
-                        }
+             }
                     };
                 }
             });
