@@ -508,8 +508,13 @@ function extract_codes_with_pattern(
     } else {
         // Con prefijo: buscar "PREFIJO...TERMINADOR"
         $escapedPrefix = preg_quote($prefix, '/');
+        // Si el terminador es explícito, no excluimos espacios para capturar "CODIGO CON ESPACIO"
         $escapedTerminator = $terminator === '' ? '\s' : preg_quote($terminator, '/');
-        $pattern = '/' . $escapedPrefix . '\s*([^' . $escapedTerminator . '\s]{' . $minLength . ',' . $maxLength . '})/i';
+
+        // Si terminador es vacío, excluimos \s. Si es explícito, solo excluimos ese terminador.
+        $exclusion = $terminator === '' ? '\s' : $escapedTerminator;
+
+        $pattern = '/' . $escapedPrefix . '\s*([^' . $exclusion . ']{' . $minLength . ',' . $maxLength . '})/i';
     }
 
     preg_match_all($pattern, $text, $matches);
