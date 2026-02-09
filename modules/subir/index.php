@@ -270,6 +270,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: #f3f4f6;
             margin: 0;
+            min-height: auto !important; /* PREVENT IFRAME RESIZE LOOP */
         }
 
         .container {
