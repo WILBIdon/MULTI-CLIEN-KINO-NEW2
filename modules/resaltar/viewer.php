@@ -444,6 +444,25 @@ $docIdForOcr = $documentId; // For OCR fallback
         .page-outer-wrapper {
             margin-bottom: 2rem;
         }
+
+        /* SPINNER MINI (Added for scanning status) */
+        .spinner-mini {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(217, 119, 6, 0.3);
+            border-radius: 50%;
+            border-top-color: #d97706;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
 
@@ -649,7 +668,9 @@ $docIdForOcr = $documentId; // For OCR fallback
                 let html = '';
 
                 if (!isComplete) {
-                    html += `<div style="color:#d97706; font-size:0.9em; margin-bottom:5px;">🔎 Escaneando ${currentPage}/${totalPages}...</div>`;
+                    html += `<div style="color:#d97706; font-size:0.9em; margin-bottom:5px; display:flex; align-items:center;">
+                        <span class="spinner-mini"></span> Escaneando ${currentPage}/${totalPages}...
+                    </div>`;
                 }
 
                 if (pagesWithMatches.length > 0) {
