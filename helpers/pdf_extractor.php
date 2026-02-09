@@ -14,9 +14,10 @@
  * Extrae texto de un archivo PDF usando múltiples métodos.
  *
  * @param string $pdfPath Ruta al archivo PDF.
+ * @param array $options Opciones de extracción (ej: ['dpi' => 150]).
  * @return string Texto extraído del PDF.
  */
-function extract_text_from_pdf(string $pdfPath): string
+function extract_text_from_pdf(string $pdfPath, array $options = []): string
 {
     if (!file_exists($pdfPath)) {
         if (class_exists('Logger')) {
@@ -46,7 +47,7 @@ function extract_text_from_pdf(string $pdfPath): string
     // Método 4: OCR con Tesseract (para documentos escaneados)
     // Solo si los métodos anteriores fallaron o devolvieron muy poco texto
     if (function_exists('extract_with_ocr')) {
-        $text = extract_with_ocr($pdfPath);
+        $text = extract_with_ocr($pdfPath, $options);
         if (!empty(trim($text))) {
             return $text;
         }
@@ -223,8 +224,12 @@ function extract_with_native_php(string $pdfPath): string
 /**
  * Extrae texto usando Tesseract OCR via pdftoppm (parte de poppler-utils)
  * Convierte primero a imagen y luego aplica OCR.
+ * 
+ * @param string $pdfPath Ruta al PDF
+ * @param array $options Opciones (dpi, etc)
+ * @return string Texto extraído o cadena vacía
  */
-function extract_with_ocr(string $pdfPath): string
+function extract_with_ocr(string $pdfPath, array $options = []): string
 {
     $tesseractPath = find_tesseract();
     if (!$tesseractPath) {
@@ -236,6 +241,9 @@ function extract_with_ocr(string $pdfPath): string
     if (!$pdftoppmPath) {
         return '';
     }
+
+    // Configuración DPI (Default 150, subida puede usar 200+)
+    $dpi = isset($options['dpi']) ? (int) $options['dpi'] : 150;
 
     // Directorio temporal para imágenes
     $tempDir = sys_get_temp_dir() . '/ocr_' . uniqid();
@@ -251,7 +259,8 @@ function extract_with_ocr(string $pdfPath): string
         $escapedPrefix = escapeshellarg($tempDir . '/page');
 
         // Sin límite de páginas para extraer de TODO el documento
-        $cmdConvert = "$pdftoppmPath -png -r 150 $escapedPdf $escapedPrefix";
+        // Usar DPI configurable
+        $cmdConvert = "$pdftoppmPath -png -r $dpi $escapedPdf $escapedPrefix";
         exec($cmdConvert);
 
         // 2. Procesar cada imagen con Tesseract
@@ -316,7 +325,7 @@ function extract_with_ocr_coordinates(string $pdfPath, int $pageNum = 1): array
         $imagePrefix = $tempDir . '/page';
         $escapedPrefix = escapeshellarg($imagePrefix);
 
-        // -f y -l para especificar página, -r 150 DPI, -gray para escala de grises (mejora OCR en fondos de color)
+        // -f y -l para especificar página, -r 150 DPI (fijo para visor rápido), -gray para escala de grises
         $cmdConvert = "$pdftoppmPath -png -gray -r 150 -f $pageNum -l $pageNum $escapedPdf $escapedPrefix";
         exec($cmdConvert, $output, $returnCode);
 
@@ -610,7 +619,7 @@ function validate_code(string $code): bool
  * Función completa: extrae texto del PDF y busca códigos con patrón.
  *
  * @param string $pdfPath Ruta al archivo PDF.
- * @param array $config Configuración del patrón.
+ * @param array $config Configuración del patrón (prefix, terminator, dpi, etc).
  * @return array Resultado con texto y códigos encontrados.
  */
 function extract_codes_from_pdf(string $pdfPath, array $config = []): array
@@ -620,7 +629,8 @@ function extract_codes_from_pdf(string $pdfPath, array $config = []): array
     $minLength = $config['min_length'] ?? 4;
     $maxLength = $config['max_length'] ?? 50;
 
-    $text = extract_text_from_pdf($pdfPath);
+    // Pasar config entera para que llegue 'dpi' si existe
+    $text = extract_text_from_pdf($pdfPath, $config);
 
     if (empty(trim($text))) {
         return [
@@ -698,6 +708,6 @@ function prepare_for_ai_extraction(string $text, string $documentType = 'documen
             'total' => 'Valor total si aplica',
             'items' => 'Lista de items con cantidad y descripción'
         ],
-        'instructions' => 'IMPORTANTE: Corrige errores comunes de OCR en los códigos. Si un código parece numérico pero tiene una "G", cámbiala por "6". Si ves confusión entre "H" y "M", usa el contexto para decidir cuál es correcta. Los códigos suelen tener al menos 2 caracteres. Ignora puntos o basura al final de los códigos.'
+        'instructions' => 'IMPORTANTE: Corrige errores comunes de OCR en los códigos. Si un código parece numérico pero tiene letras parecidas (O, G, S, Z, B), corrígelas a números (0, 6, 5, 2, 8). Si ves confusión entre "H" y "M", usa el contexto para decidir. Los códigos suelen tener al menos 2 caracteres. Ignora puntos o basura al final de los códigos. Prioriza la precisión.'
     ];
 }

@@ -15,11 +15,15 @@ class PdfController extends BaseController
         $minLength = (int) ($post['min_length'] ?? 4);
         $maxLength = (int) ($post['max_length'] ?? 50);
 
+        // Capture DPI if provided, default to null (extractor will handle default)
+        $dpi = isset($post['dpi']) ? (int) $post['dpi'] : null;
+
         $config = [
             'prefix' => $prefix,
             'terminator' => $terminator,
             'min_length' => $minLength,
-            'max_length' => $maxLength
+            'max_length' => $maxLength,
+            'dpi' => $dpi
         ];
 
         // Global helper function assumed to be available

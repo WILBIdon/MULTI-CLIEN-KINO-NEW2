@@ -125,7 +125,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 // Extraer datos si es PDF
                 if (strtolower($ext) === 'pdf') {
-                    $extractResult = extract_codes_from_pdf($targetPath);
+                    // Obtener configuración de extracción de la base de datos del cliente
+                    $stmtConfig = $db->prepare("SELECT prefix, terminator, min_length, max_length FROM configuracion_extraccion LIMIT 1");
+                    $stmtConfig->execute();
+                    $config = $stmtConfig->fetch(PDO::FETCH_ASSOC);
+
+                    $prefix = $config['prefix'] ?? '';
+                    $terminator = $config['terminator'] ?? '';
+                    $minLength = $config['min_length'] ?? 1;
+                    $maxLength = $config['max_length'] ?? 20;
+
+                    $extractResult = extract_codes_from_pdf($targetPath, [
+                        'prefix' => $prefix,
+                        'terminator' => $terminator,
+                        'min_length' => $minLength,
+                        'max_length' => $maxLength,
+                        'dpi' => 200 // MEJORA: Usar 200 DPI para mejor lectura en la subida
+                    ]);
                     if ($extractResult['success']) {
                         $datosExtraidos = [
                             'text' => substr($extractResult['text'], 0, 10000),
