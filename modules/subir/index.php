@@ -912,16 +912,30 @@ También puedes escribirlos manualmente (uno por línea)"><?= $isEditMode ? html
         const codeCount = document.getElementById('codeCount');
 
         // Auto-resize Iframe logic 
+        // Auto-resize Iframe logic (Fixed)
         function updateParentHeight() {
             if (window.frameElement) {
-                const height = document.documentElement.scrollHeight;
-                window.frameElement.style.height = height + 50 + 'px';
+                const height = document.body.scrollHeight;
+                // Evitar jitter: solo actualizar si hay diferencia significativa (> 5px)
+                const currentFnHeight = parseInt(window.frameElement.style.height) || 0;
+                if (Math.abs((height + 50) - currentFnHeight) > 10) {
+                    window.frameElement.style.height = (height + 50) + 'px';
+                }
             }
         }
+
         window.addEventListener('load', updateParentHeight);
-        window.addEventListener('resize', updateParentHeight);
+        // REMOVIDO: window.addEventListener('resize', ...) causaba bucle infinito
+
+        // Observar cambios de contenido internos que afecten la altura
         const observer = new MutationObserver(updateParentHeight);
         observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+
+        // Observar cambios de tamaño del body específicamente (mejor que window.resize)
+        const resizeObserver = new ResizeObserver(entries => {
+            updateParentHeight();
+        });
+        resizeObserver.observe(document.body);
 
         // Drag and drop
         dropZone.addEventListener('dragover', (e) => {
