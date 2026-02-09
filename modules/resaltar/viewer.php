@@ -859,57 +859,12 @@ $docIdForOcr = $documentId; // For OCR fallback
 
         // Fallback OCR: solo se usa para documentos escaneados (sin texto embebido)
         async function applyOcrHighlight(wrapper, textDiv, pageNum, allTerms) {
-            // Mostrar modal de "Analizando..."
-            let loadingModal = document.getElementById('ocr-loading-modal');
-            if (!loadingModal) {
-                loadingModal = document.createElement('div');
-                loadingModal.id = 'ocr-loading-modal';
-                loadingModal.style.cssText = `
-                    position: fixed;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    background: rgba(0,0,0,0.9);
-                    color: white;
-                    padding: 40px 60px;
-                    border-radius: 20px;
-                    z-index: 9999;
-                    text-align: center;
-                    font-family: system-ui, sans-serif;
-                    box-shadow: 0 15px 50px rgba(0,0,0,0.6);
-                `;
-                loadingModal.innerHTML = `
-                    <style>
-                        @keyframes ocr-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-                        @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 8px rgba(22, 101, 52, 0.6); } 50% { box-shadow: 0 0 20px rgba(22, 101, 52, 1); } }
-                    </style>
-                    <div style="width:60px;height:60px;border:4px solid rgba(255,255,255,0.2);border-top:4px solid #166534;border-radius:50%;animation:ocr-spin 1s linear infinite;margin:0 auto 20px;"></div>
-                    <div style="font-size:18px;font-weight:bold;">Analizando documento...</div>
-                    <div style="font-size:13px;opacity:0.7;margin-top:10px;">Extrayendo texto con OCR</div>
-                    
-                    <div style="margin-top:25px; padding:15px 20px; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); border-radius:12px; animation: pulse-glow 2s ease-in-out infinite;">
-                        <div style="font-size:14px; font-weight:bold; color:#78350f; margin-bottom:8px;">
-                            ⚠️ RECUERDE
-                        </div>
-                        <div style="font-size:12px; color:#451a03; line-height:1.5;">
-                            El éxito del resaltado depende de la <strong>calidad y legibilidad</strong> de la imagen del PDF.
-                        </div>
-                        <div style="margin-top:10px; padding:8px 12px; background:rgba(22, 101, 52, 0.9); border-radius:6px; display:inline-block;">
-                            <span style="font-size:12px; color:white; font-weight:600;">🎯 Los resultados se resaltan en <span style="color:#86efac;">VERDE OSCURO</span></span>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(loadingModal);
-            }
-
             try {
                 // OPTIMIZACIÓN: Usar cache si existe para evitar petición duplicada
                 let result;
                 if (ocrResultsCache.has(pageNum)) {
                     result = ocrResultsCache.get(pageNum);
                     console.log(`OCR página ${pageNum}: usando cache`);
-                    // Cerrar modal inmediatamente si usamos cache
-                    if (loadingModal) loadingModal.remove();
                 } else {
                     const docId = <?= $docIdForOcr ?>;
                     const termsStr = encodeURIComponent(allTerms.join(','));
@@ -922,21 +877,6 @@ $docIdForOcr = $documentId; // For OCR fallback
                 }
 
                 if (result.success && result.matches && result.matches.length > 0) {
-                    // ✅ ENCONTRADO: Mostrar resultado de éxito en el modal
-                    if (loadingModal) {
-                        loadingModal.innerHTML = `
-                            <div style="font-size:50px; margin-bottom:15px;">✅</div>
-                            <div style="font-size:20px; font-weight:bold; color:#86efac;">¡Encontrado!</div>
-                            <div style="font-size:14px; margin-top:10px; opacity:0.9;">${result.match_count} coincidencia(s) en página ${pageNum}</div>
-                        `;
-                        loadingModal.style.transition = 'opacity 0.3s ease';
-                        // Cerrar modal después de 2 segundos
-                        setTimeout(() => {
-                            loadingModal.style.opacity = '0';
-                            setTimeout(() => loadingModal.remove(), 300);
-                        }, 2000);
-                    }
-
                     // Mostrar badge pequeño con resultado
                     const ocrBadge = document.createElement('div');
                     ocrBadge.style.cssText = `
@@ -1003,26 +943,6 @@ $docIdForOcr = $documentId; // For OCR fallback
 
                     console.log(`OCR: ${result.match_count} coincidencias en página ${pageNum}`);
                 } else {
-                    // ⚠️ NO ENCONTRADO: Mostrar notificación clara
-                    if (loadingModal) {
-                        loadingModal.innerHTML = `
-                            <div style="font-size:50px; margin-bottom:15px;">⚠️</div>
-                            <div style="font-size:20px; font-weight:bold; color:#fbbf24;">Sin coincidencias</div>
-                            <div style="font-size:14px; margin-top:10px; opacity:0.9;">OCR no encontró los códigos buscados en esta página.</div>
-                            <div style="margin-top:15px; padding:10px 15px; background:rgba(255,255,255,0.1); border-radius:8px; font-size:12px;">
-                                Esto puede deberse a:<br>
-                                • Baja calidad de imagen del PDF<br>
-                                • El código no existe en esta página
-                            </div>
-                        `;
-                        loadingModal.style.transition = 'opacity 0.3s ease';
-                        // Cerrar modal después de 3 segundos
-                        setTimeout(() => {
-                            loadingModal.style.opacity = '0';
-                            setTimeout(() => loadingModal.remove(), 300);
-                        }, 3000);
-                    }
-
                     // Mostrar badge de "no encontrado" en la página
                     const noMatchBadge = document.createElement('div');
                     noMatchBadge.style.cssText = `
@@ -1045,19 +965,6 @@ $docIdForOcr = $documentId; // For OCR fallback
                     console.log(`OCR: Sin coincidencias en página ${pageNum}`);
                 }
             } catch (e) {
-                // Ocultar modal en caso de error con mensaje
-                if (loadingModal) {
-                    loadingModal.innerHTML = `
-                        <div style="font-size:50px; margin-bottom:15px;">❌</div>
-                        <div style="font-size:20px; font-weight:bold; color:#f87171;">Error de OCR</div>
-                        <div style="font-size:14px; margin-top:10px; opacity:0.9;">${e.message || 'No se pudo procesar la página'}</div>
-                    `;
-                    loadingModal.style.transition = 'opacity 0.3s ease';
-                    setTimeout(() => {
-                        loadingModal.style.opacity = '0';
-                        setTimeout(() => loadingModal.remove(), 300);
-                    }, 2500);
-                }
                 console.warn(`OCR fallback error en página ${pageNum}:`, e);
             }
         }
