@@ -14,6 +14,30 @@ if (!isset($_SESSION['client_code'])) {
 }
 
 $clientCode = $_SESSION['client_code'];
+
+// Check if requesting database download
+if (isset($_GET['type']) && $_GET['type'] === 'database') {
+    $centralDbPath = CENTRAL_DB;
+
+    if (!file_exists($centralDbPath)) {
+        die('Base de datos central no encontrada');
+    }
+
+    $timestamp = date('Y-m-d_H-i-s');
+    $filename = "central_backup_{$timestamp}.db";
+
+    // Send database file to browser
+    header('Content-Type: application/x-sqlite3');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Length: ' . filesize($centralDbPath));
+    header('Cache-Control: no-cache, no-store, must-revalidate');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+
+    readfile($centralDbPath);
+    exit;
+}
+
 $db = open_client_db($clientCode);
 
 $documentId = isset($_GET['doc']) ? (int) $_GET['doc'] : 0;
