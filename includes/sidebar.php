@@ -152,6 +152,10 @@ $currentSection = $currentSection ?? 'voraz';
                 <a href="<?= $baseUrl ?? '' ?>modules/trazabilidad/validar.php" class="nav-subitem">
                     Validar
                 </a>
+                <a href="<?= $baseUrl ?? '' ?>modules/resaltar/download.php?type=database" class="nav-subitem"
+                    style="color: var(--accent-primary); font-weight: 600;">
+                    ⬇️ Backup Completo (Todo)
+                </a>
             </div>
         </div>
 
